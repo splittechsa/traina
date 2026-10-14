@@ -1,0 +1,134 @@
+openapi: 3.0.3
+info:
+  title: Sahhti API
+  version: 0.1.0
+  description: >
+    Implemented routes only. Session routes persist when a database is configured.
+    Store verification and commission settlement stay unavailable.
+    Readiness stays false until production auth and a store verifier exist.
+servers:
+  - url: http://localhost:3000
+paths:
+  /v1/health:
+    get:
+      summary: Liveness
+      responses:
+        '200':
+          description: Process is up
+  /v1/ready:
+    get:
+      summary: Readiness
+      responses:
+        '503':
+          description: Database, production auth, or store verifier missing
+  /v1/meta:
+    get:
+      summary: Capability registry
+      responses:
+        '200':
+          description: Includes scale.validated false
+  /v1/onboarding/validate:
+    post:
+      summary: Validate onboarding without creating a user
+      responses:
+        '200':
+          description: Normalized record. persisted is false. Authoritative calories are null.
+        '401':
+          description: Missing or bad dev token when hmac_dev is on
+        '422':
+          description: Field errors, or auth is not the issue
+        '503':
+          description: AUTH_NOT_CONFIGURED
+  /v1/nutrition/diary/summarize:
+    post:
+      summary: Sum a diary. Client targets are rejected.
+      responses:
+        '200':
+          description: Totals. Image estimates are separated. Target is null.
+        '400':
+          description: Validation error, including an unexpected target field
+        '503':
+          description: AUTH_NOT_CONFIGURED
+  /v1/partnerships/commissions/quote:
+    post:
+      summary: Quote a commission. This is not a settlement.
+      responses:
+        '200':
+          description: Balanced preview. persisted and settlementAllowed are false.
+        '400':
+          description: Includes rejection of a client commission amount
+        '503':
+          description: AUTH_NOT_CONFIGURED
+  /v1/internal/commissions/settle:
+    post:
+      summary: Settlement is unavailable
+      responses:
+        '503':
+          description: LEDGER_DATABASE_REQUIRED
+  /v1/internal/billing/verify:
+    post:
+      summary: Store verification is unavailable
+      responses:
+        '501':
+          description: STORE_VERIFIER_NOT_CONFIGURED
+  /v1/auth/register:
+    post:
+      summary: Create a pending account and a verification token
+      responses:
+        '201':
+          description: User is pending. The token is not returned. Development mailbox may store it.
+  /v1/auth/verify:
+    post:
+      summary: Consume a verification token
+  /v1/auth/login:
+    post:
+      summary: Issue an access token and a rotating refresh token
+      responses:
+        '403':
+          description: EMAIL_NOT_VERIFIED
+        '401':
+          description: INVALID_CREDENTIALS
+  /v1/auth/refresh:
+    post:
+      summary: Rotate a refresh token
+  /v1/auth/recover:
+    post:
+      summary: Accept a reset request without revealing whether the email exists
+  /v1/auth/reset:
+    post:
+      summary: Set a new password and revoke sessions
+  /v1/auth/logout:
+    post:
+      summary: Revoke the current device session
+  /v1/account:
+    delete:
+      summary: Mark the account deleted and revoke sessions
+  /v1/me:
+    get:
+      summary: Signed-in user and persisted profile
+  /v1/onboarding:
+    post:
+      summary: Persist onboarding. Authoritative calories stay null.
+  /v1/home:
+    get:
+      summary: Dashboard from persisted records, or onboarded false
+  /v1/training/sessions:
+    get:
+      summary: Member workout sessions
+    post:
+      summary: Schedule a workout against an existing exercise
+  /v1/nutrition/entries:
+    post:
+      summary: Persist a food entry and return the day's arithmetic
+  /v1/nutrition/diary:
+    get:
+      summary: Diary for a date. Target is null until an approved formula exists.
+  /v1/coach/messages:
+    post:
+      summary: Development mock only, labeled, and scoped to the authenticated user
+      responses:
+        '503':
+          description: MODEL_PROVIDER_NOT_CONFIGURED
+  /v1/admin/coaching/rules:
+    post:
+      summary: Create a draft rule. Publishing requires a separate approval.

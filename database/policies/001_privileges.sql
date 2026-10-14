@@ -1,0 +1,11 @@
+-- Not applied. Run by a database administrator after the migration, on a role
+-- that is allowed to create roles. The application role must not update or delete
+-- the ledger or the audit log.
+
+-- CREATE ROLE sahhti_app LOGIN PASSWORD '...';
+-- GRANT CONNECT ON DATABASE sahhti TO sahhti_app;
+-- GRANT USAGE ON SCHEMA public TO sahhti_app;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sahhti_app;
+-- REVOKE UPDATE, DELETE ON financial_ledger_entries FROM sahhti_app;
+-- REVOKE UPDATE, DELETE ON audit_logs FROM sahhti_app;
+-- REVOKE INSERT, UPDATE, DELETE ON commission_ledger FROM sahhti_app;
