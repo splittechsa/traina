@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import * as SecureStore from 'expo-secure-store';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { ACTIVITY_LEVELS, ENVIRONMENTS, EXPERIENCES, GOALS, SPORTS, disciplineForSports, goalsForSports, type Goal, type Sport } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { messageFor } from '../../src/api/errors';
@@ -18,6 +20,9 @@ import { Body, Button, Field, Screen, StatusLine } from '../../src/ui/Screen';
 import { EditorialFrame, EditorialHint, editorialPhotos } from '../../src/ui/editorial';
 import { LoadingSkeleton } from '../../src/ui/kit';
 import { ChoiceList } from '../../src/ui/choices';
+import { useTheme } from '../../src/theme/ThemeProvider';
+import { useMotion } from '../../src/theme/motion';
+import { fontFamily, radius, spacing, typeScale } from '../../src/theme/tokens';
 
 type Me = { onboardingCompleted?: boolean; profile: Record<string, unknown> | null; goals?: string[] };
 type SavedProfile = { persisted?: boolean; onboardingCompleted?: boolean };
@@ -39,6 +44,69 @@ const times = ['morning', 'evening'] as const;
 const weekdays = ['2', '3', '4', '5', '6'] as const;
 const fuelGoals = ['cutting', 'fat_loss', 'bulking', 'muscle_gain', 'body_recomposition'] as const;
 const DRAFT_KEY = 'sahhti.onboarding.draft';
+type SymbolName = ComponentProps<typeof SymbolView>['name'];
+
+const sportSymbols: Record<Sport, SymbolName> = {
+  bodybuilding: { ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' },
+  calisthenics: { ios: 'figure.strengthtraining.traditional', android: 'accessibility_new', web: 'accessibility_new' },
+  crossfit: { ios: 'figure.cross.training', android: 'timer', web: 'timer' },
+  powerlifting: { ios: 'scalemass.fill', android: 'fitness_center', web: 'fitness_center' },
+  running: { ios: 'figure.run', android: 'directions_run', web: 'directions_run' },
+  boxing: { ios: 'figure.boxing', android: 'sports_mma', web: 'sports_mma' },
+  general_fitness: { ios: 'heart.circle.fill', android: 'monitor_heart', web: 'monitor_heart' },
+};
+
+function sportDescription(sport: Sport, locale: 'ar' | 'en'): string {
+  const descriptions: Record<Sport, { ar: string; en: string }> = {
+    bodybuilding: { ar: 'كتلة عضلية وتناسق', en: 'Muscle and physique' },
+    calisthenics: { ar: 'مهارات وتحكم بالجسم', en: 'Skills and body control' },
+    crossfit: { ar: 'جولات وأداء وظيفي', en: 'Rounds and functional work' },
+    powerlifting: { ar: 'قوة وأرقام رئيسية', en: 'Strength and main lifts' },
+    running: { ar: 'مسافة وسرعة وتحمل', en: 'Distance, pace and endurance' },
+    boxing: { ar: 'جولات ولياقة ومهارة', en: 'Rounds, fitness and skill' },
+    general_fitness: { ar: 'حركة وصحة يومية', en: 'Movement and daily health' },
+  };
+  return descriptions[sport][locale];
+}
+
+function SportGrid({ sports, locale, onToggle }: { sports: readonly Sport[]; locale: 'ar' | 'en'; onToggle: (id: string) => void }) {
+  const theme = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2] }}>
+      {SPORTS.map((sport) => {
+        const selected = sports.includes(sport);
+        return (
+          <Pressable
+            key={sport}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            onPress={() => onToggle(sport)}
+            style={({ pressed }) => ({
+              width: '48.5%',
+              minHeight: 126,
+              borderRadius: radius.lg,
+              padding: spacing[3],
+              borderWidth: 1,
+              borderColor: selected ? theme.heroAccent : 'rgba(255,255,255,0.18)',
+              backgroundColor: selected ? `${theme.heroAccent}2E` : theme.overlay,
+              opacity: pressed ? 0.82 : 1,
+            })}
+          >
+            <View style={{ width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? theme.heroAccent : 'rgba(255,255,255,0.12)', marginBottom: spacing[2] }}>
+              <SymbolView name={sportSymbols[sport]} size={20} tintColor={selected ? theme.goldInk : theme.heroText} />
+            </View>
+            <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: typeScale.body, textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: locale === 'ar' ? 'rtl' : 'ltr' }}>
+              {label(locale, 'sport', sport)}
+            </Text>
+            <Text style={{ color: theme.heroText, opacity: 0.72, fontFamily: fontFamily.regular, fontSize: typeScale.micro, lineHeight: 17, marginTop: 2, textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: locale === 'ar' ? 'rtl' : 'ltr' }}>
+              {sportDescription(sport, locale)}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
 
 function pick<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
   return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
@@ -46,6 +114,7 @@ function pick<T extends string>(value: string, allowed: readonly T[], fallback: 
 
 export default function OnboardingScreen() {
   const { locale, setLocale } = useLocale();
+  const { duration } = useMotion();
   const { tokens } = useSession();
   const queryClient = useQueryClient();
   const savingRef = useRef(false);
@@ -292,7 +361,7 @@ export default function OnboardingScreen() {
       {current === 'sports' ? (
         <View>
           <EditorialHint>{text(locale, 'sportsHint')}</EditorialHint>
-          <ChoiceList multiple value={sports} onChange={toggleSport} options={SPORTS.map((item) => ({ id: item, label: label(locale, 'sport', item) }))} />
+          <SportGrid sports={sports} locale={locale} onToggle={toggleSport} />
         </View>
       ) : null}
       {current === 'goal' ? (
@@ -365,7 +434,9 @@ export default function OnboardingScreen() {
       secondary={current === 'welcome' ? undefined : text(locale, 'back')}
       onSecondary={current === 'welcome' ? undefined : retreat}
     >
-      {choice}
+      <Animated.View key={current} entering={FadeInDown.duration(duration(320))} exiting={FadeOut.duration(duration(150))}>
+        {choice}
+      </Animated.View>
     </EditorialFrame>
   );
 }

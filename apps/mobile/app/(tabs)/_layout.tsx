@@ -6,7 +6,16 @@ import { BottomTabBar } from '../../src/ui/TabBar';
 export default function TabLayout() {
   const { locale } = useLocale();
   return (
-    <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        lazy: true,
+        freezeOnBlur: true,
+        animation: 'fade',
+        tabBarHideOnKeyboard: true,
+      }}
+      tabBar={(props) => <BottomTabBar {...props} />}
+    >
       <Tabs.Screen name="home" options={{ title: text(locale, 'home') }} />
       <Tabs.Screen name="training" options={{ title: text(locale, 'training') }} />
       <Tabs.Screen name="nutrition" options={{ title: text(locale, 'nutrition') }} />

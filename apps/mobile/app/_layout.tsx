@@ -15,7 +15,14 @@ import { useMotion } from '../src/theme/motion';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 20_000, retry: 1, refetchOnWindowFocus: false },
+    queries: {
+      staleTime: 120_000,
+      gcTime: 30 * 60_000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+    },
+    mutations: { retry: 0 },
   },
 });
 

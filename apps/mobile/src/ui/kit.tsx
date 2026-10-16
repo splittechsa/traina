@@ -1,7 +1,8 @@
 import { useEffect, type ComponentProps, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   FadeIn,
+  FadeInDown,
   useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
@@ -13,12 +14,13 @@ import Animated, {
 import Svg, { Circle, Path } from 'react-native-svg';
 import { SymbolView } from 'expo-symbols';
 import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';
-import { useMotion } from '../theme/motion';
+import { motion, useMotion } from '../theme/motion';
 import { useTheme } from '../theme/ThemeProvider';
 import { useLocale } from '../i18n/LocaleProvider';
 import { text } from '../i18n/copy';
 import { Button, Card, Muted } from './Screen';
 import { useKeyboardInset } from './keyboard';
+import { TrainaMark, TrainaMotif } from './brand';
 
 type SettingsIcon = ComponentProps<typeof SymbolView>['name'];
 
@@ -29,30 +31,131 @@ export function AppHeader({
   subtitle,
   trailing,
   large = false,
+  branded = true,
 }: {
   title: string;
   subtitle?: string;
   trailing?: ReactNode;
   large?: boolean;
+  branded?: boolean;
 }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   const size = large ? typeScale.hero : typeScale.title;
   return (
     <View style={styles.header}>
+      {branded ? <TrainaMark size={large ? 42 : 34} /> : null}
       <View style={{ flex: 1 }}>
         <Text
-          style={[styles.headerTitle, { color: theme.text, fontFamily: fontFamily.bold, fontSize: size, lineHeight: size * 1.22 }]}
+          style={[styles.headerTitle, { color: theme.text, fontFamily: fontFamily.bold, fontSize: size, lineHeight: size * 1.22, textAlign: locale === 'ar' ? 'right' : 'left' }]}
           numberOfLines={2}
           maxFontSizeMultiplier={1.2}
         >
           {title}
         </Text>
         {subtitle !== undefined ? (
-          <Text style={[styles.caption, { color: theme.textMuted, fontFamily: fontFamily.medium, marginTop: 2 }]}>{subtitle}</Text>
+          <Text style={[styles.caption, { color: theme.textMuted, fontFamily: fontFamily.medium, marginTop: 2, textAlign: locale === 'ar' ? 'right' : 'left' }]}>{subtitle}</Text>
         ) : null}
       </View>
       {trailing}
     </View>
+  );
+}
+
+export function SurfaceCard({
+  children,
+  tone = 'surface',
+  padding = spacing[4],
+  style,
+}: {
+  children: ReactNode;
+  tone?: 'surface' | 'muted' | 'raised';
+  padding?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const theme = useTheme();
+  const backgroundColor = tone === 'muted' ? theme.surfaceMuted : tone === 'raised' ? theme.surfaceRaised : theme.surface;
+  return (
+    <View
+      style={[
+        {
+          borderRadius: radius.card,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: theme.border,
+          backgroundColor,
+          padding,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+export function SectionTitle({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+  const theme = useTheme();
+  const { locale } = useLocale();
+  return (
+    <View style={{ minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing[4], marginBottom: spacing[2] }}>
+      <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, textAlign: locale === 'ar' ? 'right' : 'left' }}>{title}</Text>
+      {action !== undefined && onAction !== undefined ? (
+        <Pressable accessibilityRole="button" onPress={onAction} hitSlop={8}>
+          <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.label }}>{action}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+export function DirectionChevron({ size = 14 }: { size?: number }) {
+  const theme = useTheme();
+  const { locale } = useLocale();
+  return (
+    <SymbolView
+      name={{ ios: locale === 'ar' ? 'chevron.left' : 'chevron.right', android: locale === 'ar' ? 'chevron_left' : 'chevron_right', web: locale === 'ar' ? 'chevron_left' : 'chevron_right' }}
+      size={size}
+      tintColor={theme.textMuted}
+    />
+  );
+}
+
+export function MediaRow({
+  title,
+  meta,
+  leading,
+  trailing,
+  onPress,
+}: {
+  title: string;
+  meta?: string;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  onPress?: () => void;
+}) {
+  const theme = useTheme();
+  const { locale } = useLocale();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={onPress === undefined}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minHeight: 72,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[3],
+        paddingVertical: spacing[2],
+        opacity: pressed ? 0.76 : 1,
+      })}
+    >
+      {leading}
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.body, textAlign: locale === 'ar' ? 'right' : 'left' }}>{title}</Text>
+        {meta !== undefined ? <Text numberOfLines={1} style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.label, marginTop: 3, textAlign: locale === 'ar' ? 'right' : 'left' }}>{meta}</Text> : null}
+      </View>
+      {trailing ?? (onPress !== undefined ? <DirectionChevron /> : null)}
+    </Pressable>
   );
 }
 
@@ -297,23 +400,47 @@ export function ExerciseCard({
   title,
   meta,
   onPress,
+  index = 0,
+  selected = false,
 }: {
   title: string;
   meta: string;
   onPress?: () => void;
+  index?: number;
+  selected?: boolean;
 }) {
   const theme = useTheme();
-  const mark = title.trim().slice(0, 1);
+  const { locale } = useLocale();
+  const { reduce, duration } = useMotion();
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.exercise, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <View style={[styles.mark, { backgroundColor: theme.surfaceMuted }]}>
-        <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, fontSize: typeScale.headline }}>{mark}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>{title}</Text>
-        <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.label, marginTop: 4 }}>{meta}</Text>
-      </View>
-    </Pressable>
+    <Animated.View entering={reduce ? undefined : FadeInDown.delay(index * 55).duration(duration(260))}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => ({
+          minHeight: 78,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing[3],
+          backgroundColor: pressed ? theme.surfaceMuted : theme.surface,
+          borderColor: selected ? theme.accent : theme.border,
+          borderWidth: selected ? 2 : 1,
+          borderRadius: radius.card,
+          padding: spacing[3],
+          marginBottom: spacing[2],
+          opacity: pressed ? 0.86 : 1,
+        })}
+      >
+        <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: selected ? theme.accent : theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
+          <SymbolView name={selected ? { ios: 'checkmark', android: 'check', web: 'check' } : { ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }} size={21} tintColor={selected ? theme.emphasisText : theme.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text numberOfLines={1} style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.body, textAlign: locale === 'ar' ? 'right' : 'left' }}>{title}</Text>
+          <Text numberOfLines={1} style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.label, marginTop: 4, textAlign: locale === 'ar' ? 'right' : 'left' }}>{meta}</Text>
+        </View>
+        {selected ? <SymbolView name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }} size={18} tintColor={theme.accent} /> : <DirectionChevron size={13} />}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -396,10 +523,11 @@ export function EmptyState({ title, body, compact = false }: { title: string; bo
     );
   }
   return (
-    <Card tone="muted">
-      <Muted>{title}</Muted>
-      <Text style={{ color: theme.text, fontFamily: fontFamily.regular, fontSize: typeScale.body, lineHeight: 24 }}>{body}</Text>
-    </Card>
+    <SurfaceCard tone="muted" style={{ overflow: 'hidden', minHeight: 148, justifyContent: 'flex-end' }}>
+      <View style={{ position: 'absolute', top: spacing[2], end: -spacing[5] }}><TrainaMotif width={180} opacity={0.1} /></View>
+      <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: spacing[1] }}>{title}</Text>
+      <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.body, lineHeight: 24 }}>{body}</Text>
+    </SurfaceCard>
   );
 }
 
@@ -414,15 +542,33 @@ export function ErrorState({ body, onRetry }: { body: string; onRetry?: () => vo
   );
 }
 
+function SkeletonLine({ index, color, reduce }: { index: number; color: string; reduce: boolean }) {
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    if (reduce) return;
+    pulse.value = withDelay(
+      index * 110,
+      withRepeat(
+        withSequence(withTiming(1, { duration: motion.ambient }), withTiming(0, { duration: motion.ambient })),
+        -1,
+        false,
+      ),
+    );
+  }, [index, pulse, reduce]);
+  const style = useAnimatedStyle(() => ({
+    opacity: reduce ? 0.7 : 0.42 + pulse.value * 0.48,
+    transform: [{ scaleX: reduce ? 1 : 0.985 + pulse.value * 0.015 }],
+  }));
+  return <Animated.View style={[styles.skeleton, { backgroundColor: color }, style]} />;
+}
+
 export function LoadingSkeleton() {
   const theme = useTheme();
   const { reduce } = useMotion();
-  const entering = reduce ? undefined : FadeIn.duration(180);
+  const entering = reduce ? undefined : FadeIn.duration(motion.standard);
   return (
     <Animated.View entering={entering}>
-      {[0, 1, 2].map((item) => (
-        <View key={item} style={[styles.skeleton, { backgroundColor: theme.surfaceMuted }]} />
-      ))}
+      {[0, 1, 2].map((item) => <SkeletonLine key={item} index={item} color={theme.surfaceMuted} reduce={reduce} />)}
     </Animated.View>
   );
 }
@@ -469,7 +615,7 @@ export function BottomSheet({ visible, onClose, children }: { visible: boolean; 
   return (
     <Modal visible={visible} transparent animationType={reduce ? 'none' : 'slide'} onRequestClose={onClose}>
       <View style={[styles.sheetFrame, { marginBottom: keyboard }]}>
-        <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel={text(locale, 'back')} />
+        <Pressable style={[styles.scrim, { backgroundColor: theme.overlay }]} onPress={onClose} accessibilityLabel={text(locale, 'back')} />
         <View style={[styles.sheet, { backgroundColor: theme.background, direction }]}>
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
           {children}
@@ -481,8 +627,9 @@ export function BottomSheet({ visible, onClose, children }: { visible: boolean; 
 
 export function SectionLabel({ children }: { children: string }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   return (
-    <Text style={{ color: theme.textMuted, fontFamily: fontFamily.semibold, fontSize: typeScale.label, marginTop: spacing[5], marginBottom: spacing[2] }}>
+    <Text style={{ color: theme.textMuted, fontFamily: fontFamily.semibold, fontSize: typeScale.label, marginTop: spacing[5], marginBottom: spacing[2], textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: locale === 'ar' ? 'rtl' : 'ltr' }}>
       {children}
     </Text>
   );
@@ -500,6 +647,7 @@ export function ListRow({
   trailing?: string;
 }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   return (
     <Pressable
       accessibilityRole="button"
@@ -508,9 +656,9 @@ export function ListRow({
       style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: spacing[3], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border, paddingVertical: spacing[3] }}
     >
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.body, lineHeight: 24 }}>{title}</Text>
+        <Text numberOfLines={1} style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.body, lineHeight: 24, textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: locale === 'ar' ? 'rtl' : 'ltr' }}>{title}</Text>
         {meta !== undefined ? (
-          <Text numberOfLines={1} style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.label, lineHeight: 18, marginTop: 2 }}>{meta}</Text>
+          <Text numberOfLines={1} style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.label, lineHeight: 18, marginTop: 2, textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: locale === 'ar' ? 'rtl' : 'ltr' }}>{meta}</Text>
         ) : null}
       </View>
       {trailing !== undefined ? <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.label }}>{trailing}</Text> : null}
@@ -566,7 +714,9 @@ export function SettingsRow({
       disabled={onPress === undefined}
       onPress={onPress}
       style={{
-        flexDirection: direction === 'rtl' ? 'row-reverse' : 'row',
+        // Plain row: the RTL root already starts it on the right. 'row-reverse' here was
+        // flipping Arabic settings rows back to left-to-right.
+        flexDirection: 'row',
         alignItems: 'center',
         gap: spacing[3],
         minHeight: 52,
@@ -623,8 +773,8 @@ const styles = StyleSheet.create({
   skeleton: { height: 88, borderRadius: radius.lg, marginBottom: spacing[3] },
   segment: { borderWidth: 1, borderRadius: radius.pill, paddingVertical: spacing[2], paddingHorizontal: spacing[3], flexGrow: 0, flexShrink: 1, maxWidth: '100%' },
   sheetFrame: { flex: 1, justifyContent: 'flex-end' },
-  scrim: { flex: 1, backgroundColor: 'rgba(17,22,20,0.45)' },
-  sheet: { borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, padding: spacing[4], maxHeight: '86%' },
+  scrim: { flex: 1 },
+  sheet: { borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: spacing[4], maxHeight: '86%' },
   handle: { width: 42, height: 4, borderRadius: radius.pill, alignSelf: 'center', marginBottom: spacing[3] },
   row: { borderBottomWidth: 1, paddingVertical: spacing[4] },
 });

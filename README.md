@@ -1,8 +1,10 @@
-# Sahhti
+# Traina
 
-Sahhti (صحتي) is a Saudi fitness platform. The repository contains a modular TypeScript API, deterministic domain rules, a PostgreSQL schema, and an Expo member application.
+Traina (ترينا) is Splittech’s Saudi fitness platform. This repository is the product monorepo: a Fastify API, deterministic domain rules, PostgreSQL migrations, and the Expo member app. Package names still use `@sahhti/*` until a dedicated rename lands.
 
-It is not a finished consumer product. No iOS or Android binary has been compiled. No identity provider, payment verifier, or model provider is connected. The million-user target is a planning assumption, not a measured result.
+It is not a finished consumer product. No iOS or Android binary has been compiled. Store verification and a live coaching model are not connected. The million-user target is a planning assumption, not a measured result.
+
+Organization: [splittech-sa](https://github.com/splittech-sa) · board: [project 1](https://github.com/orgs/splittech-sa/projects/1)
 
 ## What runs today
 
@@ -12,7 +14,7 @@ npm test
 npm run typecheck
 ```
 
-`npm test` runs 74 tests: domain rules, wire contracts, design tokens, and the HTTP API, including PGlite persistence.
+Root `npm test` covers domain rules, wire contracts, design tokens, and the HTTP API, including PGlite persistence.
 
 The member app is separate and is not part of the root workspace:
 
@@ -21,7 +23,7 @@ cd apps/mobile
 npm install
 npm test
 npm run typecheck
-npx expo start
+npx expo start --lan --port 8081
 ```
 
 Windows development and the EAS iOS path are described in [docs/architecture/expo-windows.md](docs/architecture/expo-windows.md).

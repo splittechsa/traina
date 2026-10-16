@@ -27,7 +27,7 @@ type Post = {
 type CommentRow = { id: string; body: string; authorName: string | null };
 
 export default function CommunityScreen() {
-  const { locale, direction } = useLocale();
+  const { locale } = useLocale();
   const { tokens } = useSession();
   const client = useQueryClient();
   const theme = useTheme();
@@ -102,7 +102,9 @@ export default function CommunityScreen() {
     setMore(page.posts.length === 20);
   }
 
-  const row = direction === 'rtl' ? 'row-reverse' : 'row';
+  // Layout direction comes from the root (Screen `direction` + I18nManager), so a plain row
+  // already starts on the right in Arabic. Reversing it here flipped Arabic back to LTR.
+  const row = 'row' as const;
 
   return (
     <Screen>
@@ -116,7 +118,7 @@ export default function CommunityScreen() {
           style={{ flexDirection: row, alignItems: 'center', gap: spacing[3], paddingVertical: spacing[3], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border, marginBottom: spacing[2] }}
         >
           <ProfileAvatar name={locale === 'ar' ? 'أنا' : 'Me'} />
-          <Text style={{ color: theme.textMuted, flex: 1, fontFamily: fontFamily.regular, textAlign: locale === 'ar' ? 'right' : 'left', fontSize: typeScale.body }}>
+          <Text style={{ color: theme.textMuted, flex: 1, fontFamily: fontFamily.regular, writingDirection: 'auto', fontSize: typeScale.body }}>
             {locale === 'ar' ? 'شارِك تمرينك أو إنجازك اليوم...' : 'Share a workout or a milestone...'}
           </Text>
           <SymbolView name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }} size={26} tintColor={theme.accent} />

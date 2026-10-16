@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { useQueryClient } from '@tanstack/react-query';
 import { replaceTokens, setApiBaseOverride, setTokenMemory, setTokenPersistor, type StoredTokens } from '../api/tokens';
+import { transitionSession } from './sessionTransition';
 
 const ACCESS = 'sahhti.access';
 const REFRESH = 'sahhti.refresh';
@@ -35,11 +37,15 @@ async function writeStored(tokens: StoredTokens | null): Promise<void> {
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [ready, setReady] = useState(false);
   const [tokens, setTokens] = useState<StoredTokens | null>(null);
 
   useEffect(() => {
     setTokenPersistor(async (next) => {
+      if (next === null) {
+        queryClient.clear();
+      }
       await writeStored(next);
       setTokens(next);
     });
@@ -52,16 +58,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setTokens(stored);
       })
       .finally(() => setReady(true));
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo<SessionValue>(
     () => ({
       ready,
       tokens,
-      save: (next) => replaceTokens(next),
-      clear: () => replaceTokens(null),
+      save: (next) => transitionSession(() => queryClient.clear(), replaceTokens, next),
+      clear: () => transitionSession(() => queryClient.clear(), replaceTokens, null),
     }),
-    [ready, tokens],
+    [queryClient, ready, tokens],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

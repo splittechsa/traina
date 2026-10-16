@@ -139,10 +139,10 @@ export async function completeModelReply(input: {
 }): Promise<CoachTurn> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const deadline = Date.now() + COACH_OVERALL_TIMEOUT_MS;
-  const context = JSON.stringify(input.context).slice(0, 6_000);
+  const context = JSON.stringify(input.context).slice(0, 4_500);
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt(input.localeHint, context) },
-    ...input.history.slice(-12).map((item) => ({
+    ...input.history.slice(-8).map((item) => ({
       role: item.role === 'member' ? 'user' as const : 'assistant' as const,
       content: item.body,
     })),
@@ -151,7 +151,6 @@ export async function completeModelReply(input: {
     model: input.runtime.model,
     temperature: 0.4,
     messages,
-    tools: toolDefinitions(),
   }, fetchImpl, deadline - Date.now());
   if (!first.ok) {
     throw new Error('MODEL_REQUEST_FAILED');
@@ -218,14 +217,14 @@ export async function streamModelReply(input: {
   fetchImpl?: typeof fetch;
 }): Promise<{ text: string; promptTokens: number; completionTokens: number }> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const context = JSON.stringify(input.context).slice(0, 6_000);
+  const context = JSON.stringify(input.context).slice(0, 4_500);
   const response = await postChat(input.runtime, {
     model: input.runtime.model,
     temperature: 0.4,
     stream: true,
     messages: [
       { role: 'system', content: systemPrompt(input.localeHint, context) },
-      ...input.history.slice(-12).map((item) => ({
+      ...input.history.slice(-8).map((item) => ({
         role: item.role === 'member' ? 'user' : 'assistant',
         content: item.body,
       })),

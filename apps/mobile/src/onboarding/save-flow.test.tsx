@@ -53,6 +53,16 @@ vi.mock('expo-secure-store', () => ({
   deleteItemAsync: async () => undefined,
 }));
 
+vi.mock('expo-symbols', () => ({
+  SymbolView: 'SymbolView',
+}));
+
+vi.mock('react-native-reanimated', () => ({
+  default: { View: 'AnimatedView' },
+  FadeInDown: { duration: () => undefined },
+  FadeOut: { duration: () => undefined },
+}));
+
 vi.mock('../api/client', () => {
   class ApiClientError extends Error {
     readonly code: string;
@@ -101,8 +111,9 @@ vi.mock('../ui/editorial', () => {
   const React = require('react') as typeof import('react');
   return {
     editorialPhotos: { strength: 1, run: 1, recovery: 1, meal: 1, coach: 1 },
+    EditorialHint: ({ children }: { children: import('react').ReactNode }) => React.createElement('Text', null, children),
     EditorialFrame: ({ action, onAction, children }: { action: string; onAction: () => void; children?: import('react').ReactNode }) =>
-      React.createElement('View', null, children, React.createElement('Pressable', { accessibilityLabel: action, onPress: onAction }, action)),
+      React.createElement('View', null, children, React.createElement('Pressable', { accessibilityLabel: action, label: action, onPress: onAction }, action)),
   };
 });
 

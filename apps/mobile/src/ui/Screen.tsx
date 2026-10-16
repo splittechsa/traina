@@ -1,11 +1,11 @@
-import { useState, type ReactElement, type ReactNode, type RefObject } from 'react';
+import { useState, type ReactNode, type RefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';
-import { useMotion } from '../theme/motion';
+import { motion, useMotion } from '../theme/motion';
 import { useTheme } from '../theme/ThemeProvider';
 import { useLocale } from '../i18n/LocaleProvider';
 import { text, type CopyKey } from '../i18n/copy';
@@ -15,7 +15,7 @@ import { tapImpact } from './haptics';
 
 export function Screen({ title, children }: { title?: string; children: ReactNode }) {
   const theme = useTheme();
-  const { direction } = useLocale();
+  const { direction, locale } = useLocale();
   const insets = useSafeAreaInsets();
   const inTabs = useSegments()[0] === '(tabs)';
   return (
@@ -28,7 +28,7 @@ export function Screen({ title, children }: { title?: string; children: ReactNod
     >
       <StatusBar style={theme.scheme === 'dark' ? 'light' : 'dark'} />
       {title !== undefined ? (
-        <Text style={[styles.title, { color: theme.text, fontFamily: fontFamily.bold }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+        <Text style={[styles.title, { color: theme.text, fontFamily: fontFamily.bold, textAlign: locale === 'ar' ? 'right' : 'left' }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
           {title}
         </Text>
       ) : null}
@@ -84,15 +84,17 @@ export function Card({ children, tone = 'surface' }: { children: ReactNode; tone
 
 export function Body({ children, inverse = false }: { children: string; inverse?: boolean }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   return (
-    <Text style={[styles.body, { color: inverse ? theme.heroText : theme.text, fontFamily: fontFamily.regular }]}>{children}</Text>
+    <Text style={[styles.body, { color: inverse ? theme.heroText : theme.text, fontFamily: fontFamily.regular, textAlign: locale === 'ar' ? 'right' : 'left' }]}>{children}</Text>
   );
 }
 
 export function Muted({ children, inverse = false }: { children: string; inverse?: boolean }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   return (
-    <Text style={[styles.muted, { color: inverse ? theme.heroAccent : theme.textMuted, fontFamily: fontFamily.regular }]}>
+    <Text style={[styles.muted, { color: inverse ? theme.heroAccent : theme.textMuted, fontFamily: fontFamily.regular, textAlign: locale === 'ar' ? 'right' : 'left' }]}>
       {children}
     </Text>
   );
@@ -149,7 +151,8 @@ export function Field({
               borderColor: focused ? theme.lime : theme.border,
               backgroundColor: theme.surface,
               fontFamily: fontFamily.regular,
-              textAlign: 'auto',
+              textAlign: locale === 'ar' ? 'right' : 'left',
+              writingDirection: locale === 'ar' ? 'rtl' : 'ltr',
               paddingEnd: secureTextEntry ? 72 : spacing[3],
             },
           ]}
@@ -206,10 +209,13 @@ export function Button({
         onPress();
       }}
       onPressIn={() => {
-        scale.value = withTiming(duration(1) === 0 ? 1 : 0.97, { duration: duration(90) });
+        // Reanimated shared values are intentionally mutable event-state.
+        // eslint-disable-next-line react-hooks/immutability
+        scale.value = withTiming(duration(1) === 0 ? 1 : 0.97, { duration: duration(motion.fast) });
       }}
       onPressOut={() => {
-        scale.value = withTiming(1, { duration: duration(140) });
+        // eslint-disable-next-line react-hooks/immutability
+        scale.value = withTiming(1, { duration: duration(motion.standard) });
       }}
       style={[
         styles.button,
@@ -233,6 +239,7 @@ export function Button({
 
 export function Choice({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   return (
     <Pressable
       accessibilityRole="button"
@@ -246,7 +253,7 @@ export function Choice({ label, selected, onPress }: { label: string; selected: 
         },
       ]}
     >
-      <Text style={{ color: selected ? theme.emphasisText : theme.text, fontFamily: fontFamily.medium }}>{label}</Text>
+      <Text style={{ color: selected ? theme.emphasisText : theme.text, fontFamily: fontFamily.medium, textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: locale === 'ar' ? 'rtl' : 'ltr' }}>{label}</Text>
     </Pressable>
   );
 }
@@ -261,7 +268,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, paddingHorizontal: spacing[4], paddingTop: spacing[2] },
   title: { fontSize: typeScale.headline, lineHeight: typeScale.headline * 1.35, marginBottom: spacing[4], writingDirection: 'auto' },
   fill: { flex: 1 },
-  card: { borderWidth: 0, borderRadius: 22, padding: spacing[4], marginBottom: spacing[3] },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: spacing[4], marginBottom: spacing[3] },
   body: { fontSize: typeScale.body, lineHeight: 24, marginBottom: spacing[2], writingDirection: 'auto' },
   muted: { fontSize: typeScale.label, lineHeight: 18, marginBottom: spacing[2], writingDirection: 'auto' },
   field: { marginBottom: spacing[3] },

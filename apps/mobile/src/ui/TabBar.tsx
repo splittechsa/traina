@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-import { fontFamily } from '../theme/tokens';
+import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { useLocale } from '../i18n/LocaleProvider';
 import { useMotion } from '../theme/motion';
@@ -23,7 +23,6 @@ export function useTabBarInset(): number {
   const [measured, setMeasured] = useState(measuredTabBarHeight);
   useEffect(() => {
     tabBarSubscribers.add(setMeasured);
-    setMeasured(measuredTabBarHeight);
     return () => {
       tabBarSubscribers.delete(setMeasured);
     };
@@ -56,14 +55,15 @@ export function BottomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   return (
     <View
-      onLayout={(event) => publishTabBarHeight(event.nativeEvent.layout.height)}
+      onLayout={(event) => publishTabBarHeight(event.nativeEvent.layout.height + spacing[2])}
       style={[
         styles.bar,
         {
           direction,
-          backgroundColor: theme.background,
-          borderTopColor: theme.border,
-          paddingBottom: insets.bottom,
+          backgroundColor: theme.surfaceRaised,
+          borderColor: theme.border,
+          paddingBottom: Math.max(insets.bottom, spacing[2]),
+          shadowColor: theme.shadow,
         },
       ]}
     >
@@ -87,8 +87,8 @@ export function BottomTabBar({ state, descriptors, navigation }: TabBarProps) {
             }}
             style={styles.item}
           >
-            <View style={[styles.iconWrap, { backgroundColor: focused ? theme.surfaceMuted : 'transparent' }]}>
-              <SymbolView name={icon} size={20} tintColor={focused ? theme.accent : theme.textMuted} />
+            <View style={[styles.iconWrap, { backgroundColor: focused ? theme.accent : 'transparent' }]}>
+              <SymbolView name={icon} size={20} tintColor={focused ? theme.emphasisText : theme.textMuted} />
             </View>
             <Text
               numberOfLines={1}
@@ -96,7 +96,7 @@ export function BottomTabBar({ state, descriptors, navigation }: TabBarProps) {
               style={{
                 color: focused ? theme.accent : theme.textMuted,
                 fontFamily: focused ? fontFamily.semibold : fontFamily.regular,
-                fontSize: 11,
+                fontSize: typeScale.micro,
                 lineHeight: 16,
               }}
             >
@@ -112,14 +112,19 @@ export function BottomTabBar({ state, descriptors, navigation }: TabBarProps) {
 const styles = StyleSheet.create({
   bar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: spacing[3],
+    right: spacing[3],
+    bottom: spacing[2],
     zIndex: 10,
     flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg,
     paddingTop: 9,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 22,
+    elevation: 12,
   },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 52, paddingHorizontal: 2 },
-  iconWrap: { width: 46, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  iconWrap: { width: 46, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
 });

@@ -387,6 +387,39 @@ export async function diaryFor(db: Database, userId: string, day: string) {
   return { persisted: true, target: null, referenceDatabase: false, entries, summary: summarizeDiary(null, entries) };
 }
 
+export async function diaryRangeFor(db: Database, userId: string, from: string, to: string) {
+  const rows = await db.query<{
+    logged_on: string;
+    energy_kcal: number;
+    protein_mg: number;
+    carbohydrate_mg: number;
+    fat_mg: number;
+    entry_count: number;
+  }>(
+    `SELECT logged_on::text AS logged_on,
+            SUM(energy_kcal)::int AS energy_kcal,
+            SUM(protein_mg)::bigint AS protein_mg,
+            SUM(carbohydrate_mg)::bigint AS carbohydrate_mg,
+            SUM(fat_mg)::bigint AS fat_mg,
+            COUNT(*)::int AS entry_count
+     FROM food_entries
+     WHERE user_id = $1 AND logged_on BETWEEN $2 AND $3
+     GROUP BY logged_on
+     ORDER BY logged_on`,
+    [userId, from, to],
+  );
+  return {
+    days: rows.rows.map((row) => ({
+      loggedOn: row.logged_on.slice(0, 10),
+      energyKcal: Number(row.energy_kcal),
+      proteinMg: Number(row.protein_mg),
+      carbohydrateMg: Number(row.carbohydrate_mg),
+      fatMg: Number(row.fat_mg),
+      entryCount: Number(row.entry_count),
+    })),
+  };
+}
+
 export async function recordWeight(db: Database, userId: string, weightKg: string, recordedOn: string) {
   let grams = 0;
   try {
@@ -548,13 +581,40 @@ export async function homeFor(db: Database, userId: string, asOf: string, locale
 
 export async function listExercises(db: Database, userId: string) {
   const rows = await db.query(
-    `SELECT id, name_ar, name_en, primary_muscles, secondary_muscles, equipment, difficulty, instructions_ar, instructions_en
+    `SELECT id, name_ar, name_en, primary_muscles, secondary_muscles, movement_pattern,
+            equipment, difficulty, instructions_ar, instructions_en,
+            disciplines, environments, equipment_brands,
+            demo_type, demo_profile, demo_model_uri, demo_license_spdx,
+            demo_attribution, demo_review_status
      FROM exercises
      WHERE owner_user_id IS NULL OR owner_user_id = $1
      ORDER BY name_en`,
     [userId],
   );
-  return rows.rows.map((row) => ({ ...row, demonstrationMedia: null, reviewStatus: 'unreviewed' }));
+  return rows.rows.map((row) => ({
+    ...row,
+    demonstrationMedia:
+      row.demo_type === 'none'
+        ? null
+        : {
+            type: row.demo_type,
+            profile: row.demo_profile,
+            modelUri: row.demo_model_uri,
+            licenseSpdx: row.demo_license_spdx,
+            attribution: row.demo_attribution,
+            reviewStatus: row.demo_review_status,
+          },
+    reviewStatus: row.demo_review_status,
+  }));
+}
+
+export async function listEquipmentManufacturers(db: Database) {
+  const rows = await db.query(
+    `SELECT id, name, name_ar, categories, catalog_status
+     FROM equipment_manufacturers
+     ORDER BY name`,
+  );
+  return rows.rows;
 }
 
 export async function readGym(db: Database, actor: Actor, organizationId: string) {

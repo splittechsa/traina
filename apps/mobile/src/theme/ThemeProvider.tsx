@@ -20,7 +20,7 @@ function isPreference(value: string | null): value is AppearancePreference {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const system = useColorScheme();
-  const [preference, setPreferenceState] = useState<AppearancePreference>('dark');
+  const [preference, setPreferenceState] = useState<AppearancePreference>('system');
 
   useEffect(() => {
     void SecureStore.getItemAsync(APPEARANCE_KEY).then((stored) => {

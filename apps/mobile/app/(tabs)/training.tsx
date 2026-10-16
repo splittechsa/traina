@@ -17,7 +17,16 @@ import { fontFamily } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { stableRecordKey } from '../../src/lists/keys';
 import { Body, Button, Field, Screen, ScreenBody } from '../../src/ui/Screen';
-import { AppHeader, BottomSheet, ErrorState, ExerciseCard, ListRow, LoadingSkeleton, SectionLabel, SegmentedControl } from '../../src/ui/kit';
+import { AppHeader, BottomSheet, ErrorState, ExerciseCard, ListRow, LoadingSkeleton, MediaRow, SectionLabel, SectionTitle, SegmentedControl, SurfaceCard } from '../../src/ui/kit';
+import {
+  asLibraryList,
+  filterExerciseLibrary,
+  type EquipmentBrand,
+  type EquipmentManufacturer,
+  type LibraryExercise,
+  type TrainingEnvironment,
+} from '../../src/training/library';
+import { EnvironmentCards, EquipmentBrandCards, TrainingFamilyCards, familyForDiscipline, type TrainingFamily } from '../../src/training/filterCards';
 
 // Every discipline gets a deliberate photo instead of every history row reusing the same
 // running shot regardless of what was actually trained.
@@ -46,31 +55,21 @@ function weekDays(): string[] {
   });
 }
 
-type Exercise = {
-  id: string;
-  name_ar: string;
-  name_en: string;
-  primary_muscles?: string[];
-  equipment: string[] | string;
-  difficulty?: string;
-  instructions_ar?: string[];
-  instructions_en?: string[];
-  demonstrationMedia?: null;
-};
+type Exercise = LibraryExercise;
 type SessionRow = { id: string; name: string; status: string; discipline: string; scheduled_for: string };
 type Progress = { personalRecords: { id: string; exercise_id: string; load_grams: number; reps: number }[] };
-
-const filters = ['all', ...DISCIPLINES] as const;
 
 export default function TrainingScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
   const client = useQueryClient();
-  const [filter, setFilter] = useState<(typeof filters)[number]>('all');
+  const [filter, setFilter] = useState<TrainingFamily>('all');
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [discipline, setDiscipline] = useState<(typeof DISCIPLINES)[number]>('general_fitness');
+  const [environment, setEnvironment] = useState<TrainingEnvironment>('all');
+  const [equipmentBrand, setEquipmentBrand] = useState<EquipmentBrand | 'all'>('all');
   const [selected, setSelected] = useState<string[]>([]);
   const [format, setFormat] = useState<'amrap' | 'emom' | 'for_time'>('amrap');
   const [minutes, setMinutes] = useState('12');
@@ -84,6 +83,10 @@ export default function TrainingScreen() {
     queryKey: ['exercises'],
     queryFn: () => apiRequest<{ exercises: Exercise[] }>('/v1/exercises'),
   });
+  const manufacturers = useQuery({
+    queryKey: ['equipment-manufacturers'],
+    queryFn: () => apiRequest<{ manufacturers: EquipmentManufacturer[] }>('/v1/equipment/manufacturers'),
+  });
   const sessions = useQuery({
     queryKey: ['sessions'],
     queryFn: () => apiRequest<{ sessions: SessionRow[] }>('/v1/training/sessions'),
@@ -93,12 +96,23 @@ export default function TrainingScreen() {
     queryFn: () => apiRequest<Progress>('/v1/progress'),
   });
 
-  const rows = useMemo(() => {
-    const unique = uniqueById(sessions.data?.sessions ?? []);
-    return filter === 'all' ? unique : unique.filter((session) => session.discipline === filter);
-  }, [filter, sessions.data?.sessions]);
+  const allRows = useMemo(() => uniqueById(sessions.data?.sessions ?? []), [sessions.data?.sessions]);
+  const rows = useMemo(
+    () => filter === 'all' ? allRows : allRows.filter((session) => familyForDiscipline(session.discipline) === filter),
+    [allRows, filter],
+  );
+  const sessionFamilyCounts = useMemo(() => ({
+    all: allRows.length,
+    strength: allRows.filter((session) => familyForDiscipline(session.discipline) === 'strength').length,
+    crossfit: allRows.filter((session) => familyForDiscipline(session.discipline) === 'crossfit').length,
+    calisthenics: allRows.filter((session) => familyForDiscipline(session.discipline) === 'calisthenics').length,
+  }), [allRows]);
   const featured = featuredSession(rows, riyadhToday());
   const rest = rows.filter((session) => session.id !== featured?.id);
+  const today = riyadhToday();
+  const todayCount = rows.filter((session) => String(session.scheduled_for).slice(0, 10) === today).length;
+  const completedCount = rows.filter((session) => session.status === 'completed').length;
+  const activeCount = rows.filter((session) => session.status === 'in_progress' || session.status === 'paused').length;
 
   async function schedule() {
     if (saving) return;
@@ -153,6 +167,7 @@ export default function TrainingScreen() {
   if (sessions.isPending || exercises.isPending) {
     return (
       <Screen>
+        <AppHeader title={text(locale, 'training')} subtitle={locale === 'ar' ? 'نجهّز جلستك' : 'Preparing your session'} />
         <LoadingSkeleton />
       </Screen>
     );
@@ -160,17 +175,37 @@ export default function TrainingScreen() {
   if (sessions.isError || exercises.isError) {
     const offline = sessions.error instanceof ApiClientError && sessions.error.code === 'OFFLINE';
     return (
-      <Screen title={text(locale, 'training')}>
+      <Screen>
+        <AppHeader title={text(locale, 'training')} />
         <ErrorState body={text(locale, offline ? 'offline' : 'error')} onRetry={() => void sessions.refetch()} />
       </Screen>
     );
   }
 
   const library = exercises.data?.exercises ?? [];
+  const builderLibrary = filterExerciseLibrary(library, {
+    query: '',
+    discipline,
+    environment,
+    brand: equipmentBrand,
+  });
+  const builderFamily = familyForDiscipline(discipline);
   return (
     <Screen>
       <ScreenBody footer={<Button label={text(locale, 'createPlan')} onPress={() => setOpen(true)} />}>
         <AppHeader title={text(locale, 'training')} subtitle={locale === 'ar' ? 'خطتك، قوتك، وتقدمك في مكان واحد' : 'Your plan, strength and progress'} />
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+          {[
+            [locale === 'ar' ? 'اليوم' : 'Today', todayCount],
+            [locale === 'ar' ? 'مكتملة' : 'Completed', completedCount],
+            [locale === 'ar' ? 'نشطة' : 'Active', activeCount],
+          ].map(([caption, value]) => (
+            <SurfaceCard key={String(caption)} padding={12} style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 28 }}>{formatCount(Number(value), locale)}</Text>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 11, marginTop: 3 }}>{caption}</Text>
+            </SurfaceCard>
+          ))}
+        </View>
 
         {/* A real training photo instead of a flat color block — Home's hero already owns that
             composition, so Training reaches for movement and texture instead of repeating it. */}
@@ -189,8 +224,8 @@ export default function TrainingScreen() {
               <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 19, marginBottom: 14 }}>
                 {featured === null ? (locale === 'ar' ? 'اختر رياضتك وابدأ أول جلسة' : 'Choose a sport and start the first session') : `${label(locale, 'discipline', featured.discipline)} · ${label(locale, 'session', featured.status)}`}
               </Text>
-              <View style={{ minHeight: 42, borderRadius: 13, backgroundColor: theme.heroAccent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, alignSelf: 'flex-start' }}>
-                <Text style={{ color: theme.hero, fontFamily: fontFamily.bold, fontSize: 14 }}>{featured ? text(locale, 'start') : text(locale, 'createPlan')}</Text>
+              <View style={{ minHeight: 42, borderRadius: 16, backgroundColor: theme.heroAccent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, alignSelf: 'flex-start' }}>
+                <Text style={{ color: theme.goldInk, fontFamily: fontFamily.bold, fontSize: 14 }}>{featured ? text(locale, 'start') : text(locale, 'createPlan')}</Text>
               </View>
             </View>
           </PhotoWash>
@@ -210,36 +245,29 @@ export default function TrainingScreen() {
           })}
         </View>
 
-        <SegmentedControl
-          value={filter}
-          onChange={(id) => setFilter(id as (typeof filters)[number])}
-          options={filters.map((item) => ({ id: item, label: item === 'all' ? text(locale, 'all') : label(locale, 'discipline', item) }))}
-        />
+        <TrainingFamilyCards value={filter} onChange={setFilter} counts={sessionFamilyCounts} />
         {rest.length > 0 ? <SectionLabel>{text(locale, 'history')}</SectionLabel> : null}
         {rest.map((session) => (
-          <Pressable
-            key={session.id}
-            accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/workout/[id]', params: { id: session.id } })}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.surface, borderRadius: 18, padding: 12, marginBottom: 10 }}
-          >
-            <Image source={editorialPhotos[photoFor(session.discipline)]} style={{ width: 64, height: 64, borderRadius: 14 }} contentFit="cover" cachePolicy="memory-disk" />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 16 }}>{session.name}</Text>
-              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 12, marginTop: 4 }}>{`${label(locale, 'discipline', session.discipline)} · ${formatRiyadhDate(String(session.scheduled_for), locale)}`}</Text>
-            </View>
-            <Text style={{ color: theme.accent, fontFamily: fontFamily.bold }}>{text(locale, 'start')}</Text>
-          </Pressable>
+          <SurfaceCard key={session.id} padding={8} style={{ marginBottom: 10 }}>
+            <MediaRow
+              title={session.name}
+              meta={`${label(locale, 'discipline', session.discipline)} · ${formatRiyadhDate(String(session.scheduled_for), locale)}`}
+              leading={<Image source={editorialPhotos[photoFor(session.discipline)]} style={{ width: 56, height: 56, borderRadius: 16 }} contentFit="cover" cachePolicy="memory-disk" />}
+              trailing={<Text style={{ color: theme.accent, fontFamily: fontFamily.bold }}>{text(locale, 'start')}</Text>}
+              onPress={() => router.push({ pathname: '/workout/[id]', params: { id: session.id } })}
+            />
+          </SurfaceCard>
         ))}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}><SectionLabel>{text(locale, 'exercises')}</SectionLabel><Pressable onPress={() => router.push('/exercises')}><Text style={{ color: theme.accent, fontFamily: fontFamily.semibold }}>{locale === 'ar' ? 'عرض الكل ←' : 'See all →'}</Text></Pressable></View>
-        {library.slice(0, 5).map((exercise) => (
+        <SectionTitle title={text(locale, 'exercises')} action={locale === 'ar' ? 'عرض الكل' : 'See all'} onAction={() => router.push('/exercises')} />
+        {library.slice(0, 5).map((exercise, index) => (
           <ExerciseCard
             key={exercise.id}
+            index={index}
             title={locale === 'ar' ? exercise.name_ar : exercise.name_en}
             meta={[
               label(locale, 'equipment', Array.isArray(exercise.equipment) ? exercise.equipment[0] ?? '' : exercise.equipment),
               exercise.difficulty === undefined ? '' : label(locale, 'experience', exercise.difficulty),
-              (exercise.primary_muscles ?? []).slice(0, 2).join(' · '),
+              asLibraryList(exercise.primary_muscles).slice(0, 2).join(' · '),
             ].filter((part) => part.length > 0).join(' · ')}
             onPress={() => {
               setSelected((current) => (current.includes(exercise.id) ? current : [...current, exercise.id].slice(0, 8)));
@@ -260,24 +288,79 @@ export default function TrainingScreen() {
           );
         })}
       </ScreenBody>
-      <BottomSheet visible={open} onClose={() => setOpen(false)}>
+      {open ? <BottomSheet visible onClose={() => setOpen(false)}>
         <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 24 }}>
           <Field label={text(locale, 'workout')} value={name} onChangeText={setName} />
-          <SegmentedControl
-            value={discipline}
-            onChange={(id) => setDiscipline(id as (typeof DISCIPLINES)[number])}
-            options={DISCIPLINES.map((item) => ({ id: item, label: label(locale, 'discipline', item) }))}
+          <TrainingFamilyCards
+            value={builderFamily}
+            onChange={(family) => {
+              setDiscipline(family === 'strength' ? 'bodybuilding' : family === 'crossfit' ? 'crossfit' : family === 'calisthenics' ? 'calisthenics' : 'general_fitness');
+              setSelected([]);
+            }}
           />
-          <Body>{text(locale, 'chooseExercise')}</Body>
-          {library.map((exercise) => (
-            <ListRow
+          {builderFamily === 'strength' ? (
+            <SegmentedControl
+              value={discipline}
+              onChange={(id) => {
+                setDiscipline(id as 'bodybuilding' | 'powerlifting');
+                setSelected([]);
+              }}
+              options={[
+                { id: 'bodybuilding', label: label(locale, 'discipline', 'bodybuilding') },
+                { id: 'powerlifting', label: label(locale, 'discipline', 'powerlifting') },
+              ]}
+            />
+          ) : null}
+          <SectionLabel>{locale === 'ar' ? 'مكان التدريب' : 'Training place'}</SectionLabel>
+          <EnvironmentCards
+            value={environment}
+            onChange={(next) => {
+              setEnvironment(next);
+              setSelected([]);
+              if (next !== 'gym') setEquipmentBrand('all');
+            }}
+          />
+          {environment === 'gym' ? (
+            <>
+              <SectionLabel>{locale === 'ar' ? 'شركة الأجهزة' : 'Equipment brand'}</SectionLabel>
+              <EquipmentBrandCards
+                value={equipmentBrand}
+                manufacturers={manufacturers.data?.manufacturers ?? []}
+                onChange={(next) => {
+                  setEquipmentBrand(next);
+                  setSelected([]);
+                }}
+              />
+            </>
+          ) : null}
+          <View style={{ backgroundColor: theme.surfaceMuted, borderRadius: 18, padding: 14, marginBottom: 12 }}>
+            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 16, textAlign: locale === 'ar' ? 'right' : 'left' }}>
+              {locale === 'ar' ? 'اختيار ذكي للبداية' : 'Smart starting selection'}
+            </Text>
+            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 12, lineHeight: 20, marginTop: 3, textAlign: locale === 'ar' ? 'right' : 'left' }}>
+              {locale === 'ar' ? 'نختار تمارين متوافقة مع رياضتك ومكانك، ويمكنك تعديلها قبل الحفظ.' : 'Pick exercises that match your sport and place, then edit before saving.'}
+            </Text>
+            <Button
+              label={locale === 'ar' ? 'اقترح لي تمارين' : 'Suggest exercises'}
+              variant="secondary"
+              disabled={builderLibrary.length === 0}
+              onPress={() => setSelected(builderLibrary.slice(0, discipline === 'crossfit' || discipline === 'calisthenics' ? 4 : 6).map((exercise) => exercise.id))}
+            />
+          </View>
+          <Body>{`${text(locale, 'chooseExercise')} · ${formatCount(selected.length, locale)}`}</Body>
+          {builderLibrary.map((exercise, index) => (
+            <ExerciseCard
               key={exercise.id}
+              index={index}
               title={locale === 'ar' ? exercise.name_ar : exercise.name_en}
               meta={label(locale, 'equipment', Array.isArray(exercise.equipment) ? exercise.equipment[0] ?? '' : exercise.equipment)}
-              trailing={selected.includes(exercise.id) ? '✓' : undefined}
+              selected={selected.includes(exercise.id)}
               onPress={() => setSelected((current) => (current.includes(exercise.id) ? current.filter((id) => id !== exercise.id) : [...current, exercise.id].slice(0, 8)))}
             />
           ))}
+          {builderLibrary.length === 0 ? (
+            <Body>{locale === 'ar' ? 'لا توجد تمارين مطابقة لهذه التصفية.' : 'No exercises match these filters.'}</Body>
+          ) : null}
           {discipline === 'crossfit' ? (
             <>
               <SegmentedControl
@@ -308,7 +391,7 @@ export default function TrainingScreen() {
           <Button label={saving ? text(locale, 'saving') : text(locale, 'save')} disabled={saving} onPress={() => void schedule()} />
           <View />
         </ScrollView>
-      </BottomSheet>
+      </BottomSheet> : null}
     </Screen>
   );
 }

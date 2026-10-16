@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View, Alert, ActivityIndicator } from 'react-native';
+import { Pressable, Text, View, Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
@@ -10,14 +10,21 @@ import { formatCount, formatKg } from '../../src/format';
 import { label } from '../../src/i18n/labels';
 import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
-import { Body, Button, Field, Screen, ScreenBody } from '../../src/ui/Screen';
-import { AppHeader, ErrorState, ListRow, LoadingSkeleton } from '../../src/ui/kit';
-import { fontFamily, radius, typeScale } from '../../src/theme/tokens';
+import { Button, Field, Screen, ScreenBody } from '../../src/ui/Screen';
+import { AppHeader, ErrorState, LoadingSkeleton } from '../../src/ui/kit';
+import { MovementDemo3D } from '../../src/training/MovementDemo3D';
+import { asLibraryList, type LibraryExercise } from '../../src/training/library';
+import { fontFamily } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { useMotion } from '../../src/theme/motion';
 import { tapSuccess } from '../../src/ui/haptics';
 import { planOfflineSync, type PendingSetCommand } from '../../src/offline/queue';
 import { readPendingSets, writePendingSets } from '../../src/offline/sqlite';
+
+type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia'>;
+type WorkoutProgress = {
+  personalRecords: { exercise_id: string; load_grams: number; reps: number }[];
+};
 
 export default function WorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -35,6 +42,14 @@ export default function WorkoutScreen() {
     queryKey: ['session', id],
     enabled: typeof id === 'string',
     queryFn: () => apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`),
+  });
+  const exerciseLibrary = useQuery({
+    queryKey: ['exercises'],
+    queryFn: () => apiRequest<{ exercises: ExerciseMeta[] }>('/v1/exercises'),
+  });
+  const progress = useQuery({
+    queryKey: ['progress'],
+    queryFn: () => apiRequest<WorkoutProgress>('/v1/progress'),
   });
 
   useEffect(() => {
@@ -92,7 +107,7 @@ export default function WorkoutScreen() {
       set: {
         id: Crypto.randomUUID(),
         exerciseId: planned.exerciseId,
-        setIndex: session.data.session.sets.length + 1,
+        setIndex: session.data.session.sets.filter((set) => set.exerciseId === planned.exerciseId).length + 1,
         reps: Number(reps),
         loadGrams: bodyweight || load.trim().length === 0 ? 0 : parseScaledInteger(load, 1000),
         rpeTenths: null,
@@ -187,6 +202,12 @@ export default function WorkoutScreen() {
   const titleStyle = { color: theme.text, fontFamily: fontFamily.bold, fontSize: 20, lineHeight: 30 } as const;
   const mutedStyle = { color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 22 } as const;
   const activeIndex = Math.max(0, current.plannedExercises.findIndex((item) => item.exerciseId === (activeExerciseId || current.plannedExercises[0]?.exerciseId)));
+  const exerciseName = (exerciseId: string): string => {
+    const exercise = exerciseLibrary.data?.exercises.find((item) => item.id === exerciseId);
+    return exercise === undefined
+      ? (isAr ? 'تمرين' : 'Exercise')
+      : (isAr ? exercise.name_ar : exercise.name_en);
+  };
   return (
     <Screen>
       <ScreenBody footer={primary === null ? undefined : (
@@ -197,7 +218,7 @@ export default function WorkoutScreen() {
         <View style={{ paddingHorizontal: 18, paddingTop: 10 }}>
           <AppHeader title={current.name} subtitle={label(locale, 'session', current.status)} />
           <View style={{ backgroundColor: theme.hero, borderRadius: 26, padding: 22, marginTop: 10, marginBottom: 16 }}>
-            <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 12, letterSpacing: 1 }}>SAHHTI  /  SESSION</Text>
+            <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 12, letterSpacing: 1 }}>TRAINA  /  SESSION</Text>
             <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 27, lineHeight: 39, marginTop: 8 }}>{isDone ? (isAr ? 'إنجاز يُحسب لك' : 'Session complete') : isRunning ? (isAr ? 'كل مجموعة تقرّبك' : 'One set at a time') : (isAr ? 'جاهز تبدأ؟' : 'Ready to train?')}</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
               {[{ n: String(totalExercises), label: isAr ? 'تمارين' : 'Exercises' }, { n: String(completedSets), label: isAr ? 'مجموعات مسجلة' : 'Logged sets' }].map((stat) => (
@@ -223,12 +244,23 @@ export default function WorkoutScreen() {
             return (
               <Pressable key={planned.exerciseId} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => { setActiveExerciseId(planned.exerciseId); setNotice(''); }} style={{ ...tile, borderColor: selected ? theme.accent : theme.border, backgroundColor: selected ? theme.surfaceMuted : theme.surface, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                 <View style={{ height: 42, width: 42, borderRadius: 14, backgroundColor: selected ? theme.accent : theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: selected ? theme.emphasisText : theme.text, fontFamily: fontFamily.bold }}>{String(index + 1).padStart(2, '0')}</Text></View>
-                <View style={{ flex: 1 }}><Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 15 }}>{isAr ? `التمرين ${index + 1}` : `Exercise ${index + 1}`}</Text><Text style={mutedStyle}>{detail} · {isAr ? `${logged} مجموعات مسجلة` : `${logged} sets logged`}</Text></View>
+                <View style={{ flex: 1 }}><Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 15 }}>{exerciseName(planned.exerciseId)}</Text><Text style={mutedStyle}>{detail} · {isAr ? `${logged} مجموعات مسجلة` : `${logged} sets logged`}</Text></View>
                 <Text style={{ color: selected ? theme.accent : theme.textMuted, fontSize: 18 }}>{selected ? '●' : '○'}</Text>
               </Pressable>
             );
           })}
           {isRunning && active !== undefined ? (
+            <>
+            {(() => {
+              const demo = exerciseLibrary.data?.exercises.find((item) => item.id === active.exerciseId);
+              return (
+                <MovementDemo3D
+                  compact
+                  profile={demo?.demonstrationMedia?.profile ?? demo?.movement_pattern ?? 'neutral'}
+                  equipment={asLibraryList(demo?.equipment)}
+                />
+              );
+            })()}
             <View style={{ ...tile, marginTop: 4 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                 <Pressable
@@ -257,7 +289,16 @@ export default function WorkoutScreen() {
                   <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, fontSize: 18 }}>{isAr ? '‹' : '›'}</Text>
                 </Pressable>
               </View>
-              <Text style={{ ...titleStyle, marginTop: 2, marginBottom: 16 }}>{isAr ? 'سجّل مجموعتك' : 'Log your set'}</Text>
+              <Text style={{ ...titleStyle, marginTop: 2 }}>{exerciseName(active.exerciseId)}</Text>
+              {(() => {
+                const previous = progress.data?.personalRecords.find((record) => record.exercise_id === active.exerciseId);
+                if (previous === undefined) return null;
+                const reference = previous.load_grams > 0
+                  ? `${formatKg(previous.load_grams, locale)} × ${formatCount(previous.reps, locale)}`
+                  : `${formatCount(previous.reps, locale)} ${text(locale, 'reps')}`;
+                return <Text style={{ ...mutedStyle, marginBottom: 16 }}>{isAr ? `أفضل أداء سابق: ${reference}` : `Previous best: ${reference}`}</Text>;
+              })()}
+              {progress.data?.personalRecords.some((record) => record.exercise_id === active.exerciseId) ? null : <View style={{ height: 16 }} />}
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                 {['5', '8', '10', '12'].map((value) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: reps === value }} onPress={() => setReps(value)} style={{ flex: 1, minHeight: 46, borderRadius: 13, backgroundColor: reps === value ? theme.accent : theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: reps === value ? theme.emphasisText : theme.text, fontFamily: fontFamily.bold }}>{value}</Text></Pressable>)}
               </View>
@@ -285,6 +326,7 @@ export default function WorkoutScreen() {
                 </>
               ) : null}
             </View>
+            </>
           ) : null}
           {current.sets.length > 0 ? <Text style={{ ...titleStyle, marginTop: 10, marginBottom: 12 }}>{isAr ? 'سجل المجموعات' : 'Logged sets'}</Text> : null}
           {current.sets.slice().reverse().map((set) => <View key={set.id} style={{ ...tile, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{set.loadGrams === 0 ? formatCount(set.reps, locale) : `${formatCount(set.reps, locale)} × ${formatKg(set.loadGrams, locale)}`}</Text><Text style={mutedStyle}>{text(locale, 'sets')} {formatCount(set.setIndex, locale)} ✓</Text></View>)}

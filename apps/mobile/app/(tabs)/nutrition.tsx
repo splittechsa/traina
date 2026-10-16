@@ -1,21 +1,25 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useQuery, useQueryClient, useQueries } from '@tanstack/react-query';
+import { router } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { parseScaledInteger } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { messageFor } from '../../src/api/errors';
-import { formatCount, formatGramsFromMg, formatRiyadhWeekday, riyadhToday } from '../../src/format';
+import { formatCount, formatRiyadhWeekday, riyadhToday } from '../../src/format';
 import { label } from '../../src/i18n/labels';
 import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
-import { fontFamily, typeScale } from '../../src/theme/tokens';
+import { fontFamily, radius, spacing, typeScale } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { Body, Button, Field, Screen, ScreenBody } from '../../src/ui/Screen';
-import { AppHeader, BottomSheet, DateSelector, ErrorState, ListRow, LoadingSkeleton, MacroProgress, SectionLabel } from '../../src/ui/kit';
+import { AppHeader, BottomSheet, DateSelector, ErrorState, ListRow, LoadingSkeleton, SectionLabel } from '../../src/ui/kit';
+import { GlowCard, GradientRing, MacroBar } from '../../src/ui/visual';
+import { LOCAL_KEYS, useLocalValue } from '../../src/storage/local';
+import type { MacroTargets } from '../../src/nutrition/targets';
 import { stableRecordKey } from '../../src/lists/keys';
 
 type Entry = { id: string; energyKcal: number; proteinMg: number; carbohydrateMg: number; fatMg: number; source: string; label?: string | null };
-type FoodHit = { id: string; name_ar: string; name_en: string; energy_kcal: number; per_quantity: string };
 type Diary = {
   target: null;
   entries?: Entry[];
@@ -23,6 +27,16 @@ type Diary = {
     consumed: { energyKcal: number; proteinMg: number; carbohydrateMg: number; fatMg: number; imageEstimateEnergyKcal: number };
     entryCount: number;
   };
+};
+type DiaryRange = {
+  days: {
+    loggedOn: string;
+    energyKcal: number;
+    proteinMg: number;
+    carbohydrateMg: number;
+    fatMg: number;
+    entryCount: number;
+  }[];
 };
 
 function recentDays(): string[] {
@@ -42,7 +56,6 @@ export default function NutritionScreen() {
   const client = useQueryClient();
   const days = recentDays();
   const [day, setDay] = useState(days[6] ?? riyadhToday());
-  const [searchOpen, setSearchOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [energy, setEnergy] = useState('');
@@ -50,43 +63,28 @@ export default function NutritionScreen() {
   const [carbs, setCarbs] = useState('');
   const [fat, setFat] = useState('');
   const [error, setError] = useState('');
-  const [foodQuery, setFoodQuery] = useState('');
-  const [grams, setGrams] = useState('100');
   const [nameAr, setNameAr] = useState('');
   const [nameEn, setNameEn] = useState('');
-  const foods = useQuery({
-    queryKey: ['foods', foodQuery],
-    enabled: foodQuery.trim().length >= 2,
-    queryFn: () => apiRequest<{ foods: FoodHit[]; referenceDatabase: boolean }>(`/v1/nutrition/foods?q=${encodeURIComponent(foodQuery.trim())}`),
+  const targets = useLocalValue<MacroTargets | null>(LOCAL_KEYS.macroTargets, null);
+  const diary = useQuery({
+    queryKey: ['diary', day],
+    queryFn: () => apiRequest<Diary>(`/v1/nutrition/diary?on=${day}`),
   });
-  const week = useQueries({
-    queries: days.map((value) => ({
-      queryKey: ['diary', value],
-      queryFn: () => apiRequest<Diary>(`/v1/nutrition/diary?on=${value}`),
-    })),
+  const rangeStart = days[0] ?? day;
+  const rangeEnd = days[days.length - 1] ?? day;
+  const week = useQuery({
+    queryKey: ['diary-range', rangeStart, rangeEnd],
+    queryFn: () => apiRequest<DiaryRange>(`/v1/nutrition/diary-range?from=${rangeStart}&to=${rangeEnd}`),
   });
-  const diary = week[days.indexOf(day)];
 
-  async function logPortion(foodId: string) {
-    setError('');
-    const quantityGrams = Number(grams);
-    if (!Number.isInteger(quantityGrams) || quantityGrams < 1 || quantityGrams > 2000) {
-      setError(text(locale, 'portion'));
-      return;
-    }
-    try {
-      await apiRequest('/v1/nutrition/portions', { method: 'POST', body: { foodItemId: foodId, quantityGrams, loggedOn: day } });
-      await client.invalidateQueries({ queryKey: ['diary', day] });
-      await client.invalidateQueries({ queryKey: ['home'] });
-      setSearchOpen(false);
-    } catch (caught) {
-      setError(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
-    }
+  function openFoodLog() {
+    router.push({ pathname: '/food-log', params: { day } });
   }
 
   async function removeEntry(entryId: string) {
     await apiRequest(`/v1/nutrition/entries/${entryId}`, { method: 'DELETE' });
     await client.invalidateQueries({ queryKey: ['diary', day] });
+    await client.invalidateQueries({ queryKey: ['diary-range'] });
     await client.invalidateQueries({ queryKey: ['home'] });
   }
 
@@ -107,8 +105,8 @@ export default function NutritionScreen() {
       setCustomOpen(false);
       setNameAr('');
       setNameEn('');
-      setFoodQuery(nameEn.trim().length >= 2 ? nameEn.trim() : nameAr.trim());
-      setSearchOpen(true);
+      // The new food is now in "Your foods" — open search so it can be logged right away.
+      openFoodLog();
     } catch (caught) {
       setError(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
     }
@@ -129,6 +127,7 @@ export default function NutritionScreen() {
         },
       });
       await client.invalidateQueries({ queryKey: ['diary', day] });
+      await client.invalidateQueries({ queryKey: ['diary-range'] });
       await client.invalidateQueries({ queryKey: ['home'] });
       setManualOpen(false);
       setEnergy('');
@@ -140,7 +139,7 @@ export default function NutritionScreen() {
     }
   }
 
-  if (diary === undefined || diary.isPending) {
+  if (diary.isPending) {
     return (
       <Screen>
         <LoadingSkeleton />
@@ -157,47 +156,95 @@ export default function NutritionScreen() {
   }
   const consumed = diary.data.summary.consumed;
   const entries = diary.data.entries ?? [];
-  const totals = week.map((item) => item.data?.summary.consumed.energyKcal ?? 0);
+  const totals = days.map((value) => week.data?.days.find((item) => item.loggedOn === value)?.energyKcal ?? 0);
   const peak = Math.max(0, ...totals);
-  const hasMacros = consumed.proteinMg + consumed.carbohydrateMg + consumed.fatMg > 0;
-  const gramsNumber = Number(grams);
+  const ar = locale === 'ar';
+  const target = targets.value;
+  const g = ar ? 'غ' : 'g';
+  const remainingKcal = target === null ? null : target.energyKcal - consumed.energyKcal;
   return (
     <Screen>
       <ScreenBody>
-        <AppHeader title={text(locale, 'nutrition')} subtitle={locale === 'ar' ? 'وقود أدائك، يومًا بيوم' : 'Fuel your performance, one day at a time'} />
+        <AppHeader title={text(locale, 'nutrition')} subtitle={ar ? 'وقود أدائك، يومًا بيوم' : 'Fuel your performance, one day at a time'} />
         <DateSelector days={days} selected={day} onSelect={setDay} labelFor={(value) => formatRiyadhWeekday(value, locale)} />
-        <View style={{ backgroundColor: theme.surface, borderRadius: 22, padding: 20, gap: 14, marginTop: 8 }}>
-          <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 13 }}>{locale === 'ar' ? 'السعرات المسجلة اليوم' : 'Calories logged today'}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 44, lineHeight: 52 }}>{formatCount(consumed.energyKcal, locale)}</Text>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 15 }}>{text(locale, 'kcal')}</Text>
+        <View style={{ height: spacing[2] }} />
+        <GlowCard glow={theme.ember}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[4] }}>
+            <GradientRing
+              size={136}
+              stroke={13}
+              progress={target === null ? (consumed.energyKcal > 0 ? 1 : 0) : consumed.energyKcal / Math.max(1, target.energyKcal)}
+              from={theme.heroAccent}
+              to={theme.ember}
+              track="rgba(255,255,255,0.08)"
+              accessibilityLabel={`${consumed.energyKcal} ${text(locale, 'kcal')}`}
+            >
+              <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 28, lineHeight: 34, fontVariant: ['tabular-nums'] }}>{formatCount(consumed.energyKcal, locale)}</Text>
+              <Text style={{ color: 'rgba(243,246,244,0.62)', fontFamily: fontFamily.medium, fontSize: typeScale.micro }}>{text(locale, 'kcal')}</Text>
+            </GradientRing>
+            <View style={{ flex: 1, gap: spacing[1] }}>
+              {target !== null && remainingKcal !== null ? (
+                <>
+                  <Text style={{ color: 'rgba(243,246,244,0.62)', fontFamily: fontFamily.medium, fontSize: typeScale.label }}>
+                    {remainingKcal >= 0 ? (ar ? 'متبقٍ اليوم' : 'Left today') : ar ? 'فوق هدفك' : 'Over target'}
+                  </Text>
+                  <Text style={{ color: remainingKcal >= 0 ? theme.heroText : theme.warning, fontFamily: fontFamily.bold, fontSize: typeScale.display, fontVariant: ['tabular-nums'] }}>
+                    {formatCount(Math.abs(remainingKcal), locale)}
+                  </Text>
+                  <Text style={{ color: 'rgba(243,246,244,0.62)', fontFamily: fontFamily.regular, fontSize: typeScale.micro }}>
+                    {ar ? `من ${formatCount(target.energyKcal, locale)} · تقديرك الشخصي` : `of ${formatCount(target.energyKcal, locale)} · your estimate`}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={{ color: theme.heroText, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>{ar ? 'ما عندك هدف يومي بعد' : 'No daily target yet'}</Text>
+                  <Pressable accessibilityRole="button" onPress={() => router.push('/macros')} hitSlop={6}>
+                    <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.bold, fontSize: typeScale.body }}>{ar ? 'احسب سعراتك وماكروزك ←' : 'Calculate calories & macros →'}</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
           </View>
-          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 12 }}>
-            {([
-              [text(locale, 'protein'), consumed.proteinMg],
-              [text(locale, 'carbs'), consumed.carbohydrateMg],
-              [text(locale, 'fat'), consumed.fatMg],
-            ] as const).map(([name, amount], index) => (
-              <View key={name} style={[{ flex: 1, gap: 4 }, index > 0 ? { borderStartWidth: 1, borderStartColor: theme.border, paddingStart: 12 } : null]}>
-                <Text style={{ color: theme.textMuted, fontSize: 12, fontFamily: fontFamily.medium }}>{name}</Text>
-                <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 18 }}>{formatGramsFromMg(amount, locale)}</Text>
-              </View>
-            ))}
+          <View style={{ gap: spacing[3], marginTop: spacing[4] }}>
+            <MacroBar inverse label={text(locale, 'protein')} value={consumed.proteinMg / 1000} target={target?.proteinG ?? null} unit={g} color={theme.heroAccent} />
+            <MacroBar inverse label={text(locale, 'carbs')} value={consumed.carbohydrateMg / 1000} target={target?.carbsG ?? null} unit={g} color={theme.ember} />
+            <MacroBar inverse label={text(locale, 'fat')} value={consumed.fatMg / 1000} target={target?.fatG ?? null} unit={g} color={theme.violet} />
           </View>
-          {hasMacros ? <MacroProgress protein={consumed.proteinMg} carbs={consumed.carbohydrateMg} fat={consumed.fatMg} /> : null}
-          {diary.data.target === null ? <Text style={{ color: theme.textMuted, fontSize: 13, fontFamily: fontFamily.regular, lineHeight: 20 }}>{locale === 'ar' ? 'لا يوجد هدف غذائي. الأرقام المعروضة هي ما سجّلته.' : 'No nutrition target. These numbers are what you logged.'}</Text> : null}
-        </View>
-        <View style={{ flexDirection: locale === 'ar' ? 'row-reverse' : 'row', gap: 10, marginTop: 12 }}>
-          <Pressable accessibilityRole="button" onPress={() => { setError(''); setSearchOpen(true); }} style={{ flex: 1, backgroundColor: theme.accent, paddingVertical: 16, borderRadius: 18, alignItems: 'center' }}>
-            <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold, fontSize: 14 }}>{locale === 'ar' ? '+ ابحث عن طعام' : '+ Find food'}</Text>
+          {target !== null ? (
+            <Pressable accessibilityRole="button" onPress={() => router.push('/macros')} style={{ marginTop: spacing[3] }}>
+              <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: typeScale.label }}>{ar ? 'تعديل الهدف' : 'Adjust target'}</Text>
+            </Pressable>
+          ) : null}
+        </GlowCard>
+        <View style={{ flexDirection: 'row', gap: spacing[2], marginTop: spacing[3] }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={openFoodLog}
+            style={({ pressed }) => ({ flex: 1, flexDirection: 'row', gap: spacing[2], backgroundColor: theme.accent, opacity: pressed ? 0.85 : 1, height: 54, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' })}
+          >
+            <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} size={17} tintColor={theme.emphasisText} />
+            <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold, fontSize: typeScale.body }}>{ar ? 'أضف طعاماً' : 'Add food'}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => { setError(''); setManualOpen(true); }} style={{ flex: 1, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, paddingVertical: 16, borderRadius: 18, alignItems: 'center' }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 14 }}>{text(locale, 'manualEntry')}</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={ar ? 'مسح الباركود' : 'Scan barcode'}
+            onPress={() => router.push({ pathname: '/scanner', params: { day } })}
+            style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <SymbolView name={{ ios: 'barcode.viewfinder', android: 'qr_code_scanner', web: 'qr_code_scanner' }} size={22} tintColor={theme.text} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={text(locale, 'manualEntry')}
+            onPress={() => { setError(''); setManualOpen(true); }}
+            style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <SymbolView name={{ ios: 'square.and.pencil', android: 'edit', web: 'edit' }} size={20} tintColor={theme.text} />
           </Pressable>
         </View>
         {peak > 0 ? (
           <View style={{ backgroundColor: theme.surface, borderRadius: 22, padding: 18, marginTop: 20, gap: 12 }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 16, textAlign: locale === 'ar' ? 'right' : 'left' }}>{locale === 'ar' ? 'آخر ٧ أيام' : 'Last 7 days'}</Text>
+            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 16 }}>{ar ? 'آخر ٧ أيام' : 'Last 7 days'}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: 8 }}>
               {days.map((value, index) => (
                 <View key={value} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
@@ -225,25 +272,6 @@ export default function NutritionScreen() {
           />
         ))}
       </ScreenBody>
-      <BottomSheet visible={searchOpen} onClose={() => setSearchOpen(false)}>
-        <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0, maxHeight: 420 }} contentContainerStyle={{ paddingBottom: 12 }}>
-          <Field label={text(locale, 'foodSearch')} value={foodQuery} onChangeText={setFoodQuery} />
-          <Field label={text(locale, 'portion')} value={grams} onChangeText={setGrams} keyboardType="number-pad" />
-          {foods.data?.referenceDatabase === false && foodQuery.trim().length >= 2 ? <Body>{text(locale, 'foodSearchEmpty')}</Body> : null}
-          {foods.data !== undefined && foods.data.foods.length === 0 && foodQuery.trim().length >= 2 ? <Body>{text(locale, 'noFoodMatch')}</Body> : null}
-          {foods.data?.foods.map((food) => (
-            <ListRow
-              key={stableRecordKey(food.id)}
-              title={locale === 'ar' ? food.name_ar : food.name_en}
-              meta={Number.isInteger(gramsNumber) && gramsNumber > 0 ? `${formatCount(Math.floor((food.energy_kcal * gramsNumber) / 100), locale)} ${text(locale, 'kcal')}` : text(locale, 'portion')}
-              onPress={() => void logPortion(food.id)}
-            />
-          ))}
-          {error.length > 0 ? <Body>{error}</Body> : null}
-          <Button label={text(locale, 'manualEntry')} variant="secondary" onPress={() => { setSearchOpen(false); setManualOpen(true); }} />
-          <Button label={text(locale, 'customFood')} variant="secondary" onPress={() => { setSearchOpen(false); setCustomOpen(true); }} />
-        </ScrollView>
-      </BottomSheet>
       <BottomSheet visible={manualOpen} onClose={() => setManualOpen(false)}>
         <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 12 }}>
           <Field label={text(locale, 'kcal')} value={energy} onChangeText={setEnergy} keyboardType="number-pad" />
@@ -253,6 +281,8 @@ export default function NutritionScreen() {
           <Body>{text(locale, 'saudiHint')}</Body>
           {error.length > 0 ? <Body>{error}</Body> : null}
           <Button label={text(locale, 'save')} onPress={() => void save()} />
+          <View style={{ height: spacing[2] }} />
+          <Button label={text(locale, 'customFood')} variant="secondary" onPress={() => { setManualOpen(false); setCustomOpen(true); }} />
         </ScrollView>
       </BottomSheet>
       <BottomSheet visible={customOpen} onClose={() => setCustomOpen(false)}>

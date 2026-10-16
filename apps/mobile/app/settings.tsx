@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text } from '../src/i18n/copy';
@@ -6,8 +8,19 @@ import { SectionLabel, SegmentedControl, SettingsGroup, SettingsRow } from '../s
 import { useTheme } from '../src/theme/ThemeProvider';
 
 export default function SettingsScreen() {
-  const { locale, setLocale } = useLocale();
+  const { locale, setLocale, restartRequired } = useLocale();
   const theme = useTheme();
+
+  // Switching ar<->en flips I18nManager's RTL flag, but React Native only applies that to
+  // the *next* native layout pass (see index.ts) — it cannot re-mirror an already-mounted
+  // app. There is no way around a real restart here; surfacing it honestly beats leaving
+  // the UI half-mirrored with no explanation.
+  useEffect(() => {
+    if (!restartRequired) return;
+    Alert.alert(text(locale, 'restartRequiredTitle'), text(locale, 'restartRequiredBody'), [
+      { text: text(locale, 'ok') },
+    ]);
+  }, [restartRequired, locale]);
   return (
     <Screen title={text(locale, 'settings')}>
       <ScreenBody>
@@ -53,6 +66,12 @@ export default function SettingsScreen() {
             icon={{ ios: 'scalemass.fill', android: 'monitor_weight', web: 'monitor_weight' }}
             title={text(locale, 'weightTracking')}
             onPress={() => router.push('/weight')}
+          />
+          <SettingsRow
+            icon={{ ios: 'chart.pie.fill', android: 'pie_chart', web: 'pie_chart' }}
+            tint="#C76A3A"
+            title={locale === 'ar' ? 'حاسبة السعرات والماكروز' : 'Calorie & macro calculator'}
+            onPress={() => router.push('/macros')}
           />
           <SettingsRow
             icon={{ ios: 'figure.run', android: 'directions_run', web: 'directions_run' }}

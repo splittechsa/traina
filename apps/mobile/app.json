@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "صحتي",
+    "name": "ترينا",
     "slug": "sahhti",
     "scheme": "sahhti",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "sa.sahhti.member",
       "supportsTablet": true,
@@ -14,7 +14,7 @@
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
-        "NSLocalNetworkUsageDescription": "Sahhti connects to the development API on the local network.",
+        "NSLocalNetworkUsageDescription": "traina connects to the development API on the local network.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -24,7 +24,11 @@
         "backgroundColor": "#111614",
         "foregroundImage": "./assets/icon.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -35,12 +39,33 @@
       "expo-localization",
       "expo-sqlite",
       "expo-image",
-      "expo-camera",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "تستخدم ترينا الكاميرا لقراءة باركود الأطعمة فقط. traina uses the camera only to read food barcodes."
+        }
+      ],
       "expo-notifications",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "تستخدم ترينا مستشعر الحركة لعدّ خطواتك اليومية. traina uses motion data to count your daily steps."
+        }
+      ],
+      "expo-asset"
     ],
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "08645d48-eccc-471e-bd17-0354d7093033"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/08645d48-eccc-471e-bd17-0354d7093033"
     }
   }
 }

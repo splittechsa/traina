@@ -26,7 +26,7 @@ export type DesignTokens = {
   spacing: number[];
   radius: Record<string, number>;
   direction: { ar: 'rtl'; en: 'ltr' };
-  motion: { fastMs: number; standardMs: number };
+  motion: { fastMs: number; standardMs: number; emphasisMs: number };
 };
 
 function loadTokens(): DesignTokens {

@@ -13,6 +13,7 @@ vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   StyleSheet: { create: (styles: unknown) => styles, absoluteFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 } },
   Keyboard: { addListener: () => ({ remove: () => undefined }) },
+  AppState: { addEventListener: () => ({ remove: () => undefined }) },
   Platform: { OS: 'ios' },
   AccessibilityInfo: {
     isReduceMotionEnabled: async () => false,
@@ -21,11 +22,12 @@ vi.mock('react-native', () => ({
 }));
 
 vi.mock('react-native-reanimated', () => ({
-  default: { View: 'AnimatedView' },
+  default: { View: 'AnimatedView', createAnimatedComponent: (component: unknown) => component },
   FadeIn: { duration: () => undefined },
   FadeInDown: { duration: () => undefined },
   useSharedValue: (value: unknown) => ({ value }),
   useAnimatedStyle: (factory: () => object) => factory(),
+  useAnimatedProps: (factory: () => object) => factory(),
   withTiming: (value: unknown) => value,
 }));
 
@@ -35,6 +37,9 @@ vi.mock('react-native-svg', () => ({
   default: 'Svg',
   Defs: 'Defs',
   LinearGradient: 'LinearGradient',
+  Circle: 'Circle',
+  Path: 'Path',
+  Svg: 'Svg',
   Rect: 'Rect',
   Stop: 'Stop',
 }));
@@ -55,9 +60,18 @@ vi.mock('./editorial', () => ({
 vi.mock('expo-router', () => ({
   router: { push: () => undefined, replace: () => undefined },
   useSegments: () => ['(tabs)'],
+  useFocusEffect: () => undefined,
 }));
 
 vi.mock('expo-symbols', () => ({ SymbolView: () => null }));
+vi.mock('expo-sensors', () => ({
+  Pedometer: {
+    isAvailableAsync: async () => false,
+    getPermissionsAsync: async () => ({ granted: false, canAskAgain: false }),
+    requestPermissionsAsync: async () => ({ granted: false, canAskAgain: false }),
+    watchStepCount: () => ({ remove: () => undefined }),
+  },
+}));
 
 vi.mock('expo-secure-store', () => ({
   getItemAsync: async () => null,
@@ -156,7 +170,9 @@ vi.mock('./kit', () => ({
   MetricCard: 'MetricCard',
   ProfileAvatar: 'ProfileAvatar',
   SectionLabel: 'SectionLabel',
+  SectionTitle: 'SectionTitle',
   Sparkline: 'Sparkline',
+  SurfaceCard: 'SurfaceCard',
   WorkoutCard: 'WorkoutCard',
 }));
 
@@ -201,7 +217,7 @@ describe('HomeScreen hook order', () => {
     });
     expect(renderedText(renderer)).toContain('صباح الخير');
     expect(renderedText(renderer)).toContain('اسأل المدرب');
-    expect(renderedText(renderer)).toContain('كل يوم، أقوى.');
+    expect(renderedText(renderer)).toContain('الخطوة التالية');
     expect(renderedText(renderer)).toContain('أنشئ خطتك الرياضية');
 
     state.phase = 'offline';

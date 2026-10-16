@@ -12,7 +12,7 @@ import { fontFamily, typeScale } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { useMotion } from '../../src/theme/motion';
 import { Button, Screen, ScreenBody } from '../../src/ui/Screen';
-import { AIChatBubble, EmptyState } from '../../src/ui/kit';
+import { AIChatBubble, AppHeader, EmptyState, LoadingSkeleton } from '../../src/ui/kit';
 import { stableRecordKey } from '../../src/lists/keys';
 
 type CoachReply = { text: string; provider: string; productionIntelligence: boolean };
@@ -47,9 +47,35 @@ export default function CoachScreen() {
     // up on the next history refetch.
     mutationFn: (body: string) =>
       apiRequest<CoachReply>('/v1/coach/messages', { method: 'POST', body: { message: body }, timeoutMs: 35_000 }),
-    onSuccess: async () => {
+    onMutate: async (body) => {
+      await client.cancelQueries({ queryKey: ['coach-messages'] });
+      const previous = client.getQueryData<History>(['coach-messages']);
+      if (previous !== undefined) {
+        client.setQueryData<History>(['coach-messages'], {
+          ...previous,
+          messages: [...previous.messages, { id: `pending-${Date.now()}`, role: 'member', body }],
+        });
+      }
+      return { previous };
+    },
+    onSuccess: (reply) => {
       setMessage('');
-      await client.invalidateQueries({ queryKey: ['coach-messages'] });
+      client.setQueryData<History>(['coach-messages'], (current) =>
+        current === undefined
+          ? current
+          : {
+              ...current,
+              messages: [
+                ...current.messages,
+                { id: `reply-${Date.now()}`, role: 'assistant', body: reply.text },
+              ],
+            },
+      );
+    },
+    onError: (_error, _body, context) => {
+      if (context?.previous !== undefined) {
+        client.setQueryData(['coach-messages'], context.previous);
+      }
     },
   });
   const goals = me.data?.goals ?? [];
@@ -109,7 +135,9 @@ export default function CoachScreen() {
                 flexDirection: 'row',
                 alignItems: 'flex-end',
                 gap: 8,
-                backgroundColor: theme.surface,
+                backgroundColor: theme.surfaceRaised,
+                borderWidth: 1,
+                borderColor: theme.border,
                 borderRadius: 24,
                 padding: 6,
                 paddingStart: 16,
@@ -130,7 +158,8 @@ export default function CoachScreen() {
                   color: theme.text,
                   fontFamily: fontFamily.regular,
                   fontSize: typeScale.body,
-                  textAlign: isAr ? 'right' : 'left',
+                  // Natural alignment: start edge follows the RTL/LTR root, so no manual flip.
+                  writingDirection: isAr ? 'rtl' : 'ltr',
                 }}
               />
               <Pressable
@@ -157,19 +186,15 @@ export default function CoachScreen() {
           </View>
         }
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 14 }}>
-          <View style={{ height: 34, width: 34, borderRadius: 17, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
-            <SymbolView name={{ ios: 'bolt.heart.fill', android: 'favorite', web: 'favorite' }} size={16} tintColor={theme.accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card }} numberOfLines={1}>{text(locale, 'coachTitle')}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        <AppHeader
+          title={text(locale, 'coachTitle')}
+          subtitle={welcomeCaption}
+          trailing={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
             <View style={{ height: 6, width: 6, borderRadius: 3, backgroundColor: providerConfigured ? theme.success : theme.textMuted }} />
             <Text numberOfLines={1} style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 11, maxWidth: 110 }}>{statusLine}</Text>
-          </View>
-        </View>
-        {history.isPending ? <EmptyState compact title={text(locale, 'coachTitle')} body={text(locale, 'coachHistoryLoading')} /> : null}
+          </View>}
+        />
+        {history.isPending ? <LoadingSkeleton /> : null}
         {history.isError ? (
           <EmptyState
             compact

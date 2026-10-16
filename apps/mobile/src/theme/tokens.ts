@@ -1,56 +1,58 @@
-// SAHHTI / 2026 — a performance-first Saudi visual language.
-// Accessible contrast and a unified color system across all existing routes.
+// TRAINA / 2026 — warm Saudi editorial craft with a performance core.
+// Green drives action; gold is reserved for earned moments and brand detail.
 export const brand = {
-  charcoal: '#101418',
-  green: '#14B8A6',
-  lime: '#14B8A6',
-  paper: '#F4F7F6',
-  violet: '#7C9CB8',
+  charcoal: '#161411',
+  green: '#315C49',
+  gold: '#D6A54A',
+  paper: '#F3EEE6',
+  sand: '#C9B7A2',
 } as const;
 
 export type Palette = {
-  scheme: 'light' | 'dark'; background: string; surface: string; surfaceMuted: string;
+  scheme: 'light' | 'dark'; background: string; surface: string; surfaceMuted: string; surfaceRaised: string;
   text: string; textMuted: string; border: string; accent: string; emphasis: string;
   emphasisText: string; lime: string; limeInk: string; violet: string;
   hero: string; heroText: string; heroAccent: string; danger: string;
   warning: string; success: string; focus: string; ringTrack: string;
-  /** Warm secondary accent — used sparingly for streaks, records and highlights so the
-   *  app isn't read as a single-hue teal dashboard. Not a CTA color. */
   ember: string; emberInk: string;
+  gold: string; goldInk: string; overlay: string; overlayStrong: string; shadow: string;
 };
 
 export const light: Palette = {
-  scheme: 'light', background: '#F6F4F1', surface: '#FFFFFF', surfaceMuted: '#ECF2F0',
-  text: '#15201F', textMuted: '#5E6D6A', border: '#E4E0D9', accent: '#0F9B8E',
-  emphasis: '#14B8A6', emphasisText: '#FFFFFF', lime: '#14B8A6', limeInk: '#FFFFFF',
-  violet: '#4F6E94', hero: '#13201D', heroText: '#FFFFFF', heroAccent: '#4FE3C9',
-  danger: '#C53443', warning: '#9B5E0B', success: '#0F9B8E', focus: '#14B8A6', ringTrack: '#DEE7E3',
-  ember: '#C76A3A', emberInk: '#FFFFFF',
+  scheme: 'light', background: '#F3EEE6', surface: '#FFFBF6', surfaceMuted: '#ECE4D8', surfaceRaised: '#FFFFFF',
+  text: '#1C1915', textMuted: '#6E655C', border: '#DDD4C8', accent: '#315C49',
+  emphasis: '#315C49', emphasisText: '#FFFFFF', lime: '#D6A54A', limeInk: '#21180A',
+  violet: '#796C89', hero: '#17382D', heroText: '#FFF9EF', heroAccent: '#E2B65E',
+  danger: '#9B3A3A', warning: '#8A5A12', success: '#3E6B56', focus: '#B78329', ringTrack: '#DED5C7',
+  ember: '#B85D35', emberInk: '#FFFFFF', gold: '#D6A54A', goldInk: '#21180A',
+  overlay: 'rgba(22,20,17,0.44)', overlayStrong: 'rgba(15,18,15,0.88)', shadow: 'rgba(43,34,22,0.14)',
 };
 export const dark: Palette = {
-  scheme: 'dark', background: '#0E1311', surface: '#171F1D', surfaceMuted: '#212B28',
-  text: '#F3F6F4', textMuted: '#92A19D', border: '#283330', accent: '#2ED3C0',
-  emphasis: '#14B8A6', emphasisText: '#FFFFFF', lime: '#14B8A6', limeInk: '#FFFFFF',
-  violet: '#9BB4D0', hero: '#0C1715', heroText: '#F3F6F4', heroAccent: '#4FE3C9',
-  danger: '#FF8590', warning: '#FFD084', success: '#5DDEC8', focus: '#14B8A6', ringTrack: '#243330',
-  ember: '#E08456', emberInk: '#1A1008',
+  scheme: 'dark', background: '#111510', surface: '#1A211D', surfaceMuted: '#252D27', surfaceRaised: '#202923',
+  text: '#F5EFE5', textMuted: '#B1A89B', border: '#353D36', accent: '#8EB79D',
+  emphasis: '#3E6B56', emphasisText: '#FFFFFF', lime: '#E2B65E', limeInk: '#21180A',
+  violet: '#B9A9C7', hero: '#102A21', heroText: '#FFF9EF', heroAccent: '#E2B65E',
+  danger: '#FF9898', warning: '#F0C273', success: '#8EB79D', focus: '#E2B65E', ringTrack: '#303931',
+  ember: '#DF835D', emberInk: '#241006', gold: '#E2B65E', goldInk: '#21180A',
+  overlay: 'rgba(8,12,9,0.52)', overlayStrong: 'rgba(8,12,9,0.9)', shadow: 'rgba(0,0,0,0.34)',
 };
 
 export const spacing = [0, 4, 8, 12, 16, 24, 32, 48] as const;
-export const radius = { sm: 12, md: 16, lg: 24, pill: 999 } as const;
+export const radius = { sm: 12, md: 16, card: 22, lg: 24, hero: 28, sheet: 28, pill: 999 } as const;
 
 // A single deliberate scale. Every screen header, section label and number pulls from
 // this instead of hand-picked font sizes, so hierarchy reads the same everywhere.
 export const typeScale = {
-  hero: 30,
-  display: 30,
-  title: 22,
-  headline: 19,
-  card: 17,
+  hero: 34,
+  display: 34,
+  title: 28,
+  headline: 22,
+  card: 18,
   body: 16,
   label: 13,
   micro: 11,
-  numeric: 34,
+  numeric: 36,
+  numericHero: 48,
 } as const;
 
 export const fontFamily = {

@@ -10,7 +10,7 @@ import { formatCount, formatGramsFromMg, formatKg, formatRiyadhDate } from '../.
 import { label } from '../../src/i18n/labels';
 import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
-import { fontFamily, spacing } from '../../src/theme/tokens';
+import { fontFamily, radius, spacing, typeScale } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { Button, Screen, ScreenBody } from '../../src/ui/Screen';
 import {
@@ -20,8 +20,12 @@ import {
   ErrorState,
   LoadingSkeleton,
   ProfileAvatar,
+  SectionTitle,
   Sparkline,
+  SurfaceCard,
 } from '../../src/ui/kit';
+import { StepsCard } from '../../src/activity/StepsCard';
+import { HeroPanel } from '../../src/ui/visual';
 
 type HomeResponse =
   | { onboarded: false; dashboard: null }
@@ -45,20 +49,23 @@ export default function HomeScreen() {
   if (home.isPending) {
     return (
       <Screen>
+        <AppHeader title={text(locale, 'brand')} subtitle={text(locale, 'home')} />
         <LoadingSkeleton />
       </Screen>
     );
   }
   if (home.error instanceof ApiClientError && home.error.code === 'OFFLINE') {
     return (
-      <Screen title={text(locale, 'home')}>
+      <Screen>
+        <AppHeader title={text(locale, 'home')} />
         <ErrorState body={text(locale, 'offline')} onRetry={() => void home.refetch()} />
       </Screen>
     );
   }
   if (home.isError || home.data === undefined) {
     return (
-      <Screen title={text(locale, 'home')}>
+      <Screen>
+        <AppHeader title={text(locale, 'home')} />
         <ErrorState body={text(locale, 'error')} onRetry={() => void home.refetch()} />
       </Screen>
     );
@@ -66,14 +73,16 @@ export default function HomeScreen() {
   if (!home.data.onboarded || home.data.dashboard === null) {
     if (me.isPending || profileIsComplete(me.data)) {
       return (
-        <Screen title={text(locale, 'home')}>
+        <Screen>
+          <AppHeader title={text(locale, 'home')} />
           <LoadingSkeleton />
           <Button label={text(locale, 'tryAgain')} onPress={() => void Promise.all([home.refetch(), me.refetch()])} />
         </Screen>
       );
     }
     return (
-      <Screen title={text(locale, 'home')}>
+      <Screen>
+        <AppHeader title={text(locale, 'home')} />
         <EmptyState title={text(locale, 'empty')} body={text(locale, 'welcomeBody')} />
         <Button label={text(locale, 'onboarding')} onPress={() => router.replace('/(onboarding)')} />
       </Screen>
@@ -90,7 +99,7 @@ export default function HomeScreen() {
   const today = dashboard.todayWorkout.status === 'ready' ? dashboard.todayWorkout.data : null;
   const actions = [
     [text(locale, 'askCoach'), { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }, () => router.push('/(tabs)/coach')],
-    [text(locale, 'foodManual'), { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' }, () => router.push('/(tabs)/nutrition')],
+    [text(locale, 'foodManual'), { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' }, () => router.push('/food-log')],
     [text(locale, 'schedule'), { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }, () => router.push('/(tabs)/training')],
     [text(locale, 'logWeight'), { ios: 'scalemass.fill', android: 'monitor_weight', web: 'monitor_weight' }, () => router.push('/weight')],
   ] as const;
@@ -117,10 +126,12 @@ export default function HomeScreen() {
 
         {/* Primary daily call to action — what the member should do right now, paired with a
             real weekly-adherence ring so the hero carries earned data, not decoration. */}
-        <Pressable accessibilityRole="button" onPress={workoutAction} style={[styles.hero, { backgroundColor: theme.hero }]}>
-          <View style={{ flex: 1 }}>
+        <Pressable accessibilityRole="button" onPress={workoutAction} style={styles.hero}>
+          <HeroPanel>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[4] }}>
+            <View style={{ flex: 1 }}>
             <Text style={[styles.heroEyebrow, { color: theme.heroAccent, fontFamily: fontFamily.semibold }]}>
-              {isAr ? 'التمرين التالي' : 'UP NEXT'}
+              {isAr ? 'الخطوة التالية' : 'UP NEXT'}
             </Text>
             <Text style={[styles.heroTitle, { color: theme.heroText, fontFamily: fontFamily.bold }]} numberOfLines={2}>
               {today === null ? (isAr ? 'جاهز تبدأ؟' : 'Ready to train?') : today.name}
@@ -133,11 +144,11 @@ export default function HomeScreen() {
                 : label(locale, 'discipline', today.discipline)}
             </Text>
             <View style={[styles.heroButton, { backgroundColor: theme.heroAccent }]}>
-              <Text style={[styles.heroButtonText, { color: theme.hero, fontFamily: fontFamily.bold }]}>
+              <Text style={[styles.heroButtonText, { color: theme.goldInk, fontFamily: fontFamily.bold }]}>
                 {today === null ? text(locale, 'createPlan') : text(locale, 'start')}
               </Text>
             </View>
-          </View>
+            </View>
           {weekAdherence !== null ? (
             <ActivityRing
               progress={weekAdherence.completed / weekAdherence.planned}
@@ -150,21 +161,25 @@ export default function HomeScreen() {
               size={84}
             />
           ) : null}
+            </View>
+          </HeroPanel>
         </Pressable>
 
-        <View style={styles.quickRow}>
+        <View style={styles.quickGrid}>
           {actions.map(([actionLabel, icon, onPress]) => (
-            <Pressable key={actionLabel} accessibilityRole="button" onPress={onPress} style={styles.quickItem}>
-              <View style={[styles.quickIcon, { backgroundColor: theme.surface }]}>
+            <Pressable key={actionLabel} accessibilityRole="button" onPress={onPress} style={[styles.quickItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.quickIcon, { backgroundColor: theme.surfaceMuted }]}>
                 <SymbolView name={icon} size={20} tintColor={theme.accent} />
               </View>
-              <Text numberOfLines={1} style={[styles.quickLabel, { color: theme.text, fontFamily: fontFamily.medium }]}>{actionLabel}</Text>
+              <Text numberOfLines={2} style={[styles.quickLabel, { color: theme.text, fontFamily: fontFamily.semibold }]}>{actionLabel}</Text>
             </Pressable>
           ))}
         </View>
 
-        <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: fontFamily.bold }]}>{locale === 'ar' ? 'ملخص اليوم' : "Today's summary"}</Text>
-        <View style={styles.summaryStrip}>
+        <StepsCard />
+
+        <SectionTitle title={locale === 'ar' ? 'ملخص اليوم' : "Today's summary"} />
+        <SurfaceCard style={styles.summaryStrip}>
           {([
             { icon: { ios: 'flame.fill', android: 'local_fire_department', web: 'local_fire_department' }, value: calories === null ? '—' : formatCount(calories, locale), caption: text(locale, 'kcal') },
             { icon: { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' }, value: protein === null ? '—' : formatGramsFromMg(protein, locale), caption: text(locale, 'protein') },
@@ -176,13 +191,13 @@ export default function HomeScreen() {
               <Text numberOfLines={1} style={[styles.statCaption, { color: theme.textMuted, fontFamily: fontFamily.medium }]}>{item.caption}</Text>
             </View>
           ))}
-        </View>
+        </SurfaceCard>
 
         {weights.length >= 2 ? (
-          <View style={[styles.chartCard, { backgroundColor: theme.surface }]}>
+          <SurfaceCard style={styles.chartCard}>
             <Text style={[styles.statCaption, { color: theme.textMuted, fontFamily: fontFamily.medium, marginBottom: 8 }]}>{text(locale, 'weightTracking')}</Text>
             <Sparkline values={weights.map((row) => Number(row.weight_grams))} />
-          </View>
+          </SurfaceCard>
         ) : null}
         <View style={{ height: spacing[4] }} />
       </ScreenBody>
@@ -191,20 +206,19 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  sectionTitle: { fontSize: 15, lineHeight: 20, marginBottom: 10, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.4 },
-  summaryStrip: { borderRadius: 22, paddingVertical: 16, paddingHorizontal: 8, flexDirection: 'row', marginBottom: 16 },
+  summaryStrip: { paddingVertical: spacing[4], paddingHorizontal: spacing[2], flexDirection: 'row', marginBottom: spacing[4] },
   stat: { flex: 1, alignItems: 'center', gap: 6 },
-  statValue: { fontSize: 16, lineHeight: 22 },
-  statCaption: { fontSize: 11, lineHeight: 14 },
-  hero: { borderRadius: 28, padding: 20, marginTop: 14, marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 16 },
-  heroEyebrow: { fontSize: 11, letterSpacing: 1.2, marginBottom: 6 },
-  heroTitle: { fontSize: 25, lineHeight: 31, marginBottom: 4 },
-  heroCaption: { fontSize: 14, lineHeight: 20, opacity: 0.78, marginBottom: 16 },
-  heroButton: { minHeight: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, alignSelf: 'flex-start' },
-  heroButtonText: { fontSize: 15 },
-  quickRow: { flexDirection: 'row', marginBottom: 20 },
-  quickItem: { flex: 1, alignItems: 'center', gap: 8 },
-  quickIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  quickLabel: { fontSize: 11, lineHeight: 14, textAlign: 'center' },
-  chartCard: { borderRadius: 22, padding: 16, marginBottom: 12 },
+  statValue: { fontSize: typeScale.body, lineHeight: 22 },
+  statCaption: { fontSize: typeScale.micro, lineHeight: 14 },
+  hero: { marginTop: spacing[3], marginBottom: spacing[4] },
+  heroEyebrow: { fontSize: typeScale.micro, letterSpacing: 1.1, marginBottom: spacing[2] },
+  heroTitle: { fontSize: typeScale.title, lineHeight: 34, marginBottom: spacing[1] },
+  heroCaption: { fontSize: typeScale.label, lineHeight: 20, opacity: 0.78, marginBottom: spacing[4] },
+  heroButton: { minHeight: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing[4], alignSelf: 'flex-start' },
+  heroButtonText: { fontSize: typeScale.label },
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginBottom: spacing[4] },
+  quickItem: { width: '48.5%', minHeight: 64, padding: spacing[2], borderRadius: radius.md, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', flexDirection: 'row', gap: spacing[2] },
+  quickIcon: { width: 42, height: 42, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  quickLabel: { flex: 1, fontSize: typeScale.label, lineHeight: 18, textAlign: 'auto' },
+  chartCard: { padding: spacing[4], marginBottom: spacing[3] },
 });

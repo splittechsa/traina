@@ -227,6 +227,15 @@ describe('persisted product', () => {
     expect(food2.json().summary.consumed.imageEstimateEnergyKcal).toBe(50);
     expect(food2.json().target).toBeNull();
     expect(food.statusCode).toBe(200);
+    const diaryRange = await app.inject({
+      method: 'GET',
+      url: '/v1/nutrition/diary-range?from=2026-05-30&to=2026-06-02',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(diaryRange.statusCode).toBe(200);
+    expect(diaryRange.json().days).toEqual([
+      expect.objectContaining({ loggedOn: '2026-06-01', energyKcal: 250, entryCount: 2 }),
+    ]);
 
     secondToken = await tokenFor('other@sahhti.test');
     const hidden = await app.inject({
@@ -241,6 +250,12 @@ describe('persisted product', () => {
       headers: { authorization: `Bearer ${secondToken}` },
     });
     expect(ownDiary.json().summary.consumed.energyKcal).toBe(0);
+    const isolatedRange = await app.inject({
+      method: 'GET',
+      url: '/v1/nutrition/diary-range?from=2026-05-30&to=2026-06-02',
+      headers: { authorization: `Bearer ${secondToken}` },
+    });
+    expect(isolatedRange.json().days).toEqual([]);
   });
 
   it('reports progress history: per-session top sets, personal records, and empty-history safety', async () => {
@@ -383,8 +398,45 @@ describe('persisted product', () => {
       url: '/v1/exercises',
       headers: { authorization: `Bearer ${progressToken}` },
     });
-    const knownIds = new Set((library.json().exercises as { id: string }[]).map((row) => row.id));
+    const libraryRows = library.json().exercises as {
+      id: string;
+      movement_pattern: string | null;
+      disciplines: string[];
+      environments: string[];
+      equipment_brands: string[];
+      demonstrationMedia: {
+        type: 'procedural' | 'glb';
+        profile: string | null;
+        reviewStatus: 'unreviewed' | 'reviewed';
+      } | null;
+    }[];
+    const knownIds = new Set(libraryRows.map((row) => row.id));
     expect(knownIds.has(exerciseId)).toBe(true);
+    const servedExercise = libraryRows.find((row) => row.id === exerciseId);
+    expect(servedExercise).toMatchObject({
+      disciplines: expect.any(Array),
+      environments: expect.any(Array),
+      equipment_brands: expect.any(Array),
+    });
+    expect(libraryRows.some((row) => row.demonstrationMedia !== null)).toBe(true);
+    expect(libraryRows.find((row) => row.demonstrationMedia !== null)?.demonstrationMedia).toEqual(
+      expect.objectContaining({
+        type: 'procedural',
+        profile: expect.any(String),
+        reviewStatus: 'unreviewed',
+      }),
+    );
+
+    const manufacturers = await app.inject({
+      method: 'GET',
+      url: '/v1/equipment/manufacturers',
+      headers: { authorization: `Bearer ${progressToken}` },
+    });
+    expect(manufacturers.statusCode).toBe(200);
+    expect(manufacturers.json().manufacturers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'panatta', name: 'Panatta', catalog_status: 'registry_only' }),
+      expect.objectContaining({ id: 'concept2', name: 'Concept2', catalog_status: 'registry_only' }),
+    ]));
   });
 
   it('isolates gym tenants and locks the first attribution', async () => {

@@ -58,6 +58,7 @@ import {
   deleteFoodEntry,
   deleteOwnCommunityPost,
   diaryFor,
+  diaryRangeFor,
   favoriteFood,
   followMember,
   getSession,
@@ -65,6 +66,7 @@ import {
   listCoachMessages,
   listComments,
   listCommunityFeed,
+  listEquipmentManufacturers,
   listExercises,
   listSessions,
   logFood,
@@ -323,8 +325,12 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
 
   app.get('/v1/exercises', async (request) => ({
     exercises: await listExercises(dbOf(options), actorOf(request.claims).userId),
-    demonstrationMedia: null,
   }));
+
+  app.get('/v1/equipment/manufacturers', async (request) => {
+    actorOf(request.claims);
+    return { manufacturers: await listEquipmentManufacturers(dbOf(options)) };
+  });
 
   app.post('/v1/exercises', async (request, reply) => {
     const body = parse(customExerciseSchema, request.body, reply);
@@ -433,6 +439,21 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     const query = request.query as { on?: string };
     const day = query.on ?? new Date().toISOString().slice(0, 10);
     return diaryFor(dbOf(options), actor.userId, day);
+  });
+
+  app.get('/v1/nutrition/diary-range', async (request) => {
+    const actor = actorOf(request.claims);
+    const query = request.query as { from?: string; to?: string };
+    const pattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (query.from === undefined || query.to === undefined || !pattern.test(query.from) || !pattern.test(query.to)) {
+      throw new ApiError(400, 'INVALID_DATE_RANGE', 'A valid from and to date are required');
+    }
+    const from = Date.parse(`${query.from}T00:00:00.000Z`);
+    const to = Date.parse(`${query.to}T00:00:00.000Z`);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to < from || to - from > 31 * 86_400_000) {
+      throw new ApiError(400, 'INVALID_DATE_RANGE', 'Date range must be ordered and no longer than 31 days');
+    }
+    return diaryRangeFor(dbOf(options), actor.userId, query.from, query.to);
   });
 
   app.post('/v1/weight', async (request, reply) => {

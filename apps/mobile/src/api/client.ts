@@ -11,6 +11,7 @@ export class ApiClientError extends Error {
 }
 
 let localeHeader: 'ar' | 'en' = 'ar';
+let refreshPromise: Promise<boolean> | null = null;
 
 export function setApiLocale(locale: 'ar' | 'en'): void {
   localeHeader = locale;
@@ -48,6 +49,16 @@ async function refreshAccess(): Promise<boolean> {
   return true;
 }
 
+function refreshAccessOnce(): Promise<boolean> {
+  if (refreshPromise !== null) {
+    return refreshPromise;
+  }
+  refreshPromise = refreshAccess().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}, retried = false): Promise<T> {
   const headers = new Headers();
   headers.set('accept-language', localeHeader);
@@ -77,7 +88,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}, 
     clearTimeout(timer);
   }
   if (response.status === 401 && options.auth !== false && !retried && !path.startsWith('/v1/auth/')) {
-    const refreshed = await refreshAccess().catch(() => false);
+    const refreshed = await refreshAccessOnce().catch(() => false);
     if (refreshed) {
       return apiRequest<T>(path, options, true);
     }

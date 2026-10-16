@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
+import { useLocale } from '../i18n/LocaleProvider';
 
 export function ChoiceList({
   options,
@@ -14,6 +16,7 @@ export function ChoiceList({
   multiple?: boolean;
 }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   const selected = new Set(typeof value === 'string' ? [value] : value);
   return (
     <View style={styles.list}>
@@ -25,12 +28,22 @@ export function ChoiceList({
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(option.id)}
-            style={[styles.row, { backgroundColor: on ? theme.emphasis : theme.surface, borderColor: on ? theme.emphasis : theme.border }]}
+            style={[styles.row, { backgroundColor: on ? theme.heroAccent : theme.overlay, borderColor: on ? theme.heroAccent : 'rgba(255,249,239,0.22)' }]}
           >
-            <Text style={{ color: on ? theme.emphasisText : theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.body, lineHeight: 24 }}>
+            <Text style={{ flex: 1, color: on ? theme.goldInk : theme.heroText, fontFamily: fontFamily.semibold, fontSize: typeScale.body, lineHeight: 24, textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: locale === 'ar' ? 'rtl' : 'ltr' }}>
               {option.label}
             </Text>
-            <Text style={{ color: on ? theme.emphasisText : theme.textMuted, fontFamily: fontFamily.medium }}>{multiple && on ? '●' : on ? '●' : '○'}</Text>
+            <SymbolView
+              name={multiple
+                ? on
+                  ? { ios: 'checkmark.square.fill', android: 'check_box', web: 'check_box' }
+                  : { ios: 'square', android: 'check_box_outline_blank', web: 'check_box_outline_blank' }
+                : on
+                  ? { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }
+                  : { ios: 'circle', android: 'radio_button_unchecked', web: 'radio_button_unchecked' }}
+              size={19}
+              tintColor={on ? theme.goldInk : theme.heroText}
+            />
           </Pressable>
         );
       })}
