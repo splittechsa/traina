@@ -4,7 +4,7 @@ Traina (ترينا) is Splittech’s Saudi fitness platform. This repository is 
 
 It is not a finished consumer product. No iOS or Android binary has been compiled. Store verification and a live coaching model are not connected. The million-user target is a planning assumption, not a measured result.
 
-Organization: [splittech-sa](https://github.com/splittech-sa) · board: [project 1](https://github.com/orgs/splittech-sa/projects/1)
+Repository: [splittechsa/traina](https://github.com/splittechsa/traina) · board: [Traina](https://github.com/users/splittechsa/projects/1)
 
 ## What runs today
 
