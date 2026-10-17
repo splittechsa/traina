@@ -19,7 +19,7 @@ This is an engineering gap map, not a claim of product readiness for paid coachi
 | **Human Coach Dashboard** | Assigned coaches review weekly packets | **Missing** | Weekly brief can be `queued_for_human`; packet builder in domain | No coach app/UI; no assignment queue UX | Roster, queue, approve/reject/edit, feedback delivery, access audit |
 | **Weekly review queue** | Member survey → packet → human workflow | **Partial** | `coach_weekly_briefs`, member week-report screen (local), packet builder | No assignment/IN_REVIEW/FEEDBACK_SENT automation; no overdue handling | Full workflow + SLA surfaces + escalation |
 | **Privacy, consent, audit** | Purpose-tagged processing + access logs | **Partial** | Privacy docs; `consents` table schema; `audit_logs`; data inventory Appendix A | No purpose-tagged consent ledger runtime; legal basis design BLOCKED on counsel | Consent ledger, retention jobs, deletion UX, coach access logs, transfer assessment |
-| **Subscription entitlements & billing** | Entitlements ≠ UI; StoreKit verification | **Partial** | Domain subscription/capabilities; products tables | No StoreKit wire; no server receipt verification; SKUs TBD (#24) | Entitlement service, Apple events, grace/refund, fair-use AI budgets |
+| **Subscription entitlements & billing** | Website-first gateway + server entitlements; Apple IAP addable | **Partial** | Domain subscription state machine (`web` channel); products tables | No gateway adapter, checkout, webhooks, entitlement service, portal, tax, or StoreKit | Full **P3-WEB-*** / **P3-ENT-*** / **P3-APPLE-***; see `subscription-and-entitlements.md` |
 
 ---
 
