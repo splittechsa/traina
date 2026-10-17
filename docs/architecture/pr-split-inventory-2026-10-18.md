@@ -1,8 +1,9 @@
 # Uncommitted inventory & PR split — 2026-10-18
 
-**Branch:** `p2/coaching-experience-readiness` @ `deb009d`  
+**Branch:** `p1/real-training-adaptation` (from `deb009d`)  
+**Commits:** `061c5c3` domain · `55cd6dc` API · `2d7e081` clients/docs  
 **Backup (do not delete):** `backup/dirty-tree-2026-10-17` (local + `origin`)  
-**Neon migrations applied:** `0025_recommendation_lifecycle.sql`, `0026_member_in_app_notifications.sql` (verified on project `fragrant-fog-72018396`)
+**Neon migrations applied:** `0025`, `0026`, `0027` (verified on project `fragrant-fog-72018396`)
 
 ## Working tree groups (do not blind-stage together)
 
