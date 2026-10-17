@@ -17,7 +17,8 @@ API Gateway / Fastify (services/api)
       +-- AI Coaching Orchestrator    [PARTIAL — chat + daily check-in]
       +-- Weekly Review Service       [PARTIAL — packet queued, no coach UI]
       +-- Human Coach Operations      [MISSING]
-      +-- Billing & Entitlements      [PARTIAL — domain only]
+      +-- Billing & Entitlements      [PARTIAL — domain only; website-first gateway planned]
+      +-- Landing / Web Checkout      [MISSING — primary sales channel]
       +-- Privacy & Consent           [PARTIAL — docs exist, no runtime consent ledger]
       |
       +-- PostgreSQL (Neon)

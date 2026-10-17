@@ -11,6 +11,7 @@ const profile = {
   ageYears: 20,
   heightCm: '195',
   weightKg: '100',
+  sex: 'male',
   trainingExperience: 'beginner',
   goals: ['cutting'],
   discipline: 'general_fitness',

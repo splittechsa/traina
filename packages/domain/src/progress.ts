@@ -35,6 +35,12 @@ export type ProgressExerciseSetRow = {
   reps: number;
 };
 
+export type ProgressSessionLoadRow = {
+  completed_at: string;
+  discipline: string;
+  duration_seconds: number;
+};
+
 export type ProgressSnapshot = {
   weights: readonly ProgressWeightRow[];
   personalRecords: readonly ProgressPersonalRecordRow[];
@@ -44,4 +50,30 @@ export type ProgressSnapshot = {
   // 8-week training-frequency chart.
   completedSessionDates: readonly string[];
   exerciseSets: readonly ProgressExerciseSetRow[];
+  sessionLoads: readonly ProgressSessionLoadRow[];
 };
+
+export function isCardioDiscipline(discipline: string): boolean {
+  return discipline === 'crossfit' || discipline === 'functional_training';
+}
+
+export function compareSessionLoad(
+  sessions: readonly ProgressSessionLoadRow[],
+  steps: number,
+): { strengthSeconds: number; cardioSeconds: number; steps: number } {
+  let strengthSeconds = 0;
+  let cardioSeconds = 0;
+  for (const session of sessions) {
+    const duration = Number.isFinite(session.duration_seconds) ? Math.max(0, Math.floor(session.duration_seconds)) : 0;
+    if (isCardioDiscipline(session.discipline)) {
+      cardioSeconds += duration;
+    } else {
+      strengthSeconds += duration;
+    }
+  }
+  return {
+    strengthSeconds,
+    cardioSeconds,
+    steps: Number.isFinite(steps) ? Math.max(0, Math.floor(steps)) : 0,
+  };
+}

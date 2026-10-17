@@ -26,8 +26,15 @@ import {
   assertSupplementName,
   waterMillilitersTotal,
   assembleDayMealPlan,
+  assembleMemberState,
+  assertCanReadMemberStateFor,
   athleteEnergyPlan,
   assertEnergyPolicyApprovedForPaidCoaching,
+  calendarDayInTimeZone,
+  generateRecommendationsFromMemberState,
+  transitionRecommendation,
+  validateRecommendation,
+  type CoachingRecommendation,
   customizeMealSlot,
   loggingDiscipline,
   LOGGING_WINDOW_DAYS,
@@ -47,6 +54,7 @@ import {
   summarizeDiary,
   validateOnboarding,
   type MealPlanSlotPick,
+  type MemberState,
   type NutritionPace,
   type NutritionPhase,
   type Actor,
@@ -58,6 +66,7 @@ import {
   type ProgressPersonalRecordRow,
   type ProgressSnapshot,
   type ProgressWeightRow,
+  type RawMemberEvent,
   type WorkoutSession,
   type WorkoutSet,
 } from '@sahhti/domain';
@@ -578,6 +587,443 @@ function previousIsoDay(daysAgo: number): string {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - daysAgo);
   return date.toISOString().slice(0, 10);
+}
+
+function isoDayAgo(asOfDay: string, daysAgo: number): string {
+  const date = new Date(`${asOfDay}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * P1-STATE-01 — project MemberState from existing daily tables.
+ * Authorized via member_state.read (own member only until coach assignment exists).
+ */
+export async function memberStateFor(
+  db: Database,
+  actor: Actor,
+  options: { windowDays?: number; timeZone?: string; asOfDay?: string; subjectUserId?: string } = {},
+): Promise<{ state: MemberState; authorized: true }> {
+  const subjectUserId = options.subjectUserId ?? actor.userId;
+  const assignmentRow =
+    subjectUserId === actor.userId
+      ? null
+      : await db.query<{ coach_user_id: string; member_user_id: string; active: boolean; assigned_at: string }>(
+          `SELECT coach_user_id, member_user_id, active, assigned_at
+           FROM coach_member_assignments
+           WHERE coach_user_id = $1 AND member_user_id = $2 AND active = true
+           LIMIT 1`,
+          [actor.userId, subjectUserId],
+        ).catch(() => ({ rows: [] as { coach_user_id: string; member_user_id: string; active: boolean; assigned_at: string }[] }));
+  const assignment =
+    assignmentRow !== null && assignmentRow.rows[0] !== undefined
+      ? {
+          coachUserId: String(assignmentRow.rows[0].coach_user_id),
+          memberUserId: String(assignmentRow.rows[0].member_user_id),
+          active: assignmentRow.rows[0].active === true,
+          assignedAt: iso(assignmentRow.rows[0].assigned_at) ?? new Date().toISOString(),
+        }
+      : null;
+  try {
+    assertCanReadMemberStateFor(actor, subjectUserId, assignment);
+  } catch (error) {
+    if (error instanceof DomainError) {
+      throw new ApiError(403, error.code, error.message);
+    }
+    throw error;
+  }
+  if (subjectUserId !== actor.userId) {
+    await db.query(
+      `INSERT INTO coach_access_audit (coach_user_id, member_user_id, action) VALUES ($1, $2, 'member_state.read')`,
+      [actor.userId, subjectUserId],
+    ).catch(() => undefined);
+  }
+
+  const windowDays = options.windowDays ?? LOGGING_WINDOW_DAYS;
+  const timeZone = options.timeZone ?? 'Asia/Riyadh';
+  const asOfDay = options.asOfDay ?? calendarDayInTimeZone(new Date().toISOString(), timeZone);
+  const from = isoDayAgo(asOfDay, windowDays - 1);
+
+  const profile = await readProfile(db, subjectUserId);
+  const programs = await listMemberPrograms(db, subjectUserId);
+  const active = programs.active;
+
+  const foodDays = await db.query<{ logged_on: string }>(
+    `SELECT DISTINCT logged_on::text AS logged_on FROM food_entries
+     WHERE user_id = $1 AND logged_on BETWEEN $2::date AND $3::date`,
+    [subjectUserId, from, asOfDay],
+  );
+  const waterDays = await db.query<{ logged_on: string }>(
+    `SELECT DISTINCT logged_on::text AS logged_on FROM water_logs
+     WHERE user_id = $1 AND logged_on BETWEEN $2::date AND $3::date`,
+    [subjectUserId, from, asOfDay],
+  );
+  const weights = await db.query<{ id: string; recorded_on: string; weight_grams: number; created_at: string }>(
+    `SELECT id::text AS id, recorded_on::text AS recorded_on, weight_grams, created_at
+     FROM weight_records
+     WHERE user_id = $1 AND recorded_on BETWEEN $2::date AND $3::date
+     ORDER BY recorded_on, created_at`,
+    [subjectUserId, from, asOfDay],
+  );
+  const sessions = await db.query<{ id: string; completed_at: string }>(
+    `SELECT id::text AS id, completed_at
+     FROM workout_sessions
+     WHERE user_id = $1 AND status = 'completed' AND completed_at IS NOT NULL
+       AND completed_at::date BETWEEN $2::date AND $3::date`,
+    [subjectUserId, from, asOfDay],
+  );
+  const supplements = await db.query<{ id: string; logged_on: string; created_at: string }>(
+    `SELECT id::text AS id, logged_on::text AS logged_on, created_at
+     FROM supplement_logs
+     WHERE user_id = $1 AND logged_on BETWEEN $2::date AND $3::date`,
+    [subjectUserId, from, asOfDay],
+  );
+  const activities = await db.query<{ id: string; logged_on: string; duration_seconds: number; created_at: string }>(
+    `SELECT id::text AS id, logged_on::text AS logged_on, duration_seconds, created_at
+     FROM activity_logs
+     WHERE user_id = $1 AND logged_on BETWEEN $2::date AND $3::date`,
+    [subjectUserId, from, asOfDay],
+  );
+  const measurements = await db.query<{ id: string; recorded_on: string; created_at: string }>(
+    `SELECT id::text AS id, recorded_on::text AS recorded_on, created_at
+     FROM body_measurements
+     WHERE user_id = $1 AND recorded_on BETWEEN $2::date AND $3::date`,
+    [subjectUserId, from, asOfDay],
+  );
+  const pending = await db.query<{ id: string; status: string; category: string }>(
+    `SELECT id::text AS id, status, category FROM coaching_recommendations
+     WHERE user_id = $1 AND status IN ('DRAFT', 'VALIDATED', 'REVIEW_REQUIRED', 'MEMBER_CONFIRMATION_REQUIRED', 'APPROVED')
+     ORDER BY updated_at DESC LIMIT 20`,
+    [subjectUserId],
+  ).catch(() => ({ rows: [] as { id: string; status: string; category: string }[] }));
+
+  const humanReview = await db.query<{ created_at: string }>(
+    `SELECT created_at FROM coach_weekly_briefs
+     WHERE user_id = $1 AND status IN ('seen_by_human', 'closed')
+     ORDER BY created_at DESC LIMIT 1`,
+    [subjectUserId],
+  ).catch(() => ({ rows: [] as { created_at: string }[] }));
+
+  const events: RawMemberEvent[] = [];
+  for (const row of foodDays.rows) {
+    const day = row.logged_on.slice(0, 10);
+    events.push({
+      eventId: `meal:${subjectUserId}:${day}`,
+      memberId: subjectUserId,
+      eventType: 'meal_day',
+      occurredAt: `${day}T12:00:00.000Z`,
+      recordedAt: `${day}T12:00:00.000Z`,
+      source: 'food_entries',
+      schemaVersion: 1,
+      confidenceBps: 8_000,
+      provenance: 'self_reported',
+      payload: { observedOn: day },
+    });
+  }
+  for (const row of waterDays.rows) {
+    const day = row.logged_on.slice(0, 10);
+    events.push({
+      eventId: `water:${subjectUserId}:${day}`,
+      memberId: subjectUserId,
+      eventType: 'water_day',
+      occurredAt: `${day}T12:00:00.000Z`,
+      recordedAt: `${day}T12:00:00.000Z`,
+      source: 'water_logs',
+      schemaVersion: 1,
+      confidenceBps: 8_000,
+      provenance: 'self_reported',
+      payload: { observedOn: day },
+    });
+  }
+  for (const row of weights.rows) {
+    const day = row.recorded_on.slice(0, 10);
+    const recordedAt = iso(row.created_at) ?? `${day}T12:00:00.000Z`;
+    events.push({
+      eventId: `weight:${row.id}`,
+      memberId: subjectUserId,
+      eventType: 'weight',
+      occurredAt: `${day}T12:00:00.000Z`,
+      recordedAt,
+      source: 'weight_records',
+      schemaVersion: 1,
+      confidenceBps: 9_000,
+      provenance: 'self_reported',
+      payload: { observedOn: day, value: Number(row.weight_grams), weightGrams: Number(row.weight_grams) },
+    });
+  }
+  for (const row of sessions.rows) {
+    const completedAt = iso(row.completed_at) ?? new Date().toISOString();
+    const day = calendarDayInTimeZone(completedAt, timeZone);
+    events.push({
+      eventId: `session:${row.id}`,
+      memberId: subjectUserId,
+      eventType: 'session_completed',
+      occurredAt: completedAt,
+      recordedAt: completedAt,
+      source: 'workout_sessions',
+      schemaVersion: 1,
+      confidenceBps: 9_000,
+      provenance: 'measured',
+      payload: { observedOn: day },
+    });
+  }
+  for (const row of supplements.rows) {
+    const day = row.logged_on.slice(0, 10);
+    const recordedAt = iso(row.created_at) ?? `${day}T12:00:00.000Z`;
+    events.push({
+      eventId: `supp:${row.id}`,
+      memberId: subjectUserId,
+      eventType: 'supplement_taken',
+      occurredAt: `${day}T12:00:00.000Z`,
+      recordedAt,
+      source: 'supplement_logs',
+      schemaVersion: 1,
+      confidenceBps: 8_000,
+      provenance: 'self_reported',
+      payload: { observedOn: day },
+    });
+  }
+  for (const row of activities.rows) {
+    const day = row.logged_on.slice(0, 10);
+    const recordedAt = iso(row.created_at) ?? `${day}T12:00:00.000Z`;
+    events.push({
+      eventId: `activity:${row.id}`,
+      memberId: subjectUserId,
+      eventType: 'activity_minutes',
+      occurredAt: `${day}T12:00:00.000Z`,
+      recordedAt,
+      source: 'activity_logs',
+      schemaVersion: 1,
+      confidenceBps: 7_000,
+      provenance: 'self_reported',
+      payload: { observedOn: day, value: Number(row.duration_seconds), durationSeconds: Number(row.duration_seconds) },
+    });
+  }
+  for (const row of measurements.rows) {
+    const day = row.recorded_on.slice(0, 10);
+    const recordedAt = iso(row.created_at) ?? `${day}T12:00:00.000Z`;
+    events.push({
+      eventId: `measure:${row.id}`,
+      memberId: subjectUserId,
+      eventType: 'measurement',
+      occurredAt: `${day}T12:00:00.000Z`,
+      recordedAt,
+      source: 'body_measurements',
+      schemaVersion: 1,
+      confidenceBps: 8_000,
+      provenance: 'self_reported',
+      payload: { observedOn: day },
+    });
+  }
+
+  let state: MemberState;
+  try {
+    state = assembleMemberState({
+      goals: profile.goals,
+      currentProgramId: active?.id ?? null,
+      nutritionPhase: active?.nutritionPhase ?? null,
+      windowDays,
+      asOfDay,
+      timeZone,
+      events,
+      lastHumanReviewAt: humanReview.rows[0] !== undefined ? iso(humanReview.rows[0].created_at) : null,
+      pendingRecommendations: pending.rows.map((row) => ({
+        id: row.id,
+        status: row.status as MemberState['pendingRecommendations'][number]['status'],
+        category: row.category,
+      })),
+    });
+  } catch (error) {
+    throw asApi(error);
+  }
+  return { state, authorized: true };
+}
+
+function recommendationRowToDomain(row: {
+  id: string;
+  user_id: string;
+  category: string;
+  status: string;
+  summary: string;
+  rationale: string;
+  confidence: string;
+  missing_data: unknown;
+  evidence: unknown;
+  policy_version: string;
+  expires_at: string;
+  payload: unknown;
+  requires_human_review: boolean;
+  requires_member_confirmation: boolean;
+  audit: unknown;
+  created_at: string;
+  updated_at: string;
+}): CoachingRecommendation {
+  return {
+    id: String(row.id),
+    memberId: String(row.user_id),
+    category: row.category as CoachingRecommendation['category'],
+    status: row.status as CoachingRecommendation['status'],
+    summary: row.summary,
+    rationale: row.rationale,
+    confidence: row.confidence as CoachingRecommendation['confidence'],
+    missingData: asJson<string[]>(row.missing_data),
+    evidence: asJson<CoachingRecommendation['evidence'][number][]>(row.evidence),
+    policyVersion: row.policy_version,
+    expiresAt: iso(row.expires_at) ?? row.expires_at,
+    payload: asJson<Record<string, unknown>>(row.payload),
+    requiresHumanReview: row.requires_human_review === true,
+    requiresMemberConfirmation: row.requires_member_confirmation === true,
+    createdAt: iso(row.created_at) ?? row.created_at,
+    updatedAt: iso(row.updated_at) ?? row.updated_at,
+    schemaVersion: 2,
+    audit: asJson<CoachingRecommendation['audit'][number][]>(row.audit),
+  };
+}
+
+async function persistRecommendation(db: Database, rec: CoachingRecommendation): Promise<void> {
+  await db.query(
+    `INSERT INTO coaching_recommendations (
+       id, user_id, category, status, summary, rationale, confidence, missing_data, evidence,
+       policy_version, expires_at, payload, requires_human_review, requires_member_confirmation,
+       audit, schema_version, created_at, updated_at
+     ) VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12::jsonb,$13,$14,$15::jsonb,2,$16,$17
+     )
+     ON CONFLICT (id) DO UPDATE SET
+       status = EXCLUDED.status,
+       summary = EXCLUDED.summary,
+       rationale = EXCLUDED.rationale,
+       confidence = EXCLUDED.confidence,
+       missing_data = EXCLUDED.missing_data,
+       evidence = EXCLUDED.evidence,
+       payload = EXCLUDED.payload,
+       requires_human_review = EXCLUDED.requires_human_review,
+       requires_member_confirmation = EXCLUDED.requires_member_confirmation,
+       audit = EXCLUDED.audit,
+       updated_at = EXCLUDED.updated_at`,
+    [
+      rec.id,
+      rec.memberId,
+      rec.category,
+      rec.status,
+      rec.summary,
+      rec.rationale,
+      rec.confidence,
+      JSON.stringify(rec.missingData),
+      JSON.stringify(rec.evidence),
+      rec.policyVersion,
+      rec.expiresAt,
+      JSON.stringify(rec.payload),
+      rec.requiresHumanReview,
+      rec.requiresMemberConfirmation,
+      JSON.stringify(rec.audit),
+      rec.createdAt,
+      rec.updatedAt,
+    ],
+  );
+}
+
+/** Generate deterministic recommendations from MemberState; nutrition stays non-applied. */
+export async function generateMemberRecommendations(db: Database, actor: Actor) {
+  const { state } = await memberStateFor(db, actor, { timeZone: 'Asia/Riyadh' });
+  const nowIso = new Date().toISOString();
+  let drafts: CoachingRecommendation[];
+  try {
+    drafts = generateRecommendationsFromMemberState({
+      memberId: actor.userId,
+      state,
+      nowIso,
+      idFactory: () => randomUUID(),
+    }).map((draft) => validateRecommendation(draft, nowIso, 'system:recommendation_engine'));
+  } catch (error) {
+    throw asApi(error);
+  }
+  for (const rec of drafts) {
+    await persistRecommendation(db, rec);
+  }
+  return {
+    persisted: true,
+    count: drafts.length,
+    recommendations: drafts,
+    note: 'Nutrition adaptations remain propose/review-only until ENERGY_POLICY approval. AI cannot apply.',
+  };
+}
+
+export async function listMemberRecommendations(db: Database, actor: Actor) {
+  await memberStateFor(db, actor, { timeZone: 'Asia/Riyadh' });
+  const rows = await db.query<{
+    id: string;
+    user_id: string;
+    category: string;
+    status: string;
+    summary: string;
+    rationale: string;
+    confidence: string;
+    missing_data: unknown;
+    evidence: unknown;
+    policy_version: string;
+    expires_at: string;
+    payload: unknown;
+    requires_human_review: boolean;
+    requires_member_confirmation: boolean;
+    audit: unknown;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `SELECT * FROM coaching_recommendations WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 50`,
+    [actor.userId],
+  );
+  return { recommendations: rows.rows.map(recommendationRowToDomain) };
+}
+
+export async function advanceMemberRecommendation(
+  db: Database,
+  actor: Actor,
+  recommendationId: string,
+  nextStatus: 'APPROVED' | 'REJECTED' | 'APPLIED' | 'MEMBER_CONFIRMATION_REQUIRED',
+) {
+  const rows = await db.query<{
+    id: string;
+    user_id: string;
+    category: string;
+    status: string;
+    summary: string;
+    rationale: string;
+    confidence: string;
+    missing_data: unknown;
+    evidence: unknown;
+    policy_version: string;
+    expires_at: string;
+    payload: unknown;
+    requires_human_review: boolean;
+    requires_member_confirmation: boolean;
+    audit: unknown;
+    created_at: string;
+    updated_at: string;
+  }>(`SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`, [recommendationId, actor.userId]);
+  const row = rows.rows[0];
+  if (row === undefined) {
+    throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
+  }
+  let current = recommendationRowToDomain(row);
+  const at = new Date().toISOString();
+  try {
+    current = transitionRecommendation(current, nextStatus, at, { actorId: actor.userId, note: 'member_or_system_advance' });
+  } catch (error) {
+    throw asApi(error);
+  }
+  await persistRecommendation(db, current);
+  return { persisted: true, recommendation: current, applied: current.status === 'APPLIED' };
+}
+
+export async function assignCoachToMember(db: Database, coachUserId: string, memberUserId: string) {
+  await db.query(
+    `INSERT INTO coach_member_assignments (coach_user_id, member_user_id, active)
+     VALUES ($1, $2, true)
+     ON CONFLICT (coach_user_id, member_user_id) DO UPDATE SET active = true, assigned_at = now()`,
+    [coachUserId, memberUserId],
+  );
+  return { persisted: true, coachUserId, memberUserId, active: true };
 }
 
 export async function listReadyMeals() {
@@ -1564,12 +2010,19 @@ async function coachSnapshot(db: Database, actor: Actor) {
   } catch {
     discipline = null;
   }
+  let memberState: MemberState | null = null;
+  try {
+    memberState = (await memberStateFor(db, actor, { windowDays, timeZone: 'Asia/Riyadh' })).state;
+  } catch {
+    memberState = null;
+  }
   return {
     profile,
     todayWorkout,
     diary,
     water,
     discipline,
+    memberState,
     context: {
       coachPersona: 'yazan',
       product: 'Traina — AI coach reads daily logs as infrastructure',
@@ -1584,6 +2037,17 @@ async function coachSnapshot(db: Database, actor: Actor) {
       horizonWeeks: active?.horizonWeeks ?? null,
       energyPlan: active?.energy ?? null,
       loggingDiscipline14d: discipline,
+      memberState: memberState === null
+        ? null
+        : {
+            confidence: memberState.confidence,
+            dataCompletenessBps: memberState.dataCompletenessBps,
+            adherence: memberState.adherence,
+            weightTrendGramsPerWeek: memberState.weightTrendGramsPerWeek,
+            policyNotes: memberState.policyNotes,
+            weekly: memberState.weekly,
+            pendingRecommendations: memberState.pendingRecommendations,
+          },
       recentSessions: sessions.slice(0, 5),
       recentWeights: progress.weights.slice(-5),
       personalRecords: progress.personalRecords,
@@ -1628,13 +2092,22 @@ export async function answerCoach(
   }
   await assertCoachQuota(db, actor.userId);
   const snapshot = await coachSnapshot(db, actor);
+  const memberState = snapshot.memberState;
   const localeHint = /[\u0600-\u06FF]/.test(message) ? 'ar' as const : 'en' as const;
   const history = await listCoachMessages(db, actor.userId);
   let text = '';
   let tool: string | null = null;
   let tokens = 0;
   if (runtime.name === 'development_mock') {
-    tool = message.toLowerCase().includes('food') || message.includes('غداء') ? 'getFoodDiary' : 'getTodaysWorkout';
+    const wantsState =
+      message.toLowerCase().includes('state') ||
+      message.includes('حالتي') ||
+      message.includes('وضع');
+    tool = wantsState
+      ? 'getMemberState'
+      : message.toLowerCase().includes('food') || message.includes('غداء')
+        ? 'getFoodDiary'
+        : 'getTodaysWorkout';
     const execution = executeCoachTool({
       actor,
       tool,
@@ -1650,14 +2123,18 @@ export async function answerCoach(
         nutrition: snapshot.diary.summary,
         activitySteps: null,
         supplementNames: (await listSupplements(db, actor.userId, new Date().toISOString().slice(0, 10))).items.map((item) => item.name),
+        memberState,
       },
       quota: { limit: 30, used: 0, windowStartMs: Date.now(), windowMs: 60_000 },
       atMs: Date.now(),
     });
     tool = execution.tool;
-    text = tool === 'getFoodDiary'
-      ? `Development mock. Consumed ${snapshot.diary.summary.consumed.energyKcal} kcal. This is not a production coach.`
-      : `Development mock. Workout: ${snapshot.todayWorkout?.name ?? 'none scheduled'}. This is not a production coach.`;
+    text =
+      tool === 'getMemberState'
+        ? `Development mock. MemberState confidence=${memberState?.confidence ?? 'none'}; meals=${memberState?.adherence.mealDaysLogged ?? 0}/${memberState?.adherence.windowDays ?? 0}. This is not a production coach.`
+        : tool === 'getFoodDiary'
+          ? `Development mock. Consumed ${snapshot.diary.summary.consumed.energyKcal} kcal. This is not a production coach.`
+          : `Development mock. Workout: ${snapshot.todayWorkout?.name ?? 'none scheduled'}. This is not a production coach.`;
     tokens = text.length;
   } else if (options.stream === true) {
     const streamed = await streamModelReply({

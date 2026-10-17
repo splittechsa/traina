@@ -1,13 +1,18 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  activateProgramSchema,
   coachMessageSchema,
+  weeklyCoachSurveySchema,
   coachingRuleSchema,
   communityCommentSchema,
   communityPostSchema,
   customExerciseSchema,
+  copyDiarySchema,
   customFoodSchema,
   foodLogSchema,
   foodPortionSchema,
+  programNutritionSchema,
+  mealPlanDaySchema,
   loginSchema,
   logSetSchema,
   onboardingRequestSchema,
@@ -22,8 +27,14 @@ import {
   scheduleSessionSchema,
   sessionTimeSchema,
   simulateSchema,
+  startProgramDaySchema,
   verifySchema,
   weightSchema,
+  waterLogSchema,
+  supplementNameSchema,
+  supplementLogSchema,
+  activityLogSchema,
+  bodyMeasurementSchema,
 } from '@sahhti/contracts';
 import type { CoachingRuleVersion, OnboardingInput } from '@sahhti/domain';
 import type { Database } from '../db/database.js';
@@ -46,11 +57,13 @@ import {
   latestDevCode,
 } from '../identity/accounts.js';
 import {
+  activateMemberProgram,
   answerCoach,
   attributeReferral,
   blockMember,
   commentOnPost,
   createCommunityPost,
+  copyDiaryDay,
   createCustomFood,
   createDraftRule,
   createMemberExercise,
@@ -60,15 +73,33 @@ import {
   diaryFor,
   diaryRangeFor,
   favoriteFood,
+  findExerciseByScanCode,
   followMember,
   getSession,
+  abandonOpenWorkouts,
   homeFor,
   listCoachMessages,
+  listMemberPrograms,
   listComments,
   listCommunityFeed,
   listEquipmentManufacturers,
   listExercises,
+  listFavoriteFoods,
+  listReadyMeals,
   listSessions,
+  mealPlanFor,
+  memberStateFor,
+  generateMemberRecommendations,
+  listMemberRecommendations,
+  advanceMemberRecommendation,
+  assignCoachToMember,
+  nutritionDisciplineFor,
+  ensureDailyYazanCheckin,
+  latestWeeklyCoachBrief,
+  proposeProgramNutritionStep,
+  saveMealPlanDay,
+  setProgramNutrition,
+  submitWeeklyCoachBrief,
   logFood,
   logFoodPortion,
   mutateSession,
@@ -77,12 +108,23 @@ import {
   readGym,
   readProfile,
   recordWeight,
+  listSupplements,
+  addMemberSupplement,
+  logSupplement,
+  unlogSupplement,
+  logWater,
+  waterFor,
+  logActivity,
+  activitiesFor,
+  logBodyMeasurements,
+  measurementsFor,
   rollbackRule,
   searchFoods,
   saveOnboarding,
   scheduleMemberWorkout,
   setDisplayName,
   simulateRules,
+  startProgramDay,
   submitRule,
   toggleSupport,
   updateOwnCommunityPost,
@@ -327,6 +369,16 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     exercises: await listExercises(dbOf(options), actorOf(request.claims).userId),
   }));
 
+  app.get('/v1/exercises/scan', async (request, reply) => {
+    const actor = actorOf(request.claims);
+    const code = typeof (request.query as { code?: unknown }).code === 'string' ? (request.query as { code: string }).code : '';
+    const exercise = await findExerciseByScanCode(dbOf(options), actor.userId, code);
+    if (exercise === null) {
+      return reply.code(404).send({ error: { code: 'EXERCISE_CODE_UNKNOWN', message: 'No exercise is linked to this code' } });
+    }
+    return { exercise };
+  });
+
   app.get('/v1/equipment/manufacturers', async (request) => {
     actorOf(request.claims);
     return { manufacturers: await listEquipmentManufacturers(dbOf(options)) };
@@ -338,16 +390,92 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     return createMemberExercise(dbOf(options), actorOf(request.claims).userId, body);
   });
 
+  app.get('/v1/training/programs', async (request) => (
+    listMemberPrograms(dbOf(options), actorOf(request.claims).userId)
+  ));
+
+  app.post('/v1/training/programs', async (request, reply) => {
+    const body = parse(activateProgramSchema, request.body, reply);
+    if (body === undefined) return;
+    return {
+      persisted: true,
+      program: await activateMemberProgram(dbOf(options), actorOf(request.claims).userId, body.templateId),
+    };
+  });
+
+  app.post('/v1/training/programs/nutrition', async (request, reply) => {
+    const body = parse(programNutritionSchema, request.body, reply);
+    if (body === undefined) return;
+    return {
+      persisted: true,
+      ...(await setProgramNutrition(dbOf(options), actorOf(request.claims).userId, body)),
+    };
+  });
+
+  app.get('/v1/training/programs/nutrition/propose', async (request) => (
+    proposeProgramNutritionStep(dbOf(options), actorOf(request.claims).userId)
+  ));
+
+  app.get('/v1/nutrition/discipline', async (request) => (
+    nutritionDisciplineFor(dbOf(options), actorOf(request.claims).userId)
+  ));
+
+  app.post('/v1/training/programs/:id/start-day', async (request, reply) => {
+    const body = parse(startProgramDaySchema, request.body, reply);
+    if (body === undefined) return;
+    const locale = request.headers['accept-language']?.startsWith('en') ? 'en' : 'ar';
+    const params = request.params as { id: string };
+    return {
+      persisted: true,
+      session: await startProgramDay(dbOf(options), actorOf(request.claims).userId, params.id, {
+        dayIndex: body.dayIndex,
+        startNow: body.startNow,
+        locale,
+      }),
+    };
+  });
+
+  app.get('/v1/nutrition/ready-meals', async () => listReadyMeals());
+
+  app.get('/v1/nutrition/meal-plan', async (request) => {
+    const on = (request.query as { on?: string }).on ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) {
+      throw new ApiError(400, 'INVALID_DATE', 'A valid on date is required');
+    }
+    return mealPlanFor(dbOf(options), actorOf(request.claims).userId, on);
+  });
+
+  app.put('/v1/nutrition/meal-plan', async (request, reply) => {
+    const body = parse(mealPlanDaySchema, request.body, reply);
+    if (body === undefined) return;
+    return {
+      persisted: true,
+      ...(await saveMealPlanDay(dbOf(options), actorOf(request.claims).userId, body)),
+    };
+  });
+
   app.post('/v1/training/sessions', async (request, reply) => {
     const body = parse(scheduleSessionSchema, request.body, reply);
     if (body === undefined) return;
     const actor = actorOf(request.claims);
+    if (body.startNow === true) {
+      await abandonOpenWorkouts(dbOf(options), actor.userId);
+    }
     const session = await scheduleMemberWorkout(dbOf(options), actor.userId, {
       name: body.name,
       discipline: body.discipline,
       scheduledFor: body.scheduledFor,
       exercises: body.exercises,
     });
+    if (body.startNow === true) {
+      return {
+        persisted: true,
+        session: await mutateSession(dbOf(options), actor.userId, session.id, {
+          type: 'start',
+          at: new Date().toISOString(),
+        }),
+      };
+    }
     return { persisted: true, session };
   });
 
@@ -411,9 +539,19 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     return createCustomFood(dbOf(options), actorOf(request.claims).userId, body);
   });
 
+  app.get('/v1/nutrition/favorites', async (request) => {
+    return listFavoriteFoods(dbOf(options), actorOf(request.claims).userId);
+  });
+
   app.post('/v1/nutrition/foods/:id/favorite', async (request) => {
     const params = request.params as { id: string };
     return favoriteFood(dbOf(options), actorOf(request.claims).userId, params.id);
+  });
+
+  app.post('/v1/nutrition/diary/copy', async (request, reply) => {
+    const body = parse(copyDiarySchema, request.body, reply);
+    if (body === undefined) return;
+    return copyDiaryDay(dbOf(options), actorOf(request.claims).userId, body.from, body.to);
   });
 
   app.post('/v1/nutrition/portions', async (request, reply) => {
@@ -463,7 +601,129 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     return recordWeight(dbOf(options), actor.userId, body.weightKg, body.recordedOn);
   });
 
+  app.get('/v1/water', async (request) => {
+    const on = (request.query as { on?: string }).on ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) {
+      throw new ApiError(400, 'INVALID_DATE', 'A valid on date is required');
+    }
+    return waterFor(dbOf(options), actorOf(request.claims).userId, on);
+  });
+
+  app.post('/v1/water', async (request, reply) => {
+    const body = parse(waterLogSchema, request.body, reply);
+    if (body === undefined) return;
+    return { persisted: true, ...(await logWater(dbOf(options), actorOf(request.claims).userId, body.milliliters, body.loggedOn)) };
+  });
+
+  app.get('/v1/supplements', async (request) => {
+    const on = (request.query as { on?: string }).on ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) {
+      throw new ApiError(400, 'INVALID_DATE', 'A valid on date is required');
+    }
+    return listSupplements(dbOf(options), actorOf(request.claims).userId, on);
+  });
+
+  app.post('/v1/supplements', async (request, reply) => {
+    const body = parse(supplementNameSchema, request.body, reply);
+    if (body === undefined) return;
+    const day = body.loggedOn ?? new Date().toISOString().slice(0, 10);
+    return { persisted: true, ...(await addMemberSupplement(dbOf(options), actorOf(request.claims).userId, body.name, day)) };
+  });
+
+  app.post('/v1/supplements/log', async (request, reply) => {
+    const body = parse(supplementLogSchema, request.body, reply);
+    if (body === undefined) return;
+    return { persisted: true, ...(await logSupplement(dbOf(options), actorOf(request.claims).userId, body.name, body.loggedOn)) };
+  });
+
+  app.delete('/v1/supplements/log/:id', async (request) => {
+    const params = request.params as { id: string };
+    const on = (request.query as { on?: string }).on ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) {
+      throw new ApiError(400, 'INVALID_DATE', 'A valid on date is required');
+    }
+    return unlogSupplement(dbOf(options), actorOf(request.claims).userId, params.id, on);
+  });
+
+  app.get('/v1/activity', async (request) => {
+    const on = (request.query as { on?: string }).on ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) {
+      throw new ApiError(400, 'INVALID_DATE', 'A valid on date is required');
+    }
+    return activitiesFor(dbOf(options), actorOf(request.claims).userId, on);
+  });
+
+  app.post('/v1/activity', async (request, reply) => {
+    const body = parse(activityLogSchema, request.body, reply);
+    if (body === undefined) return;
+    return { persisted: true, activity: await logActivity(dbOf(options), actorOf(request.claims).userId, body) };
+  });
+
+  app.get('/v1/measurements', async (request) => measurementsFor(dbOf(options), actorOf(request.claims).userId));
+
+  app.post('/v1/measurements', async (request, reply) => {
+    const body = parse(bodyMeasurementSchema, request.body, reply);
+    if (body === undefined) return;
+    return { persisted: true, measurement: await logBodyMeasurements(dbOf(options), actorOf(request.claims).userId, body) };
+  });
+
   app.get('/v1/progress', async (request) => progressFor(dbOf(options), actorOf(request.claims).userId));
+
+  app.get('/v1/member/state', async (request) => {
+    const query = request.query as { windowDays?: string; timeZone?: string; asOfDay?: string };
+    const windowDays = query.windowDays === undefined ? undefined : Number(query.windowDays);
+    if (windowDays !== undefined && (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 90)) {
+      throw new ApiError(400, 'INVALID_WINDOW', 'windowDays must be an integer from 1 to 90');
+    }
+    if (query.asOfDay !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(query.asOfDay)) {
+      throw new ApiError(400, 'INVALID_DATE', 'asOfDay must be YYYY-MM-DD');
+    }
+    return memberStateFor(dbOf(options), actorOf(request.claims), {
+      windowDays,
+      timeZone: query.timeZone,
+      asOfDay: query.asOfDay,
+    });
+  });
+
+  app.post('/v1/member/recommendations/generate', async (request) => (
+    generateMemberRecommendations(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.get('/v1/member/recommendations', async (request) => (
+    listMemberRecommendations(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.post('/v1/member/recommendations/:id/advance', async (request, reply) => {
+    const body = request.body as { status?: string };
+    const allowed = ['APPROVED', 'REJECTED', 'APPLIED', 'MEMBER_CONFIRMATION_REQUIRED'] as const;
+    if (body?.status === undefined || !(allowed as readonly string[]).includes(body.status)) {
+      throw new ApiError(400, 'INVALID_STATUS', 'status must be APPROVED, REJECTED, APPLIED, or MEMBER_CONFIRMATION_REQUIRED');
+    }
+    const params = request.params as { id: string };
+    return advanceMemberRecommendation(
+      dbOf(options),
+      actorOf(request.claims),
+      params.id,
+      body.status as (typeof allowed)[number],
+    );
+  });
+
+  app.post('/v1/coach/assignments', async (request) => {
+    const body = request.body as { coachUserId?: string; memberUserId?: string };
+    if (typeof body?.coachUserId !== 'string' || typeof body?.memberUserId !== 'string') {
+      throw new ApiError(400, 'INVALID_ASSIGNMENT', 'coachUserId and memberUserId are required');
+    }
+    // Temporary admin-style bootstrap for pilots; production must gate by role + org.
+    return assignCoachToMember(dbOf(options), body.coachUserId, body.memberUserId);
+  });
+
+  app.get('/v1/coach/members/:memberUserId/state', async (request) => {
+    const params = request.params as { memberUserId: string };
+    return memberStateFor(dbOf(options), actorOf(request.claims), {
+      subjectUserId: params.memberUserId,
+      timeZone: 'Asia/Riyadh',
+    });
+  });
 
   app.get('/v1/gyms/:organizationId', async (request) => {
     const params = request.params as { organizationId: string };
@@ -540,9 +800,25 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
       productionIntelligence: runtime.name === 'openai_compatible',
       providerConfigured: runtime.name !== 'unconfigured',
       provider: runtime.name,
+      persona: 'yazan',
       requiredEnv: runtime.name === 'unconfigured' ? runtime.missing : [],
     };
   });
+
+  app.post('/v1/coach/daily-checkin', async (request) => {
+    const locale = request.headers['accept-language']?.startsWith('en') ? 'en' : 'ar';
+    return ensureDailyYazanCheckin(dbOf(options), actorOf(request.claims), { locale });
+  });
+
+  app.post('/v1/coach/weekly-brief', async (request, reply) => {
+    const body = parse(weeklyCoachSurveySchema, request.body, reply);
+    if (body === undefined) return;
+    return submitWeeklyCoachBrief(dbOf(options), actorOf(request.claims), body);
+  });
+
+  app.get('/v1/coach/weekly-brief', async (request) => (
+    latestWeeklyCoachBrief(dbOf(options), actorOf(request.claims).userId)
+  ));
 
   app.post('/v1/coach/messages', async (request, reply) => {
     const body = parse(coachMessageSchema, request.body, reply);

@@ -1,8 +1,9 @@
 # Traina Master TODO
 
-**Baseline:** `master` @ `24327cf` (origin) — vision docs + energy quarantine. Local workspace still has substantial uncommitted coaching/logging work.  
+**Baseline:** `origin/master` @ `84f5639` · recoverable work `backup/dirty-tree-2026-10-17` @ `0a45fdd` · active `p0/safety-gap-and-baseline`.  
 **Audit date:** 2026-10-17  
-**Org board:** GitHub project “Gym App” + issues #25–#34 (`vision-2026`)
+**Org board:** GitHub project “Gym App” + issues #25–#34 (`vision-2026`); billing #35–#38.  
+**Commercial decision:** Website-first subscription sales via external payment gateway; server-authoritative entitlements; Apple IAP as addable channel (see `subscription-and-entitlements.md`).
 
 Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
@@ -20,12 +21,13 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 | Yazan persona + chat | **Partial** | Provider persona; needs live model (#7) |
 | Daily check-in | **Partial** | `POST /v1/coach/daily-checkin`; domain `yazan-coach.ts` |
 | Weekly brief queued_for_human | **Partial** | Table + API; **no coach dashboard** |
-| MemberState engine | **Missing** | — |
 | Evidence / policy registry | **Missing** | — |
 | Recommendation state machine + versioned apply | **Missing** | Propose-only paths |
 | Human coach ops UI | **Missing** | — |
 | Consent ledger | **Missing** | Privacy docs only |
-| Store entitlements | **Partial** | Domain subscription; no StoreKit wire |
+| MemberState engine | **Partial** | Domain `member-state.ts` on `p0/safety-gap-and-baseline`; API wire pending |
+| Store / web entitlements | **Partial** | Domain subscription helpers; no gateway, no entitlement service, no StoreKit |
+| Landing page checkout | **Missing** | Website-first sales decision — see P3-WEB-* |
 | Job workers / queue | **Missing** | — |
 | Legacy `app/` / `src/` trees | **Stale** | Do not ship; product is `apps/mobile` |
 
@@ -39,9 +41,10 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 | #21 | Today brief adjusts plan | Maps to **P1-REC-*** |
 | #22 | Week report to human | Maps to **P2-HUM-*** |
 | #23 | InBody perk | P3 commercial partnership — keep |
-| #24 | Billing SKUs | Maps to **P3-BILL-*** |
+| #24 | Billing SKUs | Superseded by **P3-WEB-*** + **P3-APPLE-*** + **P3-ENT-*** (keep open as pointer) |
 | #7 | Live coach provider | Maps to **P1-AI-01** |
 | #13 | Saudi hosting / PDPL | Maps to **P0-PRIV-*** |
+| #34 | Entitlements + store verification | Maps to **P3-ENT-01** / **P3-APPLE-IAP-01** |
 
 ---
 
@@ -51,16 +54,16 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 - **Priority:** P0 · **Owner:** Eng · **State:** REVIEW  
 - **Scope:** Document dirty tree vs `origin/master`; list migrations 0001–0020; confirm build/test commands.  
 - **Acceptance:** This file + gap matrix accurate; domain tests green; recoverable remote baseline.  
-- **Evidence:** `origin/master` @ `24327cf`; gap matrix above; dirty tree still local.  
-- **Privacy/safety:** None beyond honesty.
+- **Evidence:** Backup branch `backup/dirty-tree-2026-10-17` @ `0a45fdd`; inventory `DIRTY_TREE_INVENTORY.md`; `origin/master` @ `84f5639`.  
+- **Privacy/safety:** None beyond honesty. **Remaining:** Logical slice PRs from backup → master with per-slice tests.
 
 ### P0-SAFE-01 — Quarantine universal cut deficits
 - **Priority:** P0 · **Owner:** Domain + Nutrition SME · **State:** REVIEW  
-- **Files:** `packages/domain/src/meal-plan.ts`, `apps/mobile/src/nutrition/targets.ts`, `services/api/src/member/store.ts`  
-- **Scope:** Mark `CUT_DEFICIT_BY_PACE` as unapproved for paid coaching; block apply paths; safety tests.  
+- **Files:** `meal-plan.ts`, `targets.ts`, `fromProfile.ts`, `member/store.ts`, `energy-policy-gate.test.ts`  
+- **Scope:** Mark `CUT_DEFICIT_BY_PACE` as unapproved; block apply paths; bypass-matrix tests; free tracking preserved.  
 - **Acceptance:** Paid path cannot apply sprint deficit without `policyApproved` gate; docs reference SME review.  
-- **Tests:** Domain unit + mobile targets + API integration expect `ENERGY_POLICY_UNAPPROVED`.  
-- **Safety:** HIGH · **Remaining for VERIFIED:** SME sign-off; wire any other silent apply paths.
+- **Tests:** Domain gate suite + mobile free onboarding estimate + API integration `ENERGY_POLICY_UNAPPROVED`.  
+- **Safety:** HIGH · **Remaining for VERIFIED:** SME sign-off only (apply paths audited; proposals `mayAutoApply: false`).
 
 ### P0-DATA-01 — Personal/sensitive data inventory
 - **Priority:** P0 · **Owner:** Eng + Privacy · **State:** REVIEW  
@@ -94,10 +97,10 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 | ID | Title | State | Notes |
 | --- | --- | --- | --- |
-| P1-STATE-01 | MemberState engine from validated observations | BACKLOG | Confidence + data-quality gates |
-| P1-EVT-01 | Consistent MemberEvent model / idempotent writes | BACKLOG | Align with existing tables first |
+| P1-STATE-01 | MemberState engine from validated observations | REVIEW | Clean PR slice (no mobile redesign); GET /v1/member/state + Yazan |
+| P1-EVT-01 | Consistent MemberEvent model / idempotent writes | REVIEW | RawMemberEvent normalize over existing tables |
 | P1-POL-01 | Versioned evidence/policy registry | BACKLOG | Replaces ad-hoc constants |
-| P1-REC-01 | Recommendation state machine + versioned apply | BACKLOG | Supersedes silent edits; maps #21 |
+| P1-REC-01 | Recommendation state machine + versioned apply | REVIEW | Engine + matrix tests + API generate/advance; nutrition apply blocked |
 | P1-AI-01 | Yazan tool gateway (typed tools, minimal context) | BACKLOG | Maps #7 |
 | P1-NUT-01 | Individualized energy policy (post SME) | BACKLOG | After P0-SAFE-01 |
 | P1-TEST-01 | Safety suite S-01…S-09 executed | BACKLOG | `coaching-safety-tests.md` |
@@ -110,9 +113,10 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 | ID | Title | State | Maps |
 | --- | --- | --- | --- |
+| P2-HUM-00 | Coach assignment + review queue + access audit (backend) | IN_PROGRESS | migration 0022; no decorative UI |
 | P2-HUM-01 | Weekly survey UX completeness | BACKLOG | #22 / week-report |
 | P2-HUM-02 | Structured weekly packet (dashboard object, not PDF-only) | BACKLOG | |
-| P2-HUM-03 | Coach dashboard + assignment queue | BACKLOG | |
+| P2-HUM-03 | Coach dashboard + assignment queue | BACKLOG | depends on P2-HUM-00 |
 | P2-HUM-04 | Approve/reject/edit + member feedback delivery | BACKLOG | |
 | P2-HUM-05 | Access audit + overdue/escalate | BACKLOG | |
 | P2-HUM-06 | Workload metrics for pilots | BACKLOG | |
@@ -121,18 +125,64 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 ---
 
-## P3 — Commercial & mobile integration
+## P2/P3 — WEB BILLING & SUBSCRIPTION ENTITLEMENTS
+
+**Decision:** Landing-page primary sales + external gateway; unified Traina account entitlements on all clients.  
+**Hard rules:** No PAN/CVV storage; no client-side paid unlock; billing must not bypass P0 safety/privacy gates; no prohibited iOS external-purchase CTAs.  
+**Architecture:** `docs/architecture/subscription-and-entitlements.md`
+
+### Entitlement core (channel-agnostic)
+
+| ID | Title | State | Acceptance |
+| --- | --- | --- | --- |
+| P3-ENT-01 | Server entitlement service (plans → capabilities) | BACKLOG | Mobile/web cannot unlock paid coaching without server check |
+| P3-ENT-02 | Schema: plans, prices, customers, checkout sessions, payments, subscriptions, entitlements, usage limits, webhook events, refunds | BACKLOG | Migrations + Zod contracts; idempotent keys |
+| P3-ENT-03 | Usage limits (AI fair-use, review quotas) | BACKLOG | Enforced server-side; over-limit fails closed |
+| P3-ENT-04 | Billing audit log + reconciliation reports | BACKLOG | Every grant/revoke attributable; daily reconcile job sketch |
+| P3-ENT-05 | Unauthorized entitlement mutation tests | BACKLOG | Cross-user / forged client / unsigned webhook rejected |
+
+### Website + payment gateway
+
+| ID | Title | State | Acceptance |
+| --- | --- | --- | --- |
+| P3-WEB-01 | Landing page pricing + plan presentation | BACKLOG | Matches service model Free / AI / Coach |
+| P3-WEB-02 | Register/purchase on website into same Traina identity | BACKLOG | One account; entitlements visible on mobile after purchase |
+| P3-WEB-03 | Payment gateway provider abstraction | BACKLOG | Swappable adapter; no card data in our DB |
+| P3-WEB-04 | Hosted checkout / secure payment components | BACKLOG | PCI scope stays with provider |
+| P3-WEB-05 | Server-side checkout/payment verification | BACKLOG | Entitlement only after verified success |
+| P3-WEB-06 | Signed webhook validation + replay protection | BACKLOG | Bad signature / replay → no state change |
+| P3-WEB-07 | Subscription lifecycle (renew, cancel, expiry, failed payment, grace, refund) | BACKLOG | Domain transitions + persistence match |
+| P3-WEB-08 | Invoice + Saudi tax/VAT handling | BACKLOG | Counsel-approved; engineering implements approved rules only |
+| P3-WEB-09 | Customer billing portal | BACKLOG | Invoices, cancel, payment method via provider |
+| P3-WEB-10 | Billing verification suite | BACKLOG | Success, duplicate/delayed webhooks, failed renewals, refunds, expiry, concurrency, reconciliation |
+
+### Apple-compliant mobile channel
+
+| ID | Title | State | Acceptance / blocker |
+| --- | --- | --- | --- |
+| P3-APPLE-POLICY-01 | Counsel + App Review strategy for §§3.1.1 / 3.1.3 | BACKLOG | **BLOCKED** until written policy sign-off; no guesswork |
+| P3-APPLE-IAP-01 | StoreKit IAP as second channel into same entitlements | BACKLOG | Same plans/entitlements; Apple price SKUs; server receipt verify |
+| P3-APPLE-UX-01 | iOS upgrade UX without prohibited external checkout links | BACKLOG | No bypass buttons/redirects/misleading prompts |
+| P3-APPLE-P2P-01 | Evaluate live person-to-person coaching exception separately | BACKLOG | Must **not** auto-classify Traina Coach (async review + AI) as exempt |
+
+Maps: epic **#35**; schema **#36**; web checkout **#37**; Apple policy **#38**. Supersedes narrow reading of #24 / #34 (keep as pointers).
+
+**Exit (billing):** Website purchase grants server entitlements; mobile reflects them; Apple path designed without schema redesign; App Store submission not claimed ready until **P3-APPLE-POLICY-01** VERIFIED.
+
+---
+
+## P3 — Commercial & mobile integration (non-billing)
 
 | ID | Title | State | Maps |
 | --- | --- | --- | --- |
-| P3-BILL-01 | Entitlement service + StoreKit verification | BACKLOG | #24, #11 |
+| P3-BILL-01 | *(superseded)* Entitlement + StoreKit — see **P3-ENT-*** / **P3-APPLE-*** / **P3-WEB-*** | SUPERSEDED | #24, #34 |
 | P3-UX-01 | Home = coaching actions, not dashboard clutter | BACKLOG | |
 | P3-UX-02 | Coach feedback inbox (human vs AI labeled) | BACKLOG | |
 | P3-UX-03 | Notifications for review due / feedback | BACKLOG | |
 | P3-PART-01 | InBody / Ideal Weight perk | BACKLOG | #23 |
 | P3-OPS-01 | Export/delete account experiences | BACKLOG | |
 
-**Exit:** Paid member receives advertised service through product flows.
+**Exit:** Paid member receives advertised service through product flows **and** passes billing + App Store policy gates above.
 
 ---
 
@@ -148,10 +198,13 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 ## Highest-risk next implementation order
 
-1. **P0-SAFE-01** — quarantine unsafe deficits  
-2. **P0-DOC-01** — finish doc + org board sync  
-3. **P0-DATA-01** — data inventory  
-4. **P1-STATE-01** / **P1-REC-01** — state + recommendations  
-5. **P2-HUM-03** — coach dashboard  
+1. Keep **backup/dirty-tree-2026-10-17** recoverable; slice-merge carefully  
+2. **P0-SAFE-01** SME review + **P0-PRIV-01** counsel (billing must not skip these gates)  
+3. **P1-STATE-01** wire MemberState → validated daily events  
+4. **P1-REC-01** recommendation lifecycle  
+5. **P2-HUM-*** human coach review infrastructure  
+6. **P3-ENT-*** / **P3-WEB-*** website billing (parallel after P0 privacy design exists for payment PII)  
+7. **P3-APPLE-POLICY-01** before any iOS purchase UX  
 
-Do not rewrite working auth, diary, or session logging without verified regression.
+Do not rewrite working auth, diary, or session logging without verified regression.  
+Do not mark paid coaching ready until safety, privacy, operational, and App Store gates are evidence-backed.

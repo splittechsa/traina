@@ -177,6 +177,12 @@ export function scheduleWorkout(input: {
 
 export function startWorkout(session: WorkoutSession, at: string): WorkoutSession {
   assertIsoDateTime(at, 'INVALID_SESSION_TIME');
+  if (session.status === 'in_progress' && session.startedAt !== null) {
+    return session;
+  }
+  if (session.status === 'paused') {
+    return resumeWorkout(session, at);
+  }
   if (session.status !== 'scheduled') {
     throw new DomainError('INVALID_SESSION_STATE', 'Only a scheduled workout can start');
   }
@@ -219,7 +225,7 @@ export function logSet(session: WorkoutSession, set: WorkoutSet): WorkoutSession
   return { ...session, sets: [...session.sets, set] };
 }
 
-function pausedSeconds(session: WorkoutSession, endedAt: string): number {
+function pausedSeconds(session: Pick<WorkoutSession, 'pauses'>, endedAt: string): number {
   let paused = 0;
   for (const pause of session.pauses) {
     const resumed = pause.resumedAt ?? endedAt;
@@ -232,6 +238,18 @@ function pausedSeconds(session: WorkoutSession, endedAt: string): number {
   return paused;
 }
 
+export function workoutElapsedSeconds(
+  session: Pick<WorkoutSession, 'startedAt' | 'completedAt' | 'pauses'>,
+  at: string,
+): number {
+  if (session.startedAt === null) {
+    return 0;
+  }
+  const endedAt = session.completedAt ?? at;
+  const elapsed = Math.floor((Date.parse(endedAt) - Date.parse(session.startedAt)) / 1000) - pausedSeconds(session, endedAt);
+  return elapsed < 0 ? 0 : elapsed;
+}
+
 export function completeWorkout(session: WorkoutSession, at: string): { session: WorkoutSession; summary: WorkoutSummary } {
   assertIsoDateTime(at, 'INVALID_SESSION_TIME');
   if (session.status !== 'in_progress' && session.status !== 'paused') {
@@ -239,9 +257,6 @@ export function completeWorkout(session: WorkoutSession, at: string): { session:
   }
   if (session.startedAt === null) {
     throw new DomainError('INVALID_SESSION_STATE', 'Workout has no start time');
-  }
-  if (session.sets.length === 0) {
-    throw new DomainError('EMPTY_WORKOUT', 'A completion requires at least one logged set');
   }
   const elapsed = Math.floor((Date.parse(at) - Date.parse(session.startedAt)) / 1000) - pausedSeconds(session, at);
   if (elapsed < 0) {
@@ -270,9 +285,7 @@ function summarizeCompleted(session: WorkoutSession): WorkoutSummary {
     setCount: session.sets.length,
     exerciseCount: exercises.size,
     totalReps: session.sets.reduce((sum, set) => sum + set.reps, 0),
-    durationSeconds:
-      Math.floor((Date.parse(session.completedAt) - Date.parse(session.startedAt)) / 1000) -
-      pausedSeconds(session, session.completedAt),
+    durationSeconds: workoutElapsedSeconds(session, session.completedAt),
   };
 }
 

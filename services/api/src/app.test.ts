@@ -66,6 +66,7 @@ describe('api', () => {
         ageYears: 29,
         heightCm: '170.5',
         weightKg: '70.25',
+        sex: 'male',
         trainingExperience: 'intermediate',
         goals: ['strength'],
         discipline: 'powerlifting',

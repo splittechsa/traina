@@ -4,10 +4,12 @@ import { authorize } from './access.js';
 import { logSet, type WorkoutSession, type WorkoutSet } from './training.js';
 import type { DiarySummary } from './nutrition.js';
 import type { NormalizedOnboarding } from './onboarding.js';
+import type { MemberState } from './member-state.js';
 
 export const MEMBER_COACH_TOOLS = [
   'getUserProfile',
   'getActiveGoals',
+  'getMemberState',
   'getCurrentTrainingProgram',
   'getTodaysWorkout',
   'getUpcomingWorkouts',
@@ -40,6 +42,8 @@ export type MemberSnapshot = {
   nutrition: DiarySummary | null;
   activitySteps: number | null;
   supplementNames: readonly string[];
+  /** Authorized MemberState projection — never raw DB dumps. */
+  memberState: MemberState | null;
 };
 
 export type ToolQuota = {
@@ -118,6 +122,11 @@ function toolBody(
       return { profile: trusted.profile };
     case 'getActiveGoals':
       return { goals: trusted.goals };
+    case 'getMemberState':
+      return {
+        state: trusted.memberState,
+        note: trusted.memberState === null ? 'member_state_unavailable' : 'authorized_projection_only',
+      };
     case 'getCurrentTrainingProgram':
       return { programName: trusted.programName };
     case 'getTodaysWorkout':

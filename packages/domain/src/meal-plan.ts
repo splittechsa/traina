@@ -223,6 +223,10 @@ export type WeeklyStepProposal = {
   reason: WeeklyStepReason;
   /** When true, surface a member alert (schedule changed or needs attention). */
   alert: boolean;
+  /** Always false until ENERGY_POLICY is professionally approved (P0-SAFE-01). */
+  policyApprovedForPaidCoaching: boolean;
+  /** Proposals never auto-apply; paid persist must call assertEnergyPolicyApprovedForPaidCoaching. */
+  mayAutoApply: false;
 };
 
 /**
@@ -248,25 +252,31 @@ export function proposeWeeklyNutritionStep(input: {
     throw new DomainError('INVALID_ADHERENCE', 'Water adherence must be basis points 0–10000');
   }
 
+  const seal = (row: Omit<WeeklyStepProposal, 'policyApprovedForPaidCoaching' | 'mayAutoApply'>): WeeklyStepProposal => ({
+    ...row,
+    policyApprovedForPaidCoaching: ENERGY_POLICY.approvedForPaidCoaching,
+    mayAutoApply: false,
+  });
+
   const waterBps = input.waterAdherenceBps ?? null;
   if (waterBps !== null && waterBps < 5_000) {
     const pace = input.pace ?? 'steady';
     // Soften sprint/steady cuts when the athlete is not logging water — schedule changes + alert.
     if (input.phase === 'cutting' && (pace === 'sprint' || pace === 'steady')) {
-      return { status: 'propose', energyDeltaKcal: 200, carbDeltaG: 25, reason: 'water_adherence_low', alert: true };
+      return seal({ status: 'propose', energyDeltaKcal: 200, carbDeltaG: 25, reason: 'water_adherence_low', alert: true });
     }
-    return { status: 'hold', energyDeltaKcal: 0, carbDeltaG: 0, reason: 'water_adherence_low', alert: true };
+    return seal({ status: 'hold', energyDeltaKcal: 0, carbDeltaG: 0, reason: 'water_adherence_low', alert: true });
   }
 
   if (input.mealAdherenceBps !== null && input.mealAdherenceBps < 5_000) {
-    return { status: 'hold', energyDeltaKcal: 0, carbDeltaG: 0, reason: 'adherence_low', alert: true };
+    return seal({ status: 'hold', energyDeltaKcal: 0, carbDeltaG: 0, reason: 'adherence_low', alert: true });
   }
 
   const ordered = [...input.samples]
     .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.recordedOn) && Number.isSafeInteger(row.weightGrams) && row.weightGrams >= 30_000)
     .sort((a, b) => a.recordedOn.localeCompare(b.recordedOn));
   if (ordered.length < 2) {
-    return { status: 'hold', energyDeltaKcal: 0, carbDeltaG: 0, reason: 'insufficient_data', alert: false };
+    return seal({ status: 'hold', energyDeltaKcal: 0, carbDeltaG: 0, reason: 'insufficient_data', alert: false });
   }
   const first = ordered[0]!;
   const last = ordered[ordered.length - 1]!;
@@ -277,25 +287,25 @@ export function proposeWeeklyNutritionStep(input: {
 
   if (input.phase === 'cutting') {
     if (pace === 'sprint' && perWeekGrams > -400 && perWeekGrams <= 200) {
-      return { status: 'propose', energyDeltaKcal: -200, carbDeltaG: -40, reason: 'ease_aggressive_pace', alert: true };
+      return seal({ status: 'propose', energyDeltaKcal: -200, carbDeltaG: -40, reason: 'ease_aggressive_pace', alert: true });
     }
     if (perWeekGrams > 200) {
-      return { status: 'propose', energyDeltaKcal: -200, carbDeltaG: -40, reason: 'weight_rising_on_cut', alert: true };
+      return seal({ status: 'propose', energyDeltaKcal: -200, carbDeltaG: -40, reason: 'weight_rising_on_cut', alert: true });
     }
     if (perWeekGrams > -200 && perWeekGrams <= 200) {
-      return { status: 'propose', energyDeltaKcal: -150, carbDeltaG: -30, reason: 'weight_stalled_on_cut', alert: true };
+      return seal({ status: 'propose', energyDeltaKcal: -150, carbDeltaG: -30, reason: 'weight_stalled_on_cut', alert: true });
     }
     if (perWeekGrams < -1_200) {
-      return { status: 'propose', energyDeltaKcal: 150, carbDeltaG: 30, reason: 'weight_dropping_fast', alert: true };
+      return seal({ status: 'propose', energyDeltaKcal: 150, carbDeltaG: 30, reason: 'weight_dropping_fast', alert: true });
     }
   }
   if (input.phase === 'gain' && perWeekGrams < 100) {
-    return { status: 'propose', energyDeltaKcal: 150, carbDeltaG: 30, reason: 'weight_stalled_on_gain', alert: true };
+    return seal({ status: 'propose', energyDeltaKcal: 150, carbDeltaG: 30, reason: 'weight_stalled_on_gain', alert: true });
   }
   if (input.phase === 'fitness' && perWeekGrams > 400) {
-    return { status: 'propose', energyDeltaKcal: -100, carbDeltaG: -20, reason: 'weight_rising_on_cut', alert: true };
+    return seal({ status: 'propose', energyDeltaKcal: -100, carbDeltaG: -20, reason: 'weight_rising_on_cut', alert: true });
   }
-  return { status: 'hold', energyDeltaKcal: 0, carbDeltaG: 0, reason: 'stable', alert: false };
+  return seal({ status: 'hold', energyDeltaKcal: 0, carbDeltaG: 0, reason: 'stable', alert: false });
 }
 
 /** Ready meal with declared macros only — never invent a Saudi dish calculator. */

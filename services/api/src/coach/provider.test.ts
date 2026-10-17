@@ -34,6 +34,7 @@ describe('coach provider', () => {
     expect(reply.text).toContain('التمرين');
     expect(calls[0]?.authorization).toBe('Bearer secret-key');
     expect(calls[0]?.body).toContain('general_health');
+    expect(calls[0]?.body).toContain('Yazan');
     expect(reply.text).not.toContain('secret-key');
   });
 
