@@ -87,6 +87,7 @@ describe('persisted product', () => {
         ageYears: 29,
         heightCm: '170.5',
         weightKg: '70.25',
+        sex: 'male',
         trainingExperience: 'intermediate',
         goals: ['strength'],
         discipline: 'powerlifting',
@@ -137,6 +138,31 @@ describe('persisted product', () => {
     expect(Number(pair[0]?.weight_grams)).toBe(80_000);
     expect(Number(pair[1]?.weight_grams)).toBe(80_000);
     expect(new Set(weights.map((row) => row.id)).size).toBe(weights.length);
+    const water = await app.inject({
+      method: 'POST',
+      url: '/v1/water',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { milliliters: 250, loggedOn: sameDay },
+    });
+    expect(water.statusCode).toBe(200);
+    expect(water.json().milliliters).toBe(250);
+    const activity = await app.inject({
+      method: 'POST',
+      url: '/v1/activity',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { kind: 'boxing', durationSeconds: 1800, loggedOn: sameDay },
+    });
+    expect(activity.statusCode).toBe(200);
+    expect(activity.json().activity.kind).toBe('boxing');
+    expect(activity.json().activity).not.toHaveProperty('calories');
+    const tape = await app.inject({
+      method: 'POST',
+      url: '/v1/measurements',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { recordedOn: sameDay, waistMm: 820 },
+    });
+    expect(tape.statusCode).toBe(200);
+    expect(tape.json().measurement.waistMm).toBe(820);
     await app.inject({
       method: 'PATCH',
       url: '/v1/profile',
@@ -227,6 +253,22 @@ describe('persisted product', () => {
     expect(food2.json().summary.consumed.imageEstimateEnergyKcal).toBe(50);
     expect(food2.json().target).toBeNull();
     expect(food.statusCode).toBe(200);
+    const breakfast = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/entries',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        loggedOn: '2026-06-01',
+        energyKcal: 180,
+        proteinMg: 8000,
+        carbohydrateMg: 20000,
+        fatMg: 5000,
+        source: 'manual',
+        mealSlot: 'breakfast',
+      },
+    });
+    expect(breakfast.statusCode).toBe(200);
+    expect((breakfast.json().entries as { mealSlot: string; energyKcal: number }[]).some((row) => row.mealSlot === 'breakfast' && row.energyKcal === 180)).toBe(true);
     const diaryRange = await app.inject({
       method: 'GET',
       url: '/v1/nutrition/diary-range?from=2026-05-30&to=2026-06-02',
@@ -234,7 +276,7 @@ describe('persisted product', () => {
     });
     expect(diaryRange.statusCode).toBe(200);
     expect(diaryRange.json().days).toEqual([
-      expect.objectContaining({ loggedOn: '2026-06-01', energyKcal: 250, entryCount: 2 }),
+      expect.objectContaining({ loggedOn: '2026-06-01', energyKcal: 430, entryCount: 3 }),
     ]);
 
     secondToken = await tokenFor('other@sahhti.test');
@@ -275,6 +317,7 @@ describe('persisted product', () => {
         ageYears: 31,
         heightCm: '165',
         weightKg: '62',
+        sex: 'male',
         trainingExperience: 'beginner',
         goals: ['strength'],
         discipline: 'powerlifting',
@@ -305,6 +348,7 @@ describe('persisted product', () => {
     expect(empty.json().completedSessionDates).toEqual([]);
     expect(empty.json().exerciseSets).toEqual([]);
     expect(empty.json().personalRecords).toEqual([]);
+    expect(empty.json().sessionLoads).toEqual([]);
 
     async function completedSession(scheduledFor: string, sets: { loadGrams: number; reps: number }[]): Promise<void> {
       const scheduled = await app.inject({
@@ -437,6 +481,94 @@ describe('persisted product', () => {
       expect.objectContaining({ id: 'panatta', name: 'Panatta', catalog_status: 'registry_only' }),
       expect.objectContaining({ id: 'concept2', name: 'Concept2', catalog_status: 'registry_only' }),
     ]));
+    expect(libraryRows.length).toBeGreaterThanOrEqual(90);
+    const scan = await app.inject({
+      method: 'GET',
+      url: '/v1/exercises/scan?code=TRN-LEGPRESS',
+      headers: { authorization: `Bearer ${progressToken}` },
+    });
+    expect(scan.statusCode).toBe(200);
+    expect(scan.json().exercise).toEqual(expect.objectContaining({
+      id: '10000000-0000-4000-8000-000000000019',
+      name_en: 'Machine leg press',
+    }));
+    const extraScan = await app.inject({
+      method: 'GET',
+      url: '/v1/exercises/scan?code=TRN-SUMO',
+      headers: { authorization: `Bearer ${progressToken}` },
+    });
+    expect(extraScan.statusCode).toBe(200);
+    expect(extraScan.json().exercise.name_en).toBe('Sumo deadlift');
+    const catalog = await app.inject({
+      method: 'GET',
+      url: '/v1/training/programs',
+      headers: { authorization: `Bearer ${progressToken}` },
+    });
+    expect(catalog.statusCode).toBe(200);
+    expect(catalog.json().active).toBeNull();
+    expect(catalog.json().recommended.length).toBeGreaterThan(0);
+    expect(catalog.json().templates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'push_pull_legs', discipline: 'bodybuilding' }),
+      expect.objectContaining({ id: 'bro_split' }),
+      expect.objectContaining({ id: 'arnold_split' }),
+      expect.objectContaining({ id: 'calisthenics_ppl' }),
+      expect.objectContaining({ id: 'crossfit_three' }),
+    ]));
+    const activated = await app.inject({
+      method: 'POST',
+      url: '/v1/training/programs',
+      headers: { authorization: `Bearer ${progressToken}` },
+      payload: { templateId: 'push_pull_legs' },
+    });
+    expect(activated.statusCode).toBe(200);
+    expect(activated.json().program.templateId).toBe('push_pull_legs');
+    const started = await app.inject({
+      method: 'POST',
+      url: `/v1/training/programs/${activated.json().program.id}/start-day`,
+      headers: { authorization: `Bearer ${progressToken}` },
+      payload: { dayIndex: 0, startNow: true },
+    });
+    expect(started.statusCode).toBe(200);
+    expect(started.json().session.status).toBe('in_progress');
+    expect(started.json().session.plannedExercises.length).toBeGreaterThanOrEqual(3);
+    const startedAgain = await app.inject({
+      method: 'POST',
+      url: `/v1/training/programs/${activated.json().program.id}/start-day`,
+      headers: { authorization: `Bearer ${progressToken}` },
+      payload: { dayIndex: 1, startNow: true },
+    });
+    expect(startedAgain.statusCode).toBe(200);
+    expect(startedAgain.json().session.status).toBe('in_progress');
+    const previous = await app.inject({
+      method: 'GET',
+      url: `/v1/training/sessions/${started.json().session.id}`,
+      headers: { authorization: `Bearer ${progressToken}` },
+    });
+    expect(previous.statusCode).toBe(200);
+    expect(previous.json().session.status).toBe('abandoned');
+    const timed = await app.inject({
+      method: 'POST',
+      url: `/v1/training/sessions/${startedAgain.json().session.id}/complete`,
+      headers: { authorization: `Bearer ${progressToken}` },
+      payload: { at: new Date(Date.now() + 90_000).toISOString() },
+    });
+    expect(timed.statusCode).toBe(200);
+    expect(timed.json().session.status).toBe('completed');
+    expect(timed.json().session.sets).toEqual([]);
+    const unknownTemplate = await app.inject({
+      method: 'POST',
+      url: '/v1/training/programs',
+      headers: { authorization: `Bearer ${progressToken}` },
+      payload: { templateId: 'not-a-template' },
+    });
+    expect(unknownTemplate.statusCode).toBe(404);
+    const unknownScan = await app.inject({
+      method: 'GET',
+      url: '/v1/exercises/scan?code=NOPE-UNKNOWN',
+      headers: { authorization: `Bearer ${progressToken}` },
+    });
+    expect(unknownScan.statusCode).toBe(404);
+    expect(unknownScan.json().error.code).toBe('EXERCISE_CODE_UNKNOWN');
   });
 
   it('isolates gym tenants and locks the first attribution', async () => {
@@ -497,6 +629,68 @@ describe('persisted product', () => {
       payload: { code: 'RIYADH-1' },
     });
     expect(second.json().result).toBe('existing');
+  });
+
+  it('posts a Yazan daily check-in from logs and queues a weekly human-coach file', async () => {
+    const token = await tokenFor('yazan-coach@sahhti.test');
+    await app.inject({
+      method: 'POST',
+      url: '/v1/onboarding',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        ageYears: 26,
+        heightCm: '178',
+        weightKg: '82',
+        sex: 'male',
+        trainingExperience: 'intermediate',
+        goals: ['fat_loss'],
+        discipline: 'bodybuilding',
+        sessionsPerWeek: 4,
+        environment: 'gym',
+        equipment: ['barbell'],
+        activityLevel: 'moderate',
+        dietaryPreferences: [],
+        allergies: [],
+        supplements: [],
+        injuries: [],
+        preferredWorkoutTimes: [],
+        hasGymMembership: false,
+        locale: 'ar',
+      },
+    });
+    const checkin = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/daily-checkin',
+      headers: { authorization: `Bearer ${token}`, 'accept-language': 'ar' },
+      payload: {},
+    });
+    expect(checkin.statusCode).toBe(200);
+    expect(checkin.json().persona).toBe('yazan');
+    expect(String(checkin.json().text)).toContain('يزن');
+    const again = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/daily-checkin',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {},
+    });
+    expect(again.json().created).toBe(false);
+    const weekOf = '2026-06-09';
+    const brief = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/weekly-brief',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { weekOf, energy: 3, sleep: 4, stress: 2, hunger: 4, notes: 'اختبار' },
+    });
+    expect(brief.statusCode).toBe(200);
+    expect(brief.json().escalateToHuman).toBe(true);
+    expect(brief.json().packet.briefAr).toContain('مدرب بشري');
+    const latest = await app.inject({
+      method: 'GET',
+      url: '/v1/coach/weekly-brief',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(latest.statusCode).toBe(200);
+    expect(latest.json().brief.status).toBe('queued_for_human');
   });
 
   it('answers the coach from the signed-in member only and labels the mock', async () => {
@@ -706,6 +900,211 @@ describe('persisted product', () => {
     });
     expect(removed.statusCode).toBe(200);
     expect((removed.json().entries as { id: string }[]).some((item) => item.id === entry?.id)).toBe(false);
+  });
+
+  it('copies a logged day onto an empty day and lists favorites the member saved', async () => {
+    const token = await tokenFor('copy-diary@sahhti.test');
+    const created = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/foods',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { nameAr: 'تمر سكري', nameEn: 'Sukkari dates', energyKcal: 280, proteinMg: 2000, carbohydrateMg: 75000, fatMg: 400 },
+    });
+    expect(created.statusCode).toBe(200);
+    const foodId = created.json().id as string;
+    const logged = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/portions',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { foodItemId: foodId, quantityGrams: 50, loggedOn: '2026-06-10', mealSlot: 'snack' },
+    });
+    expect(logged.statusCode).toBe(200);
+    const selfCopy = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/diary/copy',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { from: '2026-06-10', to: '2026-06-10' },
+    });
+    expect(selfCopy.statusCode).toBe(422);
+    expect(selfCopy.json().error.code).toBe('SAME_DAY_COPY');
+    const emptySource = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/diary/copy',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { from: '2026-06-09', to: '2026-06-11' },
+    });
+    expect(emptySource.statusCode).toBe(404);
+    const copied = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/diary/copy',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { from: '2026-06-10', to: '2026-06-11' },
+    });
+    expect(copied.statusCode).toBe(200);
+    expect(copied.json().summary.consumed.energyKcal).toBe(140);
+    expect((copied.json().entries as { mealSlot: string }[]).every((row) => row.mealSlot === 'snack')).toBe(true);
+    const again = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/diary/copy',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { from: '2026-06-10', to: '2026-06-11' },
+    });
+    expect(again.statusCode).toBe(409);
+    const hiddenCopy = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/diary/copy',
+      headers: { authorization: `Bearer ${secondToken}` },
+      payload: { from: '2026-06-10', to: '2026-06-12' },
+    });
+    expect(hiddenCopy.statusCode).toBe(404);
+    const none = await app.inject({
+      method: 'GET',
+      url: '/v1/nutrition/favorites',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(none.json().foods).toEqual([]);
+    const starred = await app.inject({
+      method: 'POST',
+      url: `/v1/nutrition/foods/${foodId}/favorite`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(starred.statusCode).toBe(200);
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/v1/nutrition/favorites',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect((listed.json().foods as { id: string; name_en: string }[]).some((row) => row.id === foodId && row.name_en === 'Sukkari dates')).toBe(true);
+    const otherFav = await app.inject({
+      method: 'GET',
+      url: '/v1/nutrition/favorites',
+      headers: { authorization: `Bearer ${secondToken}` },
+    });
+    expect(otherFav.json().foods).toEqual([]);
+  });
+
+  it('builds an adaptive sprint cut from athlete horizon and tracks water discipline', async () => {
+    const token = await tokenFor('meal-plan@sahhti.test');
+    const onboard = await app.inject({
+      method: 'POST',
+      url: '/v1/onboarding',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        ageYears: 28,
+        heightCm: '175',
+        weightKg: '85',
+        sex: 'male',
+        trainingExperience: 'intermediate',
+        goals: ['fat_loss'],
+        discipline: 'bodybuilding',
+        sessionsPerWeek: 4,
+        environment: 'gym',
+        equipment: ['barbell'],
+        activityLevel: 'moderate',
+        dietaryPreferences: [],
+        allergies: [],
+        supplements: [],
+        injuries: [],
+        preferredWorkoutTimes: [],
+        hasGymMembership: false,
+        locale: 'ar',
+      },
+    });
+    expect(onboard.statusCode).toBe(200);
+    const activated = await app.inject({
+      method: 'POST',
+      url: '/v1/training/programs',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { templateId: 'push_pull_legs' },
+    });
+    expect(activated.statusCode).toBe(200);
+    const sprint = await app.inject({
+      method: 'POST',
+      url: '/v1/training/programs/nutrition',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { phase: 'cutting', maintenanceKcal: 2800, horizonWeeks: 3 },
+    });
+    // P0-SAFE-01: universal cut deficits must not apply on paid path until SME review.
+    expect(sprint.statusCode).toBe(422);
+    expect(sprint.json().error.code).toBe('ENERGY_POLICY_UNAPPROVED');
+    const steady = await app.inject({
+      method: 'POST',
+      url: '/v1/training/programs/nutrition',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { phase: 'cutting', maintenanceKcal: 2800, pace: 'steady' },
+    });
+    expect(steady.statusCode).toBe(422);
+    expect(steady.json().error.code).toBe('ENERGY_POLICY_UNAPPROVED');
+    const discipline = await app.inject({
+      method: 'GET',
+      url: '/v1/nutrition/discipline',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(discipline.statusCode).toBe(200);
+    expect(discipline.json().discipline.windowDays).toBe(14);
+    expect(discipline.json().alert).toBe(true);
+    const ready = await app.inject({
+      method: 'GET',
+      url: '/v1/nutrition/ready-meals',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(ready.statusCode).toBe(200);
+    expect(ready.json().inventedDishes).toBe(false);
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/v1/nutrition/meal-plan',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        loggedOn: '2026-06-15',
+        targetKcal: 1700,
+        slots: [
+          { slot: 'breakfast', templateId: 'breakfast_eggs_oats' },
+          { slot: 'lunch', templateId: 'lunch_chicken_rice' },
+          {
+            slot: 'dinner',
+            custom: { label: 'وجبتـي الخاصة', energyKcal: 400, proteinMg: 35000, carbohydrateMg: 20000, fatMg: 12000 },
+          },
+        ],
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().plan.plannedKcal).toBe(1340);
+  });
+
+  it('lets a member keep a free supplement list and tick what they took today', async () => {
+    const token = await tokenFor('supplements@sahhti.test');
+    const created = await app.inject({
+      method: 'POST',
+      url: '/v1/supplements',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'كرياتين', loggedOn: '2026-06-11' },
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json().catalog).toBe(false);
+    expect((created.json().items as { name: string; taken: boolean }[]).some((row) => row.name === 'كرياتين' && row.taken === false)).toBe(true);
+    const logged = await app.inject({
+      method: 'POST',
+      url: '/v1/supplements/log',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'كرياتين', loggedOn: '2026-06-11' },
+    });
+    expect(logged.statusCode).toBe(200);
+    const row = (logged.json().items as { name: string; taken: boolean; logId: string | null }[]).find((item) => item.name === 'كرياتين');
+    expect(row?.taken).toBe(true);
+    expect(row?.logId).toBeTruthy();
+    const hidden = await app.inject({
+      method: 'GET',
+      url: '/v1/supplements?on=2026-06-11',
+      headers: { authorization: `Bearer ${secondToken}` },
+    });
+    expect(hidden.json().items).toEqual([]);
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/v1/supplements/log',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: 'PrimeStack', loggedOn: '2026-06-11' },
+    });
+    expect(unknown.statusCode).toBe(404);
   });
 
   it('pauses and resumes an owned workout', async () => {

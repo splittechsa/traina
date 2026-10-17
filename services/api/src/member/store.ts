@@ -15,10 +15,40 @@ import {
   resolveAttribution,
   resumeWorkout,
   scalePer100g,
+  abandonWorkout,
+  assertActivityDuration,
+  assertMeasurementMm,
+  assertWaterServing,
+  catalogTemplates,
+  isActivityKind,
+  isMealSlot,
+  assertDiaryCopy,
+  assertSupplementName,
+  waterMillilitersTotal,
+  assembleDayMealPlan,
+  athleteEnergyPlan,
+  assertEnergyPolicyApprovedForPaidCoaching,
+  customizeMealSlot,
+  loggingDiscipline,
+  LOGGING_WINDOW_DAYS,
+  pickReadyMeal,
+  proposeWeeklyNutritionStep,
+  READY_MEAL_TEMPLATES,
+  assertNutritionPace,
+  assertNutritionPhase,
+  buildWeeklyHumanCoachPacket,
+  buildYazanDailyBrief,
+  planTemplateDay,
+  recommendTemplates,
   scheduleWorkout,
   startWorkout,
+  templateById,
+  workoutElapsedSeconds,
   summarizeDiary,
   validateOnboarding,
+  type MealPlanSlotPick,
+  type NutritionPace,
+  type NutritionPhase,
   type Actor,
   type CoachingRuleVersion,
   type FoodEntry,
@@ -79,17 +109,19 @@ export async function saveOnboarding(
     const version = Number(versions.rows[0]?.next ?? 1);
     await tx.query(
       `INSERT INTO user_profiles (
-         user_id, age_years_reported, age_reported_on, height_mm, weight_grams, training_experience,
+         user_id, age_years_reported, age_reported_on, height_mm, weight_grams, sex, training_experience,
          discipline, sessions_per_week, environment, activity_level, dietary_preferences, allergies,
-         supplements, injuries, has_gym_membership, locale, measurement_units, version
+         supplements, injuries, has_gym_membership, locale, measurement_units,
+         nutrition_pace, horizon_weeks, version
        ) VALUES (
-         $1, $2, CURRENT_DATE, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 1
+         $1, $2, CURRENT_DATE, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 1
        )
        ON CONFLICT (user_id) DO UPDATE SET
          age_years_reported = EXCLUDED.age_years_reported,
          age_reported_on = CURRENT_DATE,
          height_mm = EXCLUDED.height_mm,
          weight_grams = EXCLUDED.weight_grams,
+         sex = EXCLUDED.sex,
          training_experience = EXCLUDED.training_experience,
          discipline = EXCLUDED.discipline,
          sessions_per_week = EXCLUDED.sessions_per_week,
@@ -102,6 +134,8 @@ export async function saveOnboarding(
          has_gym_membership = EXCLUDED.has_gym_membership,
          locale = EXCLUDED.locale,
          measurement_units = EXCLUDED.measurement_units,
+         nutrition_pace = EXCLUDED.nutrition_pace,
+         horizon_weeks = EXCLUDED.horizon_weeks,
          version = user_profiles.version + 1,
          updated_at = now()`,
       [
@@ -109,6 +143,7 @@ export async function saveOnboarding(
         record.ageYears,
         record.heightMm,
         record.weightGrams,
+        record.sex,
         record.trainingExperience,
         record.discipline,
         record.sessionsPerWeek,
@@ -121,6 +156,8 @@ export async function saveOnboarding(
         record.hasGymMembership,
         record.locale,
         units,
+        record.nutritionPace,
+        record.horizonWeeks,
       ],
     );
     await tx.query(`UPDATE user_profiles SET sports = $2::text[] WHERE user_id = $1`, [userId, record.sports]);
@@ -158,7 +195,8 @@ export async function saveOnboarding(
 
 export async function readProfile(db: Database, userId: string) {
   const profile = await db.query<Record<string, unknown>>(
-    `SELECT display_name, age_years_reported, height_mm, weight_grams, discipline, sports, locale, measurement_units, version
+    `SELECT display_name, age_years_reported, height_mm, weight_grams, sex, discipline, sports, locale, measurement_units, version,
+            training_experience, sessions_per_week, environment, supplements, nutrition_pace, horizon_weeks
      FROM user_profiles WHERE user_id = $1`,
     [userId],
   );
@@ -229,7 +267,13 @@ async function writeSession(db: Database, session: WorkoutSession): Promise<void
 export async function scheduleMemberWorkout(
   db: Database,
   userId: string,
-  input: { name: string; discipline: string; scheduledFor: string; exercises: WorkoutSession['plannedExercises'] },
+  input: {
+    name: string;
+    discipline: string;
+    scheduledFor: string;
+    exercises: WorkoutSession['plannedExercises'];
+    programVersionId?: string | null;
+  },
 ): Promise<WorkoutSession> {
   for (const exercise of input.exercises) {
     const found = await db.query(`SELECT id FROM exercises WHERE id = $1`, [exercise.exerciseId]);
@@ -251,10 +295,483 @@ export async function scheduleMemberWorkout(
     throw asApi(error);
   }
   await db.query(
-    `INSERT INTO workout_sessions (id, user_id, name, discipline, status, planned_exercises, scheduled_for, pauses)
-     VALUES ($1, $2, $3, $4, 'scheduled', $5::jsonb, $6, '[]'::jsonb)`,
-    [session.id, userId, session.name, session.discipline, JSON.stringify(session.plannedExercises), session.scheduledFor],
+    `INSERT INTO workout_sessions (id, user_id, name, discipline, status, planned_exercises, scheduled_for, pauses, program_version_id)
+     VALUES ($1, $2, $3, $4, 'scheduled', $5::jsonb, $6, '[]'::jsonb, $7)`,
+    [
+      session.id,
+      userId,
+      session.name,
+      session.discipline,
+      JSON.stringify(session.plannedExercises),
+      session.scheduledFor,
+      input.programVersionId ?? null,
+    ],
   );
+  return session;
+}
+
+function publicTemplate(template: NonNullable<ReturnType<typeof templateById>>) {
+  return {
+    id: template.id,
+    family: template.family,
+    split: template.split,
+    daysPerWeek: template.daysPerWeek,
+    discipline: template.discipline,
+    environment: template.environment,
+    name_ar: template.name_ar,
+    name_en: template.name_en,
+    summary_ar: template.summary_ar,
+    summary_en: template.summary_en,
+    days: template.days.map((day) => ({
+      name_ar: day.name_ar,
+      name_en: day.name_en,
+      exerciseCount: day.exerciseIds.length,
+    })),
+  };
+}
+
+function recommendationsFor(profile: Record<string, unknown> | null, goals: readonly string[]) {
+  const sports = Array.isArray(profile?.sports) ? profile.sports.map((item) => String(item)) : [];
+  return recommendTemplates({
+    sessionsPerWeek: profile?.sessions_per_week === null || profile?.sessions_per_week === undefined ? null : Number(profile.sessions_per_week),
+    goals,
+    discipline: profile?.discipline === null || profile?.discipline === undefined ? null : String(profile.discipline),
+    sports,
+    environment: profile?.environment === null || profile?.environment === undefined ? null : String(profile.environment),
+    experience: profile?.training_experience === null || profile?.training_experience === undefined ? null : String(profile.training_experience),
+    heightMm: profile?.height_mm === null || profile?.height_mm === undefined ? null : Number(profile.height_mm),
+    weightGrams: profile?.weight_grams === null || profile?.weight_grams === undefined ? null : Number(profile.weight_grams),
+  });
+}
+
+export function listTrainingTemplates() {
+  return catalogTemplates().map((item) => publicTemplate(item));
+}
+
+export async function listMemberPrograms(db: Database, userId: string) {
+  const { profile, goals } = await readProfile(db, userId);
+  const ranked = recommendationsFor(profile, goals);
+  const recommendedIds = new Set(ranked.slice(0, 3).map((item) => item.id));
+  const active = await db.query<{
+    id: string;
+    template_id: string | null;
+    name: string;
+    discipline: string;
+    nutrition_phase: string | null;
+    nutrition_pace: string | null;
+    horizon_weeks: number | null;
+    weekly_energy_delta_kcal: number;
+    maintenance_kcal: number | null;
+  }>(
+    `SELECT id, template_id, name, discipline, nutrition_phase, nutrition_pace, horizon_weeks,
+            weekly_energy_delta_kcal, maintenance_kcal
+     FROM programs WHERE user_id = $1 AND active = true LIMIT 1`,
+    [userId],
+  );
+  const row = active.rows[0];
+  const template = row?.template_id === undefined || row.template_id === null ? null : templateById(row.template_id);
+  let energy = null;
+  if (row !== undefined && row.nutrition_phase !== null && row.maintenance_kcal !== null) {
+    try {
+      energy = athleteEnergyPlan({
+        maintenanceKcal: Number(row.maintenance_kcal),
+        phase: assertNutritionPhase(row.nutrition_phase),
+        pace: row.nutrition_pace === null ? undefined : assertNutritionPace(row.nutrition_pace),
+        horizonWeeks: row.horizon_weeks === null ? null : Number(row.horizon_weeks),
+        weeklyEnergyDeltaKcal: Number(row.weekly_energy_delta_kcal),
+      });
+    } catch {
+      energy = null;
+    }
+  }
+  return {
+    templates: catalogTemplates().map((item) => ({
+      ...publicTemplate(item),
+      recommended: recommendedIds.has(item.id),
+    })),
+    recommended: ranked.slice(0, 5),
+    readyMeals: READY_MEAL_TEMPLATES,
+    active:
+      row === undefined
+        ? null
+        : {
+            id: row.id,
+            templateId: row.template_id,
+            name: row.name,
+            discipline: row.discipline,
+            days: template === null ? [] : publicTemplate(template).days,
+            nutritionPhase: row.nutrition_phase,
+            nutritionPace: row.nutrition_pace,
+            horizonWeeks: row.horizon_weeks === null ? null : Number(row.horizon_weeks),
+            maintenanceKcal: row.maintenance_kcal === null ? null : Number(row.maintenance_kcal),
+            weeklyEnergyDeltaKcal: Number(row.weekly_energy_delta_kcal),
+            energy,
+          },
+  };
+}
+
+export async function setProgramNutrition(
+  db: Database,
+  userId: string,
+  input: {
+    phase: string;
+    maintenanceKcal: number;
+    pace?: string;
+    horizonWeeks?: number | null;
+    weeklyEnergyDeltaKcal?: number;
+  },
+) {
+  try {
+    // Paid coaching apply path — block until ENERGY_POLICY is professionally approved (P0-SAFE-01).
+    assertEnergyPolicyApprovedForPaidCoaching();
+  } catch (error) {
+    throw asApi(error);
+  }
+  let phase: NutritionPhase;
+  let pace: NutritionPace | undefined;
+  try {
+    phase = assertNutritionPhase(input.phase);
+    pace = input.pace === undefined ? undefined : assertNutritionPace(input.pace);
+  } catch (error) {
+    throw asApi(error);
+  }
+  let energy;
+  try {
+    energy = athleteEnergyPlan({
+      maintenanceKcal: input.maintenanceKcal,
+      phase,
+      pace,
+      horizonWeeks: input.horizonWeeks ?? null,
+      weeklyEnergyDeltaKcal: input.weeklyEnergyDeltaKcal ?? 0,
+    });
+  } catch (error) {
+    throw asApi(error);
+  }
+  const updated = await db.query<{ id: string }>(
+    `UPDATE programs
+     SET nutrition_phase = $2,
+         maintenance_kcal = $3,
+         weekly_energy_delta_kcal = $4,
+         nutrition_pace = $5,
+         horizon_weeks = $6
+     WHERE user_id = $1 AND active = true
+     RETURNING id`,
+    [
+      userId,
+      phase,
+      input.maintenanceKcal,
+      energy.weeklyEnergyDeltaKcal,
+      energy.pace,
+      energy.horizonWeeks,
+    ],
+  );
+  if (updated.rows[0] === undefined) {
+    throw new ApiError(404, 'PROGRAM_NOT_FOUND', 'Activate a training program before setting nutrition');
+  }
+  return { programId: String(updated.rows[0].id), phase, pace: energy.pace, energy };
+}
+
+export async function nutritionDisciplineFor(db: Database, userId: string) {
+  const windowDays = LOGGING_WINDOW_DAYS;
+  const from = previousIsoDay(windowDays - 1);
+  const to = new Date().toISOString().slice(0, 10);
+  const diary = await diaryRangeFor(db, userId, from, to);
+  const mealDaysLogged = diary.days.filter((day) => day.entryCount > 0).length;
+  const water = await db.query<{ n: string }>(
+    `SELECT COUNT(DISTINCT logged_on)::text AS n
+     FROM water_logs
+     WHERE user_id = $1 AND logged_on BETWEEN $2::date AND $3::date`,
+    [userId, from, to],
+  );
+  const waterDaysLogged = Number(water.rows[0]?.n ?? 0);
+  let discipline;
+  try {
+    discipline = loggingDiscipline({ windowDays, mealDaysLogged, waterDaysLogged });
+  } catch (error) {
+    throw asApi(error);
+  }
+  let proposal = null;
+  try {
+    proposal = await proposeProgramNutritionStep(db, userId);
+  } catch {
+    proposal = null;
+  }
+  return {
+    windowDays,
+    from,
+    to,
+    discipline,
+    proposal,
+    alert: proposal?.proposal?.alert === true || discipline.status !== 'ok',
+  };
+}
+
+export async function proposeProgramNutritionStep(db: Database, userId: string) {
+  const active = await db.query<{
+    nutrition_phase: string | null;
+    nutrition_pace: string | null;
+  }>(
+    `SELECT nutrition_phase, nutrition_pace FROM programs WHERE user_id = $1 AND active = true LIMIT 1`,
+    [userId],
+  );
+  const phaseRaw = active.rows[0]?.nutrition_phase;
+  if (phaseRaw === null || phaseRaw === undefined) {
+    throw new ApiError(404, 'NUTRITION_PHASE_MISSING', 'Set a nutrition phase on the active program first');
+  }
+  let phase: NutritionPhase;
+  let pace: NutritionPace | undefined;
+  try {
+    phase = assertNutritionPhase(phaseRaw);
+    const paceRaw = active.rows[0]?.nutrition_pace;
+    pace = paceRaw === null || paceRaw === undefined ? undefined : assertNutritionPace(paceRaw);
+  } catch (error) {
+    throw asApi(error);
+  }
+  const weights = await db.query<{ recorded_on: string; weight_grams: number }>(
+    `SELECT recorded_on::text AS recorded_on, weight_grams
+     FROM weight_records WHERE user_id = $1
+     ORDER BY recorded_on DESC LIMIT 8`,
+    [userId],
+  );
+  const samples = weights.rows
+    .map((row) => ({ recordedOn: row.recorded_on.slice(0, 10), weightGrams: Number(row.weight_grams) }))
+    .reverse();
+  const windowDays = LOGGING_WINDOW_DAYS;
+  const from = previousIsoDay(windowDays - 1);
+  const to = new Date().toISOString().slice(0, 10);
+  const diary = await diaryRangeFor(db, userId, from, to);
+  const mealDaysLogged = diary.days.filter((day) => day.entryCount > 0).length;
+  const water = await db.query<{ n: string }>(
+    `SELECT COUNT(DISTINCT logged_on)::text AS n
+     FROM water_logs
+     WHERE user_id = $1 AND logged_on BETWEEN $2::date AND $3::date`,
+    [userId, from, to],
+  );
+  const waterDaysLogged = Number(water.rows[0]?.n ?? 0);
+  let discipline;
+  try {
+    discipline = loggingDiscipline({ windowDays, mealDaysLogged, waterDaysLogged });
+  } catch (error) {
+    throw asApi(error);
+  }
+  try {
+    return {
+      phase,
+      pace: pace ?? 'steady',
+      proposal: proposeWeeklyNutritionStep({
+        phase,
+        pace,
+        samples,
+        mealAdherenceBps: discipline.mealAdherenceBps,
+        waterAdherenceBps: discipline.waterAdherenceBps,
+      }),
+      discipline,
+      applied: false,
+      note: 'Proposal only. Confirm before changing the athlete plan.',
+    };
+  } catch (error) {
+    throw asApi(error);
+  }
+}
+
+function previousIsoDay(daysAgo: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toISOString().slice(0, 10);
+}
+
+export async function listReadyMeals() {
+  return { meals: READY_MEAL_TEMPLATES, catalog: true, inventedDishes: false };
+}
+
+export async function mealPlanFor(db: Database, userId: string, loggedOn: string) {
+  const day = await db.query<{ id: string; target_kcal: number }>(
+    `SELECT id, target_kcal FROM member_meal_plan_days WHERE user_id = $1 AND logged_on = $2`,
+    [userId, loggedOn],
+  );
+  const row = day.rows[0];
+  if (row === undefined) {
+    return { loggedOn, plan: null, readyMeals: READY_MEAL_TEMPLATES };
+  }
+  const slots = await db.query<{
+    meal_slot: string;
+    template_id: string | null;
+    custom_label: string | null;
+    energy_kcal: number;
+    protein_mg: number;
+    carbohydrate_mg: number;
+    fat_mg: number;
+  }>(
+    `SELECT meal_slot, template_id, custom_label, energy_kcal, protein_mg, carbohydrate_mg, fat_mg
+     FROM member_meal_plan_slots WHERE day_id = $1 ORDER BY meal_slot`,
+    [row.id],
+  );
+  const picks: MealPlanSlotPick[] = slots.rows.map((slot) => ({
+    slot: slot.meal_slot as MealPlanSlotPick['slot'],
+    templateId: slot.template_id,
+    customLabel: slot.custom_label,
+    energyKcal: Number(slot.energy_kcal),
+    proteinMg: Number(slot.protein_mg),
+    carbohydrateMg: Number(slot.carbohydrate_mg),
+    fatMg: Number(slot.fat_mg),
+  }));
+  return {
+    loggedOn,
+    plan: assembleDayMealPlan(Number(row.target_kcal), picks),
+    readyMeals: READY_MEAL_TEMPLATES,
+  };
+}
+
+export async function saveMealPlanDay(
+  db: Database,
+  userId: string,
+  input: {
+    loggedOn: string;
+    targetKcal: number;
+    slots: Array<{
+      slot: string;
+      templateId?: string;
+      custom?: { label: string; energyKcal: number; proteinMg: number; carbohydrateMg: number; fatMg: number };
+    }>;
+  },
+) {
+  const picks: MealPlanSlotPick[] = [];
+  try {
+    for (const slot of input.slots) {
+      if (!isMealSlot(slot.slot)) {
+        throw new DomainError('UNKNOWN_MEAL_SLOT', 'That meal slot is not in the catalog');
+      }
+      if (slot.templateId !== undefined) {
+        picks.push(pickReadyMeal(slot.slot, slot.templateId));
+      } else if (slot.custom !== undefined) {
+        picks.push(customizeMealSlot(slot.slot, slot.custom));
+      } else {
+        throw new DomainError('INVALID_MEAL_SLOT', 'Provide a ready meal or custom macros');
+      }
+    }
+    assembleDayMealPlan(input.targetKcal, picks);
+  } catch (error) {
+    throw asApi(error);
+  }
+  return db.transaction(async (tx) => {
+    await tx.query(`DELETE FROM member_meal_plan_days WHERE user_id = $1 AND logged_on = $2`, [userId, input.loggedOn]);
+    const inserted = await tx.query<{ id: string }>(
+      `INSERT INTO member_meal_plan_days (user_id, logged_on, target_kcal) VALUES ($1, $2, $3) RETURNING id`,
+      [userId, input.loggedOn, input.targetKcal],
+    );
+    const dayId = String(inserted.rows[0]?.id);
+    for (const pick of picks) {
+      await tx.query(
+        `INSERT INTO member_meal_plan_slots (
+           day_id, meal_slot, template_id, custom_label, energy_kcal, protein_mg, carbohydrate_mg, fat_mg
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          dayId,
+          pick.slot,
+          pick.templateId,
+          pick.customLabel,
+          pick.energyKcal,
+          pick.proteinMg,
+          pick.carbohydrateMg,
+          pick.fatMg,
+        ],
+      );
+    }
+    return {
+      loggedOn: input.loggedOn,
+      plan: assembleDayMealPlan(input.targetKcal, picks),
+      readyMeals: READY_MEAL_TEMPLATES,
+    };
+  });
+}
+
+export async function activateMemberProgram(db: Database, userId: string, templateId: string) {
+  const template = templateById(templateId);
+  if (template === null) {
+    throw new ApiError(404, 'UNKNOWN_TEMPLATE', 'Training template is not in the catalog');
+  }
+  return db.transaction(async (tx) => {
+    await tx.query(`UPDATE programs SET active = false WHERE user_id = $1 AND active = true`, [userId]);
+    const programId = randomUUID();
+    const versionId = randomUUID();
+    await tx.query(
+      `INSERT INTO programs (id, user_id, discipline, name, template_id, active)
+       VALUES ($1, $2, $3, $4, $5, true)`,
+      [programId, userId, template.discipline, template.name_en, template.id],
+    );
+    await tx.query(
+      `INSERT INTO program_versions (id, program_id, version, source, template)
+       VALUES ($1, $2, 1, 'explicit', $3::jsonb)`,
+      [versionId, programId, JSON.stringify({ templateId: template.id, days: template.days })],
+    );
+    return {
+      id: programId,
+      templateId: template.id,
+      name: template.name_en,
+      discipline: template.discipline,
+      days: publicTemplate(template).days,
+    };
+  });
+}
+
+export async function abandonOpenWorkouts(db: Database, userId: string) {
+  const open = await db.query<{ id: string }>(
+    `SELECT id FROM workout_sessions
+     WHERE user_id = $1 AND status IN ('scheduled', 'in_progress', 'paused')
+     ORDER BY scheduled_for DESC`,
+    [userId],
+  );
+  const at = new Date().toISOString();
+  for (const row of open.rows) {
+    const current = await sessionOwned(db, userId, row.id);
+    try {
+      await writeSession(db, abandonWorkout(current, at));
+    } catch (error) {
+      if (error instanceof DomainError && error.code === 'INVALID_SESSION_STATE') {
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+export async function startProgramDay(
+  db: Database,
+  userId: string,
+  programId: string,
+  input: { dayIndex: number; startNow?: boolean; locale?: 'ar' | 'en' },
+) {
+  const owned = await db.query<{ id: string; template_id: string | null }>(
+    `SELECT id, template_id FROM programs WHERE id = $1 AND user_id = $2`,
+    [programId, userId],
+  );
+  const program = owned.rows[0];
+  if (program === undefined || program.template_id === null) {
+    throw new ApiError(404, 'PROGRAM_NOT_FOUND', 'Program is not on this account');
+  }
+  const version = await db.query<{ id: string }>(
+    `SELECT id FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
+    [programId],
+  );
+  let planned: ReturnType<typeof planTemplateDay>;
+  try {
+    planned = planTemplateDay(program.template_id, input.dayIndex);
+  } catch (error) {
+    throw asApi(error);
+  }
+  if (input.startNow === true) {
+    await abandonOpenWorkouts(db, userId);
+  }
+  const session = await scheduleMemberWorkout(db, userId, {
+    name: input.locale === 'en' ? planned.name_en : planned.name_ar,
+    discipline: planned.discipline,
+    scheduledFor: new Date().toISOString(),
+    exercises: planned.exercises,
+    programVersionId: version.rows[0]?.id ?? null,
+  });
+  if (input.startNow === true) {
+    return mutateSession(db, userId, session.id, { type: 'start', at: new Date().toISOString() });
+  }
   return session;
 }
 
@@ -336,8 +853,8 @@ async function completedSessions(db: Database, userId: string): Promise<WorkoutS
 }
 
 export async function listSessions(db: Database, userId: string) {
-  const rows = await db.query(
-    `SELECT id, name, discipline, status, scheduled_for, started_at, completed_at
+  const rows = await db.query<Record<string, unknown>>(
+    `SELECT id, name, discipline, status, scheduled_for, started_at, completed_at, pauses
      FROM workout_sessions WHERE user_id = $1 ORDER BY scheduled_for DESC`,
     [userId],
   );
@@ -347,7 +864,21 @@ export async function listSessions(db: Database, userId: string) {
     const id = String(row.id);
     if (seen.has(id)) continue;
     seen.add(id);
-    unique.push(row);
+    const startedAt = iso(row.started_at);
+    const completedAt = iso(row.completed_at);
+    unique.push({
+      id,
+      name: row.name,
+      discipline: row.discipline,
+      status: row.status,
+      scheduled_for: row.scheduled_for,
+      started_at: startedAt,
+      completed_at: completedAt,
+      duration_seconds: startedAt === null ? 0 : workoutElapsedSeconds(
+        { startedAt, completedAt, pauses: asJson(row.pauses ?? []) },
+        completedAt ?? new Date().toISOString(),
+      ),
+    });
   }
   return unique;
 }
@@ -359,19 +890,40 @@ export async function getSession(db: Database, userId: string, sessionId: string
 export async function logFood(
   db: Database,
   userId: string,
-  entry: { loggedOn: string; energyKcal: number; proteinMg: number; carbohydrateMg: number; fatMg: number; source: FoodEntry['source'] },
+  entry: {
+    loggedOn: string;
+    energyKcal: number;
+    proteinMg: number;
+    carbohydrateMg: number;
+    fatMg: number;
+    source: FoodEntry['source'];
+    mealSlot?: string;
+  },
 ) {
+  const mealSlot = entry.mealSlot === undefined ? null : isMealSlot(entry.mealSlot) ? entry.mealSlot : null;
+  if (entry.mealSlot !== undefined && mealSlot === null) {
+    throw new ApiError(422, 'UNKNOWN_MEAL_SLOT', 'That meal slot is not in the catalog');
+  }
   await db.query(
-    `INSERT INTO food_entries (user_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [userId, entry.loggedOn, entry.energyKcal, entry.proteinMg, entry.carbohydrateMg, entry.fatMg, entry.source, entry.source === 'image_estimate'],
+    `INSERT INTO food_entries (user_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, meal_slot)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [userId, entry.loggedOn, entry.energyKcal, entry.proteinMg, entry.carbohydrateMg, entry.fatMg, entry.source, entry.source === 'image_estimate', mealSlot],
   );
   return diaryFor(db, userId, entry.loggedOn);
 }
 
 export async function diaryFor(db: Database, userId: string, day: string) {
-  const rows = await db.query<{ id: string; energy_kcal: number; protein_mg: number; carbohydrate_mg: number; fat_mg: number; source: FoodEntry['source']; label: string | null }>(
-    `SELECT id, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, label
+  const rows = await db.query<{
+    id: string;
+    energy_kcal: number;
+    protein_mg: number;
+    carbohydrate_mg: number;
+    fat_mg: number;
+    source: FoodEntry['source'];
+    label: string | null;
+    meal_slot: string | null;
+  }>(
+    `SELECT id, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, label, meal_slot
      FROM food_entries WHERE user_id = $1 AND logged_on = $2 ORDER BY created_at, id`,
     [userId, day],
   );
@@ -383,6 +935,7 @@ export async function diaryFor(db: Database, userId: string, day: string) {
     fatMg: Number(row.fat_mg),
     source: row.source,
     label: row.label,
+    mealSlot: row.meal_slot,
   }));
   return { persisted: true, target: null, referenceDatabase: false, entries, summary: summarizeDiary(null, entries) };
 }
@@ -435,6 +988,227 @@ export async function recordWeight(db: Database, userId: string, weightKg: strin
     [userId, grams, recordedOn],
   );
   return { id: String(inserted.rows[0]?.id), weightGrams: grams, recordedOn };
+}
+
+export async function logWater(db: Database, userId: string, milliliters: number, loggedOn: string) {
+  try {
+    assertWaterServing(milliliters);
+  } catch (error) {
+    throw asApi(error);
+  }
+  const inserted = await db.query<{ id: string }>(
+    `INSERT INTO water_logs (user_id, logged_on, milliliters) VALUES ($1, $2, $3) RETURNING id`,
+    [userId, loggedOn, milliliters],
+  );
+  return waterFor(db, userId, loggedOn, String(inserted.rows[0]?.id));
+}
+
+export async function waterFor(db: Database, userId: string, loggedOn: string, lastId?: string) {
+  const rows = await db.query<{ id: string; milliliters: number; created_at: string }>(
+    `SELECT id, milliliters, created_at FROM water_logs WHERE user_id = $1 AND logged_on = $2 ORDER BY created_at`,
+    [userId, loggedOn],
+  );
+  const entries = rows.rows.map((row) => ({
+    id: String(row.id),
+    milliliters: Number(row.milliliters),
+    createdAt: row.created_at,
+  }));
+  return { loggedOn, milliliters: waterMillilitersTotal(entries), entries, lastId: lastId ?? null };
+}
+
+async function seedMemberSupplements(db: Database, userId: string): Promise<void> {
+  const existing = await db.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM member_supplements WHERE user_id = $1`,
+    [userId],
+  );
+  if (Number(existing.rows[0]?.n ?? 0) > 0) return;
+  const profile = await db.query<{ supplements: string[] | null }>(
+    `SELECT supplements FROM user_profiles WHERE user_id = $1`,
+    [userId],
+  );
+  const names = profile.rows[0]?.supplements ?? [];
+  for (const raw of names) {
+    let name: string;
+    try {
+      name = assertSupplementName(String(raw));
+    } catch {
+      continue;
+    }
+    await db.query(
+      `INSERT INTO member_supplements (user_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [userId, name],
+    );
+  }
+}
+
+export async function listSupplements(db: Database, userId: string, loggedOn: string) {
+  await seedMemberSupplements(db, userId);
+  const items = await db.query<{ name: string }>(
+    `SELECT name FROM member_supplements WHERE user_id = $1 ORDER BY created_at, name`,
+    [userId],
+  );
+  const taken = await db.query<{ id: string; name: string }>(
+    `SELECT id, name FROM supplement_logs WHERE user_id = $1 AND logged_on = $2`,
+    [userId, loggedOn],
+  );
+  const takenByName = new Map(taken.rows.map((row) => [row.name, String(row.id)]));
+  return {
+    loggedOn,
+    catalog: false,
+    items: items.rows.map((row) => ({
+      name: row.name,
+      taken: takenByName.has(row.name),
+      logId: takenByName.get(row.name) ?? null,
+    })),
+  };
+}
+
+export async function addMemberSupplement(db: Database, userId: string, rawName: string, loggedOn: string) {
+  let name: string;
+  try {
+    name = assertSupplementName(rawName);
+  } catch (error) {
+    throw asApi(error);
+  }
+  await db.query(
+    `INSERT INTO member_supplements (user_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+    [userId, name],
+  );
+  return listSupplements(db, userId, loggedOn);
+}
+
+export async function logSupplement(db: Database, userId: string, rawName: string, loggedOn: string) {
+  let name: string;
+  try {
+    name = assertSupplementName(rawName);
+  } catch (error) {
+    throw asApi(error);
+  }
+  const owned = await db.query(
+    `SELECT name FROM member_supplements WHERE user_id = $1 AND name = $2`,
+    [userId, name],
+  );
+  if (owned.rows[0] === undefined) {
+    throw new ApiError(404, 'SUPPLEMENT_NOT_FOUND', 'That name is not on the member list');
+  }
+  await db.query(
+    `INSERT INTO supplement_logs (user_id, name, logged_on) VALUES ($1, $2, $3) ON CONFLICT (user_id, name, logged_on) DO NOTHING`,
+    [userId, name, loggedOn],
+  );
+  return listSupplements(db, userId, loggedOn);
+}
+
+export async function unlogSupplement(db: Database, userId: string, logId: string, loggedOn: string) {
+  const removed = await db.query(
+    `DELETE FROM supplement_logs WHERE id = $1 AND user_id = $2 RETURNING id`,
+    [logId, userId],
+  );
+  if (removed.rows[0] === undefined) {
+    throw new ApiError(404, 'ENTRY_NOT_FOUND', 'Supplement log was not found');
+  }
+  return listSupplements(db, userId, loggedOn);
+}
+
+export async function logActivity(
+  db: Database,
+  userId: string,
+  input: { kind: string; durationSeconds: number; loggedOn: string },
+) {
+  if (!isActivityKind(input.kind)) {
+    throw new ApiError(422, 'UNKNOWN_ACTIVITY', 'That activity is not in the catalog');
+  }
+  try {
+    assertActivityDuration(input.durationSeconds);
+  } catch (error) {
+    throw asApi(error);
+  }
+  const inserted = await db.query<{ id: string }>(
+    `INSERT INTO activity_logs (user_id, logged_on, kind, duration_seconds) VALUES ($1, $2, $3, $4) RETURNING id`,
+    [userId, input.loggedOn, input.kind, input.durationSeconds],
+  );
+  return { id: String(inserted.rows[0]?.id), ...input };
+}
+
+export async function activitiesFor(db: Database, userId: string, loggedOn: string) {
+  const rows = await db.query<{ id: string; kind: string; duration_seconds: number; created_at: string }>(
+    `SELECT id, kind, duration_seconds, created_at FROM activity_logs WHERE user_id = $1 AND logged_on = $2 ORDER BY created_at`,
+    [userId, loggedOn],
+  );
+  return {
+    loggedOn,
+    activities: rows.rows.map((row) => ({
+      id: String(row.id),
+      kind: row.kind,
+      durationSeconds: Number(row.duration_seconds),
+      createdAt: row.created_at,
+    })),
+  };
+}
+
+export async function logBodyMeasurements(
+  db: Database,
+  userId: string,
+  input: {
+    recordedOn: string;
+    waistMm?: number | null;
+    chestMm?: number | null;
+    hipMm?: number | null;
+    armMm?: number | null;
+    thighMm?: number | null;
+    neckMm?: number | null;
+  },
+) {
+  const values = {
+    waistMm: input.waistMm ?? null,
+    chestMm: input.chestMm ?? null,
+    hipMm: input.hipMm ?? null,
+    armMm: input.armMm ?? null,
+    thighMm: input.thighMm ?? null,
+    neckMm: input.neckMm ?? null,
+  };
+  if (Object.values(values).every((value) => value === null)) {
+    throw new ApiError(422, 'EMPTY_MEASUREMENT', 'At least one circumference is required');
+  }
+  try {
+    for (const value of Object.values(values)) assertMeasurementMm(value);
+  } catch (error) {
+    throw asApi(error);
+  }
+  const inserted = await db.query<{ id: string }>(
+    `INSERT INTO body_measurements (user_id, recorded_on, waist_mm, chest_mm, hip_mm, arm_mm, thigh_mm, neck_mm)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [userId, input.recordedOn, values.waistMm, values.chestMm, values.hipMm, values.armMm, values.thighMm, values.neckMm],
+  );
+  return { id: String(inserted.rows[0]?.id), recordedOn: input.recordedOn, ...values };
+}
+
+export async function measurementsFor(db: Database, userId: string) {
+  const rows = await db.query<{
+    id: string;
+    recorded_on: string;
+    waist_mm: number | null;
+    chest_mm: number | null;
+    hip_mm: number | null;
+    arm_mm: number | null;
+    thigh_mm: number | null;
+    neck_mm: number | null;
+  }>(
+    `SELECT id, recorded_on, waist_mm, chest_mm, hip_mm, arm_mm, thigh_mm, neck_mm
+     FROM body_measurements WHERE user_id = $1 ORDER BY recorded_on DESC, created_at DESC LIMIT 60`,
+    [userId],
+  );
+  return {
+    measurements: rows.rows.map((row) => ({
+      id: String(row.id),
+      recordedOn: row.recorded_on,
+      waistMm: row.waist_mm,
+      chestMm: row.chest_mm,
+      hipMm: row.hip_mm,
+      armMm: row.arm_mm,
+      thighMm: row.thigh_mm,
+      neckMm: row.neck_mm,
+    })),
+  };
 }
 
 // Bounds on how much history a single /v1/progress response will ever carry. These exist so a
@@ -520,12 +1294,31 @@ export async function progressFor(db: Database, userId: string): Promise<Progres
      LIMIT ${MAX_EXERCISE_SET_ROWS}`,
     [userId],
   );
+  const sessionLoads = await db.query<{ completed_at: string; started_at: string | null; discipline: string; pauses: unknown }>(
+    `SELECT completed_at, started_at, discipline, pauses FROM (
+       SELECT completed_at, started_at, discipline, pauses FROM workout_sessions
+       WHERE user_id = $1 AND status = 'completed' AND completed_at IS NOT NULL
+         AND completed_at >= now() - interval '120 days'
+       ORDER BY completed_at DESC
+       LIMIT ${MAX_SESSION_DATES}
+     ) recent
+     ORDER BY completed_at`,
+    [userId],
+  );
   return {
     weights: weights.rows,
     personalRecords: records.rows,
     completedWorkouts: Number(completed.rows[0]?.count ?? 0),
     completedSessionDates: completedDates.rows.map((row) => row.completed_at),
     exerciseSets: exerciseSets.rows,
+    sessionLoads: sessionLoads.rows.map((row) => ({
+      completed_at: row.completed_at,
+      discipline: row.discipline,
+      duration_seconds: workoutElapsedSeconds(
+        { startedAt: iso(row.started_at), completedAt: row.completed_at, pauses: asJson(row.pauses ?? []) },
+        row.completed_at,
+      ),
+    })),
   };
 }
 
@@ -579,19 +1372,14 @@ export async function homeFor(db: Database, userId: string, asOf: string, locale
   };
 }
 
-export async function listExercises(db: Database, userId: string) {
-  const rows = await db.query(
-    `SELECT id, name_ar, name_en, primary_muscles, secondary_muscles, movement_pattern,
+const exerciseSelect = `id, name_ar, name_en, primary_muscles, secondary_muscles, movement_pattern,
             equipment, difficulty, instructions_ar, instructions_en,
             disciplines, environments, equipment_brands,
             demo_type, demo_profile, demo_model_uri, demo_license_spdx,
-            demo_attribution, demo_review_status
-     FROM exercises
-     WHERE owner_user_id IS NULL OR owner_user_id = $1
-     ORDER BY name_en`,
-    [userId],
-  );
-  return rows.rows.map((row) => ({
+            demo_attribution, demo_review_status`;
+
+function mapExerciseRow(row: Record<string, unknown>) {
+  return {
     ...row,
     demonstrationMedia:
       row.demo_type === 'none'
@@ -605,7 +1393,51 @@ export async function listExercises(db: Database, userId: string) {
             reviewStatus: row.demo_review_status,
           },
     reviewStatus: row.demo_review_status,
-  }));
+  };
+}
+
+export function normalizeScanCode(raw: string): string {
+  const trimmed = raw.trim();
+  const prefixed = /^traina:exercise:(.+)$/i.exec(trimmed);
+  if (prefixed?.[1] !== undefined) return prefixed[1].trim().toLowerCase();
+  return trimmed.replace(/\s+/g, '').toUpperCase();
+}
+
+export async function listExercises(db: Database, userId: string) {
+  const rows = await db.query(
+    `SELECT ${exerciseSelect}
+     FROM exercises
+     WHERE owner_user_id IS NULL OR owner_user_id = $1
+     ORDER BY name_en`,
+    [userId],
+  );
+  return rows.rows.map((row) => mapExerciseRow(row));
+}
+
+export async function findExerciseByScanCode(db: Database, userId: string, raw: string) {
+  const code = normalizeScanCode(raw);
+  if (code.length < 4 || code.length > 80) return null;
+  const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(code);
+  const rows = byId
+    ? await db.query(
+        `SELECT ${exerciseSelect}
+         FROM exercises
+         WHERE id = $1 AND (owner_user_id IS NULL OR owner_user_id = $2)`,
+        [code, userId],
+      )
+    : await db.query(
+        `SELECT exercises.id, exercises.name_ar, exercises.name_en, exercises.primary_muscles, exercises.secondary_muscles,
+                exercises.movement_pattern, exercises.equipment, exercises.difficulty, exercises.instructions_ar, exercises.instructions_en,
+                exercises.disciplines, exercises.environments, exercises.equipment_brands,
+                exercises.demo_type, exercises.demo_profile, exercises.demo_model_uri, exercises.demo_license_spdx,
+                exercises.demo_attribution, exercises.demo_review_status
+         FROM exercise_scan_codes AS codes
+         JOIN exercises ON exercises.id = codes.exercise_id
+         WHERE codes.code = $1 AND (exercises.owner_user_id IS NULL OR exercises.owner_user_id = $2)`,
+        [code, userId],
+      );
+  const row = rows.rows[0];
+  return row === undefined ? null : mapExerciseRow(row);
 }
 
 export async function listEquipmentManufacturers(db: Database) {
@@ -712,18 +1544,50 @@ async function coachSnapshot(db: Database, actor: Actor) {
   const todayWorkout = first?.id !== undefined ? await sessionOwned(db, actor.userId, String(first.id)) : null;
   const diary = await diaryFor(db, actor.userId, today);
   const progress = await progressFor(db, actor.userId);
+  const water = await waterFor(db, actor.userId, today);
+  const supplements = await listSupplements(db, actor.userId, today);
+  const programs = await listMemberPrograms(db, actor.userId);
+  const active = programs.active;
+  const windowDays = LOGGING_WINDOW_DAYS;
+  const from = previousIsoDay(windowDays - 1);
+  const diaryRange = await diaryRangeFor(db, actor.userId, from, today);
+  const mealDaysLogged = diaryRange.days.filter((day) => day.entryCount > 0).length;
+  const waterDays = await db.query<{ n: string }>(
+    `SELECT COUNT(DISTINCT logged_on)::text AS n
+     FROM water_logs WHERE user_id = $1 AND logged_on BETWEEN $2::date AND $3::date`,
+    [actor.userId, from, today],
+  );
+  const waterDaysLogged = Number(waterDays.rows[0]?.n ?? 0);
+  let discipline = null;
+  try {
+    discipline = loggingDiscipline({ windowDays, mealDaysLogged, waterDaysLogged });
+  } catch {
+    discipline = null;
+  }
   return {
     profile,
     todayWorkout,
     diary,
+    water,
+    discipline,
     context: {
+      coachPersona: 'yazan',
+      product: 'Traina — AI coach reads daily logs as infrastructure',
       displayName: profile.profile?.display_name ?? null,
       goals: profile.goals,
       todayDiary: diary.summary,
+      todayWaterMl: water.milliliters,
+      supplementsDue: supplements.items.filter((item) => !item.taken).map((item) => item.name),
+      supplementsTaken: supplements.items.filter((item) => item.taken).map((item) => item.name),
+      nutritionPhase: active?.nutritionPhase ?? null,
+      nutritionPace: active?.nutritionPace ?? null,
+      horizonWeeks: active?.horizonWeeks ?? null,
+      energyPlan: active?.energy ?? null,
+      loggingDiscipline14d: discipline,
       recentSessions: sessions.slice(0, 5),
       recentWeights: progress.weights.slice(-5),
       personalRecords: progress.personalRecords,
-      missingData: 'Absent values are unknown. Do not invent them.',
+      missingData: 'Absent values are unknown. Do not invent them. No burned-kcal invention.',
     },
   };
 }
@@ -785,7 +1649,7 @@ export async function answerCoach(
         recentCompletedSessionIds: [],
         nutrition: snapshot.diary.summary,
         activitySteps: null,
-        supplementNames: [],
+        supplementNames: (await listSupplements(db, actor.userId, new Date().toISOString().slice(0, 10))).items.map((item) => item.name),
       },
       quota: { limit: 30, used: 0, windowStartMs: Date.now(), windowMs: 60_000 },
       atMs: Date.now(),
@@ -866,6 +1730,194 @@ export async function listCoachMessages(db: Database, userId: string) {
   }));
 }
 
+/**
+ * Proactive daily message from Yazan based on today's logs.
+ * Idempotent per calendar day — logging remains input; this is the coach speaking first.
+ */
+export async function ensureDailyYazanCheckin(
+  db: Database,
+  actor: Actor,
+  options: { locale?: 'ar' | 'en'; waterGoalMl?: number } = {},
+) {
+  const today = new Date().toISOString().slice(0, 10);
+  const existing = await db.query<{ id: string; body: string; focus: string }>(
+    `SELECT id, body, focus FROM coach_daily_checkins WHERE user_id = $1 AND logged_on = $2`,
+    [actor.userId, today],
+  );
+  if (existing.rows[0] !== undefined) {
+    return {
+      loggedOn: today,
+      created: false,
+      focus: existing.rows[0].focus,
+      text: existing.rows[0].body,
+      persona: 'yazan' as const,
+    };
+  }
+
+  const snapshot = await coachSnapshot(db, actor);
+  const weights = snapshot.context.recentWeights as { weight_grams?: number; weightGrams?: number }[];
+  const firstW = weights[0];
+  const lastW = weights[weights.length - 1];
+  const startG = firstW !== undefined ? Number(firstW.weight_grams ?? firstW.weightGrams ?? NaN) : NaN;
+  const endG = lastW !== undefined ? Number(lastW.weight_grams ?? lastW.weightGrams ?? NaN) : NaN;
+  const weightTrendGrams =
+    Number.isFinite(startG) && Number.isFinite(endG) && weights.length >= 2 ? endG - startG : null;
+
+  const sessions = (snapshot.context.recentSessions as { status?: string }[]) ?? [];
+  const sessionsCompleted = sessions.filter((row) => row.status === 'completed').length;
+  let brief;
+  try {
+    brief = buildYazanDailyBrief({
+      goals: snapshot.profile.goals,
+      waterMl: snapshot.water.milliliters,
+      waterGoalMl: options.waterGoalMl ?? 2_500,
+      mealCount: snapshot.diary.summary.entryCount,
+      energyKcal: snapshot.diary.summary.consumed.energyKcal,
+      sessionsCompleted,
+      sessionsPlanned: Math.max(sessionsCompleted, sessions.length),
+      nutritionPhase: (snapshot.context.nutritionPhase as string | null) ?? null,
+      nutritionPace: (snapshot.context.nutritionPace as string | null) ?? null,
+      waterDaysLogged14: snapshot.discipline?.waterDaysLogged ?? 0,
+      mealDaysLogged14: snapshot.discipline?.mealDaysLogged ?? 0,
+      weightTrendGrams,
+    });
+  } catch (error) {
+    throw asApi(error);
+  }
+  const locale = options.locale ?? 'ar';
+  const text = locale === 'en' ? brief.messageEn : brief.messageAr;
+  const conversationId = await conversationFor(db, actor.userId);
+  await db.transaction(async (tx) => {
+    await tx.query(
+      `INSERT INTO coach_daily_checkins (user_id, logged_on, focus, body) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id, logged_on) DO NOTHING`,
+      [actor.userId, today, brief.focus, text],
+    );
+    await tx.query(
+      `INSERT INTO coach_messages (conversation_id, role, body) VALUES ($1, 'assistant', $2)`,
+      [conversationId, text],
+    );
+  });
+  return {
+    loggedOn: today,
+    created: true,
+    focus: brief.focus,
+    priority: brief.priority,
+    text,
+    persona: 'yazan' as const,
+  };
+}
+
+export async function submitWeeklyCoachBrief(
+  db: Database,
+  actor: Actor,
+  input: {
+    weekOf: string;
+    energy: number;
+    sleep: number;
+    stress: number;
+    hunger: number;
+    notes?: string;
+  },
+) {
+  const profile = await readProfile(db, actor.userId);
+  const programs = await listMemberPrograms(db, actor.userId);
+  const active = programs.active;
+  const weekStart = input.weekOf;
+  const weekEndDate = new Date(`${weekStart}T12:00:00.000Z`);
+  weekEndDate.setUTCDate(weekEndDate.getUTCDate() + 6);
+  const weekEnd = weekEndDate.toISOString().slice(0, 10);
+  const diary = await diaryRangeFor(db, actor.userId, weekStart, weekEnd);
+  const mealDaysLogged = diary.days.filter((day) => day.entryCount > 0).length;
+  const energyKcalTotal = diary.days.reduce((sum, day) => sum + day.energyKcal, 0);
+  const water = await db.query<{ n: string }>(
+    `SELECT COUNT(DISTINCT logged_on)::text AS n
+     FROM water_logs WHERE user_id = $1 AND logged_on BETWEEN $2::date AND $3::date`,
+    [actor.userId, weekStart, weekEnd],
+  );
+  const waterDaysLogged = Number(water.rows[0]?.n ?? 0);
+  const sessions = await db.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM workout_sessions
+     WHERE user_id = $1 AND status = 'completed'
+       AND completed_at::date BETWEEN $2::date AND $3::date`,
+    [actor.userId, weekStart, weekEnd],
+  );
+  const weights = await db.query<{ recorded_on: string; weight_grams: number }>(
+    `SELECT recorded_on::text AS recorded_on, weight_grams FROM weight_records
+     WHERE user_id = $1 AND recorded_on BETWEEN $2::date AND $3::date
+     ORDER BY recorded_on`,
+    [actor.userId, weekStart, weekEnd],
+  );
+  const firstWeight = weights.rows[0];
+  const lastWeight = weights.rows[weights.rows.length - 1];
+  let packet;
+  try {
+    packet = buildWeeklyHumanCoachPacket({
+      weekOf: weekStart,
+      goals: profile.goals,
+      mealDaysLogged,
+      waterDaysLogged,
+      sessionsCompleted: Number(sessions.rows[0]?.n ?? 0),
+      energyKcalTotal,
+      weightStartGrams: firstWeight === undefined ? null : Number(firstWeight.weight_grams),
+      weightEndGrams: lastWeight === undefined ? null : Number(lastWeight.weight_grams),
+      nutritionPhase: active?.nutritionPhase ?? null,
+      nutritionPace: active?.nutritionPace ?? null,
+      survey: {
+        energy: input.energy,
+        sleep: input.sleep,
+        stress: input.stress,
+        hunger: input.hunger,
+        notes: input.notes ?? '',
+      },
+    });
+  } catch (error) {
+    throw asApi(error);
+  }
+  const saved = await db.query<{ id: string }>(
+    `INSERT INTO coach_weekly_briefs (user_id, week_of, survey, packet, status)
+     VALUES ($1, $2, $3::jsonb, $4::jsonb, 'queued_for_human')
+     ON CONFLICT (user_id, week_of) DO UPDATE
+       SET survey = EXCLUDED.survey, packet = EXCLUDED.packet, status = 'queued_for_human', created_at = now()
+     RETURNING id`,
+    [actor.userId, weekStart, JSON.stringify(packet.survey), JSON.stringify(packet)],
+  );
+  const conversationId = await conversationFor(db, actor.userId);
+  const notice =
+    packet.briefAr.slice(0, 400) +
+    '\n\n— يزن: رفعت ملف الأسبوع لمدرب بشري للمراجعة.';
+  await db.query(`INSERT INTO coach_messages (conversation_id, role, body) VALUES ($1, 'assistant', $2)`, [
+    conversationId,
+    notice,
+  ]);
+  return {
+    id: String(saved.rows[0]?.id),
+    persisted: true,
+    escalateToHuman: true as const,
+    status: 'queued_for_human' as const,
+    packet,
+  };
+}
+
+export async function latestWeeklyCoachBrief(db: Database, userId: string) {
+  const row = await db.query<{ id: string; week_of: string; packet: unknown; status: string; created_at: string }>(
+    `SELECT id, week_of::text AS week_of, packet, status, created_at
+     FROM coach_weekly_briefs WHERE user_id = $1 ORDER BY week_of DESC LIMIT 1`,
+    [userId],
+  );
+  const found = row.rows[0];
+  if (found === undefined) return { brief: null };
+  return {
+    brief: {
+      id: String(found.id),
+      weekOf: found.week_of.slice(0, 10),
+      packet: found.packet,
+      status: found.status,
+      createdAt: found.created_at,
+    },
+  };
+}
+
 async function memberFoodSource(db: Database): Promise<string> {
   const existing = await db.query<{ id: string }>(
     `SELECT id FROM food_sources WHERE name = 'member' AND version = '1'`,
@@ -922,7 +1974,7 @@ export async function createCustomFood(
 export async function logFoodPortion(
   db: Database,
   userId: string,
-  input: { foodItemId: string; quantityGrams: number; loggedOn: string },
+  input: { foodItemId: string; quantityGrams: number; loggedOn: string; mealSlot?: string },
 ) {
   const rows = await db.query<{
     name_ar: string;
@@ -945,6 +1997,10 @@ export async function logFoodPortion(
   if (food.per_quantity !== '100 g') {
     throw new ApiError(422, 'UNSUPPORTED_PORTION', 'This food is not stored per 100 g');
   }
+  const mealSlot = input.mealSlot === undefined ? null : isMealSlot(input.mealSlot) ? input.mealSlot : null;
+  if (input.mealSlot !== undefined && mealSlot === null) {
+    throw new ApiError(422, 'UNKNOWN_MEAL_SLOT', 'That meal slot is not in the catalog');
+  }
   let scaled;
   try {
     scaled = scalePer100g({
@@ -958,8 +2014,8 @@ export async function logFoodPortion(
   }
   await db.query(
     `INSERT INTO food_entries (
-       user_id, food_item_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, label
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', false, $8)`,
+       user_id, food_item_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, label, meal_slot
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', false, $8, $9)`,
     [
       userId,
       input.foodItemId,
@@ -969,9 +2025,61 @@ export async function logFoodPortion(
       scaled.carbohydrateMg,
       scaled.fatMg,
       `${food.name_ar} · ${input.quantityGrams} g`,
+      mealSlot,
     ],
   );
   return diaryFor(db, userId, input.loggedOn);
+}
+
+export async function copyDiaryDay(db: Database, userId: string, from: string, to: string) {
+  try {
+    assertDiaryCopy(from, to);
+  } catch (error) {
+    throw asApi(error);
+  }
+  const source = await db.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM food_entries WHERE user_id = $1 AND logged_on = $2`,
+    [userId, from],
+  );
+  if (Number(source.rows[0]?.n ?? 0) === 0) {
+    throw new ApiError(404, 'NOTHING_TO_COPY', 'There is no food logged on that day');
+  }
+  const target = await db.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM food_entries WHERE user_id = $1 AND logged_on = $2`,
+    [userId, to],
+  );
+  if (Number(target.rows[0]?.n ?? 0) > 0) {
+    throw new ApiError(409, 'DIARY_DAY_NOT_EMPTY', 'That day already has logged food');
+  }
+  await db.query(
+    `INSERT INTO food_entries (
+       user_id, food_item_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, label, meal_slot
+     )
+     SELECT user_id, food_item_id, $3::date, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, label, meal_slot
+     FROM food_entries
+     WHERE user_id = $1 AND logged_on = $2
+     ORDER BY created_at, id`,
+    [userId, from, to],
+  );
+  return diaryFor(db, userId, to);
+}
+
+export async function listFavoriteFoods(db: Database, userId: string) {
+  const rows = await db.query(
+    `SELECT food_items.id, food_items.name_ar, food_items.name_en, food_items.energy_kcal,
+            food_items.protein_mg, food_items.carbohydrate_mg, food_items.fat_mg
+     FROM food_favorites
+     JOIN food_items ON food_items.id = food_favorites.food_item_id
+     WHERE food_favorites.user_id = $1
+       AND (food_items.owner_user_id IS NULL OR food_items.owner_user_id = $1)
+     ORDER BY food_favorites.created_at DESC, food_items.name_en
+     LIMIT 24`,
+    [userId],
+  );
+  return {
+    foods: rows.rows.map((row) => ({ ...row, perQuantity: '100 g' })),
+    referenceDatabase: false,
+  };
 }
 
 export async function deleteFoodEntry(db: Database, userId: string, entryId: string) {

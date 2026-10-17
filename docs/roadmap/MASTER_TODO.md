@@ -1,8 +1,8 @@
 # Traina Master TODO
 
-**Baseline:** `master` @ `d9ad7f6` (origin). Local workspace has substantial uncommitted coaching/logging work — treat as dirty until committed.  
+**Baseline:** `master` @ `24327cf` (origin) — vision docs + energy quarantine. Local workspace still has substantial uncommitted coaching/logging work.  
 **Audit date:** 2026-10-17  
-**Domain tests:** 83 passed · **API app.test:** 9 passed (spot check)
+**Org board:** GitHub project “Gym App” + issues #25–#34 (`vision-2026`)
 
 Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
@@ -16,7 +16,7 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 | Onboarding as profile source | **Partial** | Sex/pace/horizon in domain+migration 0020; mobile onboarding updated locally |
 | Daily water/food/sessions/supplements/weight | **Partial** | Migrations 0014–0016; APIs present; mobile screens local |
 | Meal plan + ready meals | **Partial** | Domain `meal-plan.ts`; API; mobile meal-plan |
-| Fixed cut deficits 400/650/1100 | **Existing / UNSAFE** | Must not ship as universal paid presets |
+| Fixed cut deficits 400/650/1100 | **Quarantined** | `ENERGY_POLICY.approvedForPaidCoaching=false`; paid apply + mobile `training` style blocked |
 | Yazan persona + chat | **Partial** | Provider persona; needs live model (#7) |
 | Daily check-in | **Partial** | `POST /v1/coach/daily-checkin`; domain `yazan-coach.ts` |
 | Weekly brief queued_for_human | **Partial** | Table + API; **no coach dashboard** |
@@ -48,24 +48,25 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 ## P0 — Engineering truth, privacy, safety
 
 ### P0-AUDIT-01 — Repository truth & recoverable baseline
-- **Priority:** P0 · **Owner:** Eng · **State:** IN_PROGRESS  
+- **Priority:** P0 · **Owner:** Eng · **State:** REVIEW  
 - **Scope:** Document dirty tree vs `origin/master`; list migrations 0001–0020; confirm build/test commands.  
-- **Acceptance:** This file + gap matrix accurate; `npm test -w @sahhti/domain` green.  
-- **Evidence:** Domain 83 tests pass (2026-10-17).  
+- **Acceptance:** This file + gap matrix accurate; domain tests green; recoverable remote baseline.  
+- **Evidence:** `origin/master` @ `24327cf`; gap matrix above; dirty tree still local.  
 - **Privacy/safety:** None beyond honesty.
 
 ### P0-SAFE-01 — Quarantine universal cut deficits
-- **Priority:** P0 · **Owner:** Domain + Nutrition SME · **State:** READY  
-- **Files:** `packages/domain/src/meal-plan.ts`, `apps/mobile/src/nutrition/targets.ts`  
-- **Scope:** Mark `CUT_DEFICIT_BY_PACE` as unapproved for paid coaching; block sprint 1100 without professional review flag; add safety test S-07 stub.  
+- **Priority:** P0 · **Owner:** Domain + Nutrition SME · **State:** REVIEW  
+- **Files:** `packages/domain/src/meal-plan.ts`, `apps/mobile/src/nutrition/targets.ts`, `services/api/src/member/store.ts`  
+- **Scope:** Mark `CUT_DEFICIT_BY_PACE` as unapproved for paid coaching; block apply paths; safety tests.  
 - **Acceptance:** Paid path cannot apply sprint deficit without `policyApproved` gate; docs reference SME review.  
-- **Tests:** Domain unit + coaching-safety S-07.  
-- **Safety:** HIGH.
+- **Tests:** Domain unit + mobile targets + API integration expect `ENERGY_POLICY_UNAPPROVED`.  
+- **Safety:** HIGH · **Remaining for VERIFIED:** SME sign-off; wire any other silent apply paths.
 
 ### P0-DATA-01 — Personal/sensitive data inventory
-- **Priority:** P0 · **Owner:** Eng + Privacy · **State:** BACKLOG  
+- **Priority:** P0 · **Owner:** Eng + Privacy · **State:** REVIEW  
 - **Scope:** Inventory columns/tables touching health-ish data; purposes; retention.  
 - **Acceptance:** Inventory table in `data-flow-and-privacy.md` appendix.  
+- **Evidence:** Appendix A added 2026-10-17. Retention/legal basis still TBD (P0-PRIV-01).  
 - **Privacy:** Required before expansion of AI context.
 
 ### P0-PRIV-01 — Consent & legal-basis design
@@ -82,9 +83,10 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 - **Acceptance:** Doc reviewed by product owner.
 
 ### P0-DOC-01 — Vision docs land in repo
-- **Priority:** P0 · **Owner:** Eng · **State:** IN_PROGRESS  
+- **Priority:** P0 · **Owner:** Eng · **State:** DONE  
 - **Scope:** vision, service model, target architecture, data-flow, decision engine, human ops, entitlements, safety tests, release gates, this master TODO.  
-- **Acceptance:** Files present under `docs/`; GitHub org issues linked.
+- **Acceptance:** Files present under `docs/`; GitHub org issues linked.  
+- **Evidence:** `24327cf` on `origin/master`; issues #25–#34 on org project.
 
 ---
 

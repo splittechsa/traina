@@ -30,6 +30,17 @@ describe('estimateTargets', () => {
     expect(gain.energyKcal).toBe(2880);
   });
 
+  it('refuses training-style absolute deficits until ENERGY_POLICY is approved (P0-SAFE-01)', () => {
+    const free = estimateTargets({ ...base, goal: 'lose' });
+    expect(free.maintenanceKcal - free.energyKcal).toBeLessThan(600);
+    expect(() =>
+      estimateTargets({ ...base, goal: 'lose' }, new Date('2026-10-14T00:00:00Z'), 'training', { pace: 'steady' }),
+    ).toThrow(/ENERGY_POLICY_UNAPPROVED|not approved for paid coaching/);
+    expect(() =>
+      estimateTargets({ ...base, goal: 'lose' }, new Date('2026-10-14T00:00:00Z'), 'training', { horizonWeeks: 3 }),
+    ).toThrow(/ENERGY_POLICY_UNAPPROVED|not approved for paid coaching/);
+  });
+
   it('never goes below the safety floor', () => {
     const t = estimateTargets({ sex: 'female', ageYears: 60, heightCm: 150, weightKg: 45, activity: 'sedentary', goal: 'lose' });
     expect(t.energyKcal).toBe(1200);

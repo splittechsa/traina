@@ -34,3 +34,38 @@ Mobile → HTTPS /v1 → Fastify → PostgreSQL
 - Regulatory sign-off requires qualified Saudi counsel — not an AI checklist.
 
 Related: `docs/security/privacy.md`, `docs/security/threat-model.md`.
+
+---
+
+## Appendix A — Personal / sensitive data inventory (P0-DATA-01)
+
+Audit of migration-defined tables that can hold member-identifying or health-adjacent data. **Purposes are engineering intent only — not legal bases.** Retention = TBD pending counsel (P0-PRIV-01).
+
+| Table / area | Examples of fields | Coaching purpose | Sensitivity | Notes |
+| --- | --- | --- | --- | --- |
+| `users` | email, locale | Account | Personal | Auth identity |
+| `user_credentials` / codes / resets | password hash, tokens | Auth | Credential | Never to AI |
+| `device_sessions` | device/session metadata | Auth | Personal | |
+| `user_profiles` | sex, DOB/age, height, weight, experience, pace, horizon | Onboarding → plan params | Health-adjacent | Measured vs self-reported TBD |
+| `onboarding_snapshots` | full intake JSON | Audit of intake | Health-adjacent | Versioned snapshot |
+| `user_goals` | goal codes | Coaching goals | Low–medium | |
+| `consents` | purpose, status | Legal/consent | Personal | Exists; ledger design incomplete |
+| `weight_records` | weight_grams, dates | Progress / trends | Health | |
+| `body_measurements` | girths / mm | Progress | Health | |
+| `food_entries` / diary | macros, portions | Nutrition logging | Health-adjacent | |
+| `nutrition_targets` | kcal/macros | Plan targets | Health-adjacent | Must not invent authority |
+| `member_meal_plan_*` | day targets, slots | Meal plan | Health-adjacent | |
+| `water_logs` / `activity_logs` | ml, steps, duration | Lifestyle signals | Low–medium | |
+| `member_supplements` / `supplement_logs` | names, ticks | Adherence | Medium | Never infer take from reminder |
+| `workout_sessions` / `workout_sets` / PRs | loads, reps, RPE | Training | Health-adjacent | |
+| `programs` / `program_versions` | phase, pace, maintenance_kcal | Active plan | Health-adjacent | Energy apply gated by P0-SAFE-01 |
+| `coach_*` (messages, memory, tools, checkins, briefs) | chat, summaries, queues | Yazan + human review | High | Minimize AI context |
+| `ai_usage` | tokens/cost | Cost control | Operational | Not health content |
+| `subscriptions` / payment / ledger | SKUs, money events | Billing | Financial | |
+| `audit_logs` / `outbox` | system events | Security/ops | Mixed | |
+| Community / media tables | posts, reports | Social (if enabled) | Personal | Separate consent |
+| Local SecureStore (mobile) | macro estimate prefs | UX only | Device | Not authoritative server targets |
+
+**AI processing:** Coach provider receives assembled context only — not unrestricted DB dumps. Cross-border transfer assessment still open (#13 / P0-PRIV-01).
+
+**Evidence date:** 2026-10-17 · Baseline commit with vision docs: `24327cf`.
