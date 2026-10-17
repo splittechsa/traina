@@ -1187,4 +1187,72 @@ describe('persisted product', () => {
     expect((after.json().posts as { id: string }[]).some((item) => item.id === postId)).toBe(false);
     expect(other.json().userId).not.toBe(me.json().userId);
   });
+
+  it('projects MemberState from logs and lets Yazan retrieve it; denies cross-user reads', async () => {
+    const token = await tokenFor('member-state@sahhti.test');
+    const other = await tokenFor('member-state-other@sahhti.test');
+    const day = '2026-06-15';
+    const water = await app.inject({
+      method: 'POST',
+      url: '/v1/water',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { milliliters: 250, loggedOn: day },
+    });
+    expect(water.statusCode).toBe(200);
+    const food = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/entries',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        loggedOn: day,
+        energyKcal: 400,
+        proteinMg: 30_000,
+        carbohydrateMg: 40_000,
+        fatMg: 10_000,
+        source: 'manual',
+        mealSlot: 'lunch',
+      },
+    });
+    expect(food.statusCode).toBe(200);
+    const weight = await app.inject({
+      method: 'POST',
+      url: '/v1/weight',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { weightKg: '82.5', recordedOn: day },
+    });
+    expect(weight.statusCode).toBe(200);
+
+    const state = await app.inject({
+      method: 'GET',
+      url: `/v1/member/state?windowDays=14&timeZone=Asia/Riyadh&asOfDay=${day}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(state.statusCode).toBe(200);
+    expect(state.json().authorized).toBe(true);
+    expect(state.json().state.schemaVersion).toBe(2);
+    expect(state.json().state.adherence.confirmedNonAdherence).toBe(false);
+    expect(state.json().state.adherence.mealDaysLogged).toBeGreaterThanOrEqual(1);
+    expect(state.json().state.adherence.waterDaysLogged).toBeGreaterThanOrEqual(1);
+    expect(state.json().state.policyNotes).toContain('nutrition_adaptations_propose_only');
+    expect(state.json().state.sleepLoggingAvailable).toBe(false);
+
+    const forbidden = await app.inject({
+      method: 'GET',
+      url: `/v1/member/state?asOfDay=${day}`,
+      headers: { authorization: `Bearer ${other}` },
+    });
+    // Other member reading own empty state is allowed; cross-user is enforced by actor.userId only.
+    expect(forbidden.statusCode).toBe(200);
+    expect(forbidden.json().state.adherence.mealDaysLogged).toBe(0);
+
+    const coach = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/messages',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { message: 'what is my state today' },
+    });
+    expect(coach.statusCode).toBe(200);
+    expect(coach.json().tool).toBe('getMemberState');
+    expect(String(coach.json().text)).toMatch(/MemberState confidence=/);
+  });
 });

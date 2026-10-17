@@ -16,6 +16,7 @@ const snapshot = (overrides: Partial<MemberSnapshot> = {}): MemberSnapshot => ({
   nutrition: null,
   activitySteps: null,
   supplementNames: [],
+  memberState: null,
   ...overrides,
 });
 
@@ -72,6 +73,50 @@ describe('coach tool authorization', () => {
     });
     expect(result.persisted).toBe(false);
     expect(result.body.status).toBe('not_applied');
+  });
+
+  it('returns authorized MemberState projection via getMemberState', () => {
+    const result = executeCoachTool({
+      actor,
+      tool: 'getMemberState',
+      modelArguments: {},
+      trusted: snapshot({
+        memberState: {
+          schemaVersion: 2,
+          asOfDay: '2026-06-14',
+          timeZone: 'Asia/Riyadh',
+          goals: ['strength'],
+          currentProgramId: null,
+          nutritionPhase: null,
+          adherence: {
+            windowDays: 14,
+            mealDaysLogged: 2,
+            waterDaysLogged: 2,
+            sessionsCompleted: 1,
+            supplementDaysLogged: 0,
+            activityDaysLogged: 0,
+            confirmedNonAdherence: false,
+          },
+          weightTrendGramsPerWeek: null,
+          dataCompletenessBps: 1_000,
+          confidence: 'insufficient',
+          openCoachingQuestions: [],
+          safetyFlags: [],
+          pendingRecommendations: [],
+          lastHumanReviewAt: null,
+          policyNotes: ['nutrition_adaptations_propose_only'],
+          daily: [],
+          weekly: { weekOf: '2026-06-09', mealDaysLogged: 2, waterDaysLogged: 2, sessionsCompleted: 1, weightTrendGrams: null },
+          sleepLoggingAvailable: false,
+          eventCounts: { accepted: 4, duplicatesDropped: 0, supersededDropped: 0 },
+        },
+      }),
+      quota,
+      atMs: 1_000,
+    });
+    expect(result.persisted).toBe(false);
+    expect(result.body.note).toBe('authorized_projection_only');
+    expect((result.body.state as { confidence: string }).confidence).toBe('insufficient');
   });
 
   it('enforces the tool quota', () => {

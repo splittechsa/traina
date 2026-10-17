@@ -97,10 +97,10 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 | ID | Title | State | Notes |
 | --- | --- | --- | --- |
-| P1-STATE-01 | MemberState engine from validated observations | IN_PROGRESS | Domain foundation + tests; API wire next |
-| P1-EVT-01 | Consistent MemberEvent model / idempotent writes | BACKLOG | Align with existing tables first |
+| P1-STATE-01 | MemberState engine from validated observations | REVIEW | Domain + GET /v1/member/state + Yazan getMemberState; sleep daily N/A |
+| P1-EVT-01 | Consistent MemberEvent model / idempotent writes | IN_PROGRESS | Projection from existing tables via RawMemberEvent normalize |
 | P1-POL-01 | Versioned evidence/policy registry | BACKLOG | Replaces ad-hoc constants |
-| P1-REC-01 | Recommendation state machine + versioned apply | BACKLOG | Supersedes silent edits; maps #21 |
+| P1-REC-01 | Recommendation state machine + versioned apply | IN_PROGRESS | Domain lifecycle + migration 0021; nutrition apply gated |
 | P1-AI-01 | Yazan tool gateway (typed tools, minimal context) | BACKLOG | Maps #7 |
 | P1-NUT-01 | Individualized energy policy (post SME) | BACKLOG | After P0-SAFE-01 |
 | P1-TEST-01 | Safety suite S-01…S-09 executed | BACKLOG | `coaching-safety-tests.md` |

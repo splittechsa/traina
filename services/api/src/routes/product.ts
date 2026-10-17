@@ -88,6 +88,7 @@ import {
   listReadyMeals,
   listSessions,
   mealPlanFor,
+  memberStateFor,
   nutritionDisciplineFor,
   ensureDailyYazanCheckin,
   latestWeeklyCoachBrief,
@@ -663,6 +664,22 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   });
 
   app.get('/v1/progress', async (request) => progressFor(dbOf(options), actorOf(request.claims).userId));
+
+  app.get('/v1/member/state', async (request) => {
+    const query = request.query as { windowDays?: string; timeZone?: string; asOfDay?: string };
+    const windowDays = query.windowDays === undefined ? undefined : Number(query.windowDays);
+    if (windowDays !== undefined && (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 90)) {
+      throw new ApiError(400, 'INVALID_WINDOW', 'windowDays must be an integer from 1 to 90');
+    }
+    if (query.asOfDay !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(query.asOfDay)) {
+      throw new ApiError(400, 'INVALID_DATE', 'asOfDay must be YYYY-MM-DD');
+    }
+    return memberStateFor(dbOf(options), actorOf(request.claims), {
+      windowDays,
+      timeZone: query.timeZone,
+      asOfDay: query.asOfDay,
+    });
+  });
 
   app.get('/v1/gyms/:organizationId', async (request) => {
     const params = request.params as { organizationId: string };

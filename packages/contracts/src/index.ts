@@ -339,6 +339,46 @@ export const bodyMeasurementSchema = z
 
 export const profilePatchSchema = z.object({ displayName: z.string().min(1).max(80) }).strict();
 
+/** Query for GET /v1/member/state — server projects MemberState; client never invents it. */
+export const memberStateQuerySchema = z
+  .object({
+    windowDays: z.coerce.number().int().min(1).max(90).optional(),
+    timeZone: z.string().min(1).max(64).optional(),
+    asOfDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+  .strict();
+
+export const memberStateResponseSchema = z
+  .object({
+    authorized: z.literal(true),
+    state: z
+      .object({
+        schemaVersion: z.literal(2),
+        asOfDay: z.string(),
+        timeZone: z.string(),
+        goals: z.array(z.string()),
+        currentProgramId: z.string().nullable(),
+        nutritionPhase: z.string().nullable(),
+        adherence: z
+          .object({
+            windowDays: z.number().int(),
+            mealDaysLogged: z.number().int(),
+            waterDaysLogged: z.number().int(),
+            sessionsCompleted: z.number().int(),
+            supplementDaysLogged: z.number().int(),
+            activityDaysLogged: z.number().int(),
+            confirmedNonAdherence: z.literal(false),
+          })
+          .strict(),
+        confidence: z.enum(['high', 'medium', 'low', 'insufficient']),
+        dataCompletenessBps: z.number().int(),
+        policyNotes: z.array(z.string()),
+        sleepLoggingAvailable: z.literal(false),
+      })
+      .passthrough(),
+  })
+  .strict();
+
 export const coachMessageSchema = z.object({ message: z.string().min(1).max(2000) }).strict();
 
 export const weeklyCoachSurveySchema = z
