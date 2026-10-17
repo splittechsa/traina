@@ -16,7 +16,7 @@ import { AIChatBubble, AppHeader, EmptyState, LoadingSkeleton } from '../../src/
 import { stableRecordKey } from '../../src/lists/keys';
 
 type CoachReply = { text: string; provider: string; productionIntelligence: boolean };
-type StoredMessage = { id: string; role: string; body: string };
+type StoredMessage = { id: string; role: string; body: string; authorKind?: string };
 type History = { messages: StoredMessage[]; productionIntelligence: boolean; providerConfigured: boolean; provider?: string };
 type Me = { goals?: string[] };
 
@@ -219,7 +219,13 @@ export default function CoachScreen() {
             key={stableRecordKey(item.id)}
             role={item.role === 'member' ? 'user' : 'coach'}
             text={item.body}
-            note={item.role === 'assistant' && item.body.toLowerCase().includes('not a production coach') ? text(locale, 'coachMock') : undefined}
+            note={
+              item.role === 'human_coach' || item.authorKind === 'human_coach'
+                ? text(locale, 'humanCoachLabel')
+                : item.role === 'assistant' && item.body.toLowerCase().includes('not a production coach')
+                  ? text(locale, 'coachMock')
+                  : undefined
+            }
           />
         ))}
         {send.isPending ? <AIChatBubble role="coach" text={text(locale, 'coachThinking')} pending /> : null}

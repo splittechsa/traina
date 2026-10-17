@@ -99,8 +99,8 @@ export default function HomeScreen() {
   const today = dashboard.todayWorkout.status === 'ready' ? dashboard.todayWorkout.data : null;
   const actions = [
     [text(locale, 'askCoach'), { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }, () => router.push('/(tabs)/coach')],
+    [text(locale, 'weeklyCheckin'), { ios: 'clipboard.fill', android: 'assignment', web: 'assignment' }, () => router.push('/weekly-checkin')],
     [text(locale, 'foodManual'), { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' }, () => router.push('/food-log')],
-    [text(locale, 'schedule'), { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }, () => router.push('/(tabs)/training')],
     [text(locale, 'logWeight'), { ios: 'scalemass.fill', android: 'monitor_weight', web: 'monitor_weight' }, () => router.push('/weight')],
   ] as const;
 

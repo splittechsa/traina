@@ -6,6 +6,7 @@ export const ROLES = [
   'gym_branch_manager',
   'support_agent',
   'coach_reviewer',
+  'coach_supervisor',
   'finance',
   'moderator',
   'admin',
@@ -88,7 +89,7 @@ export function authorize(actor: Actor, action: Action, resource: Resource): Aut
       return deny('FORBIDDEN');
     }
     case 'member_state.read': {
-      // Health-adjacent coaching state — own member only until assignment tables exist.
+      // Health-adjacent coaching state — own member, or assigned coach (enforced in human-coach).
       // Support agents intentionally cannot read MemberState (non_health ≠ coaching facts).
       if (resource.kind !== 'user') {
         return deny('RESOURCE_MISMATCH');
@@ -96,8 +97,8 @@ export function authorize(actor: Actor, action: Action, resource: Resource): Aut
       if (resource.userId === actor.userId && (hasRole(actor, 'member') || hasRole(actor, 'admin'))) {
         return allow('own', 'required');
       }
-      // Assigned-coach access lands with human ops (P2-HUM); deny until assignment is enforced.
-      if (hasRole(actor, 'coach_reviewer')) {
+      // authorize() alone cannot prove assignment; store/domain assertCanReadMemberStateFor does.
+      if (hasRole(actor, 'coach_reviewer') || hasRole(actor, 'coach_supervisor')) {
         return deny('ASSIGNMENT_REQUIRED');
       }
       return deny('FORBIDDEN');

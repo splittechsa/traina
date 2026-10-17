@@ -27,14 +27,23 @@ import {
   waterMillilitersTotal,
   assembleDayMealPlan,
   assembleMemberState,
+  assertCanManageCoachAssignments,
   assertCanReadMemberStateFor,
+  assertCoachEligibleForAssignment,
+  assertMemberEligibleForAssignment,
+  assertNotSelfRolePromotion,
   athleteEnergyPlan,
   assertEnergyPolicyApprovedForPaidCoaching,
+  buildAuthorizedCoachPacket,
   calendarDayInTimeZone,
+  COACH_SHARE_POLICY_VERSION,
+  createCoachFeedback,
   generateRecommendationsFromMemberState,
   transitionRecommendation,
+  transitionWeeklyReview,
   validateRecommendation,
   type CoachingRecommendation,
+  type WeeklyReviewStatus,
   customizeMealSlot,
   loggingDiscipline,
   LOGGING_WINDOW_DAYS,
@@ -58,6 +67,7 @@ import {
   type NutritionPace,
   type NutritionPhase,
   type Actor,
+  type Role,
   type CoachingRuleVersion,
   type FoodEntry,
   type NormalizedOnboarding,
@@ -624,19 +634,23 @@ export async function memberStateFor(
           assignedAt: iso(assignmentRow.rows[0].assigned_at) ?? new Date().toISOString(),
         }
       : null;
+  const consentGranted =
+    subjectUserId === actor.userId || actor.roles.includes('admin')
+      ? true
+      : await hasCoachShareConsent(db, subjectUserId);
   try {
-    assertCanReadMemberStateFor(actor, subjectUserId, assignment);
+    assertCanReadMemberStateFor(actor, subjectUserId, assignment, {
+      coachShareConsentGranted: consentGranted,
+    });
   } catch (error) {
     if (error instanceof DomainError) {
-      throw new ApiError(403, error.code, error.message);
+      // Uniform denial — do not leak assignment/consent/existence details.
+      throw new ApiError(403, 'FORBIDDEN', 'Access denied');
     }
     throw error;
   }
   if (subjectUserId !== actor.userId) {
-    await db.query(
-      `INSERT INTO coach_access_audit (coach_user_id, member_user_id, action) VALUES ($1, $2, 'member_state.read')`,
-      [actor.userId, subjectUserId],
-    ).catch(() => undefined);
+    await writeCoachAccessAudit(db, actor.userId, subjectUserId, 'member_state.read');
   }
 
   const windowDays = options.windowDays ?? LOGGING_WINDOW_DAYS;
@@ -1016,14 +1030,1043 @@ export async function advanceMemberRecommendation(
   return { persisted: true, recommendation: current, applied: current.status === 'APPLIED' };
 }
 
-export async function assignCoachToMember(db: Database, coachUserId: string, memberUserId: string) {
+const KNOWN_ROLES: readonly Role[] = [
+  'member',
+  'gym_owner',
+  'gym_branch_manager',
+  'support_agent',
+  'coach_reviewer',
+  'coach_supervisor',
+  'finance',
+  'moderator',
+  'admin',
+];
+
+async function loadUserRolesStatus(
+  db: Database,
+  userId: string,
+): Promise<{ roles: Role[]; status: 'active' | 'inactive' } | null> {
+  const users = await db.query<{ status: string }>(
+    `SELECT status FROM users WHERE id = $1 AND deleted_at IS NULL`,
+    [userId],
+  );
+  const user = users.rows[0];
+  if (user === undefined) return null;
+  const assigned = await db.query<{ role: string }>(`SELECT role FROM role_assignments WHERE user_id = $1`, [userId]);
+  const roles = assigned.rows
+    .map((row) => row.role)
+    .filter((role): role is Role => (KNOWN_ROLES as readonly string[]).includes(role));
+  return { roles, status: user.status === 'active' ? 'active' : 'inactive' };
+}
+
+async function hasCoachShareConsent(db: Database, memberUserId: string): Promise<boolean> {
+  const row = await db.query<{ status: string }>(
+    `SELECT status FROM member_coach_share_consents
+     WHERE member_user_id = $1 AND purpose = 'human_weekly_coaching_review' AND status = 'granted'
+     LIMIT 1`,
+    [memberUserId],
+  ).catch(() => ({ rows: [] as { status: string }[] }));
+  return row.rows[0]?.status === 'granted';
+}
+
+async function writeCoachAccessAudit(
+  db: Database,
+  coachUserId: string,
+  memberUserId: string,
+  action: string,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO coach_access_audit (coach_user_id, member_user_id, action) VALUES ($1, $2, $3)`,
+    [coachUserId, memberUserId, action],
+  );
+}
+
+/** Uniform denial for missing or unauthorized review IDs — no existence oracle. */
+function denyReviewAccess(): never {
+  throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+}
+
+const CONSENT_JOIN = `INNER JOIN member_coach_share_consents c
+  ON c.member_user_id = a.member_user_id
+ AND c.purpose = 'human_weekly_coaching_review'
+ AND c.status = 'granted'`;
+
+async function requireAssignedCoach(
+  db: Database,
+  actor: Actor,
+  memberUserId: string,
+): Promise<void> {
+  if (actor.roles.includes('admin')) return;
+  const assignment = await db.query<{ id: string }>(
+    `SELECT id FROM coach_member_assignments
+     WHERE coach_user_id = $1 AND member_user_id = $2 AND active = true LIMIT 1`,
+    [actor.userId, memberUserId],
+  );
+  if (assignment.rows[0] === undefined) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  if (!(await hasCoachShareConsent(db, memberUserId))) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+}
+
+/** Admin/supervisor only — never self-serve assignment. */
+export async function assignCoachToMember(
+  db: Database,
+  actor: Actor,
+  coachUserId: string,
+  memberUserId: string,
+  reason = '',
+) {
+  try {
+    assertCanManageCoachAssignments(actor);
+    assertNotSelfRolePromotion(actor, coachUserId);
+  } catch (error) {
+    if (error instanceof DomainError) {
+      throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+    }
+    throw error;
+  }
+  const coach = await loadUserRolesStatus(db, coachUserId);
+  const member = await loadUserRolesStatus(db, memberUserId);
+  if (coach === null || member === null) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  try {
+    assertCoachEligibleForAssignment(coach.roles, coach.status);
+    assertMemberEligibleForAssignment(member.roles, member.status);
+  } catch (error) {
+    if (error instanceof DomainError) {
+      throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+    }
+    throw error;
+  }
+
+  const previous = await db.query<{ coach_user_id: string }>(
+    `SELECT coach_user_id FROM coach_member_assignments
+     WHERE member_user_id = $1 AND active = true AND coach_user_id <> $2`,
+    [memberUserId, coachUserId],
+  );
+  const previousCoachId = previous.rows[0]?.coach_user_id ?? null;
+  if (previousCoachId !== null) {
+    await db.query(
+      `UPDATE coach_member_assignments SET active = false WHERE member_user_id = $1 AND active = true`,
+      [memberUserId],
+    );
+  }
+
   await db.query(
     `INSERT INTO coach_member_assignments (coach_user_id, member_user_id, active)
      VALUES ($1, $2, true)
      ON CONFLICT (coach_user_id, member_user_id) DO UPDATE SET active = true, assigned_at = now()`,
     [coachUserId, memberUserId],
   );
-  return { persisted: true, coachUserId, memberUserId, active: true };
+  await db.query(
+    `INSERT INTO coach_assignment_events (actor_user_id, coach_user_id, member_user_id, action, reason, previous_coach_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      actor.userId,
+      coachUserId,
+      memberUserId,
+      previousCoachId === null ? 'assign' : 'reassign',
+      reason.slice(0, 500),
+      previousCoachId,
+    ],
+  );
+  await writeCoachAccessAudit(db, actor.userId, memberUserId, 'assignment.write');
+  return {
+    persisted: true,
+    coachUserId,
+    memberUserId,
+    active: true,
+    reassigned: previousCoachId !== null,
+    previousCoachUserId: previousCoachId,
+  };
+}
+
+export async function revokeCoachAssignment(
+  db: Database,
+  actor: Actor,
+  coachUserId: string,
+  memberUserId: string,
+  reason = '',
+) {
+  try {
+    assertCanManageCoachAssignments(actor);
+  } catch (error) {
+    if (error instanceof DomainError) {
+      throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+    }
+    throw error;
+  }
+  const updated = await db.query<{ id: string }>(
+    `UPDATE coach_member_assignments SET active = false
+     WHERE coach_user_id = $1 AND member_user_id = $2 AND active = true
+     RETURNING id`,
+    [coachUserId, memberUserId],
+  );
+  if (updated.rows[0] === undefined) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  await db.query(
+    `INSERT INTO coach_assignment_events (actor_user_id, coach_user_id, member_user_id, action, reason)
+     VALUES ($1, $2, $3, 'revoke', $4)`,
+    [actor.userId, coachUserId, memberUserId, reason.slice(0, 500)],
+  );
+  await writeCoachAccessAudit(db, actor.userId, memberUserId, 'assignment.write');
+  return { persisted: true, coachUserId, memberUserId, active: false };
+}
+
+export async function listCoachAssignmentsForActor(db: Database, actor: Actor) {
+  // Supervisors/admins see all active assignments (ops roster). Coaches only see consented members.
+  if (actor.roles.includes('admin') || actor.roles.includes('coach_supervisor')) {
+    const rows = await db.query<{
+      coach_user_id: string;
+      member_user_id: string;
+      active: boolean;
+      assigned_at: string;
+      consent_granted: boolean;
+    }>(
+      `SELECT a.coach_user_id, a.member_user_id, a.active, a.assigned_at,
+              EXISTS (
+                SELECT 1 FROM member_coach_share_consents c
+                WHERE c.member_user_id = a.member_user_id
+                  AND c.purpose = 'human_weekly_coaching_review'
+                  AND c.status = 'granted'
+              ) AS consent_granted
+       FROM coach_member_assignments a
+       WHERE a.active = true
+       ORDER BY a.assigned_at DESC
+       LIMIT 200`,
+    );
+    return {
+      assignments: rows.rows.map((row) => ({
+        coachUserId: String(row.coach_user_id),
+        memberUserId: String(row.member_user_id),
+        active: row.active,
+        assignedAt: iso(row.assigned_at) ?? row.assigned_at,
+        consentGranted: row.consent_granted === true,
+      })),
+    };
+  }
+  if (!actor.roles.includes('coach_reviewer')) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  const rows = await db.query<{
+    coach_user_id: string;
+    member_user_id: string;
+    active: boolean;
+    assigned_at: string;
+  }>(
+    `SELECT a.coach_user_id, a.member_user_id, a.active, a.assigned_at
+     FROM coach_member_assignments a
+     ${CONSENT_JOIN}
+     WHERE a.coach_user_id = $1 AND a.active = true
+     ORDER BY a.assigned_at DESC`,
+    [actor.userId],
+  );
+  return {
+    assignments: rows.rows.map((row) => ({
+      coachUserId: String(row.coach_user_id),
+      memberUserId: String(row.member_user_id),
+      active: row.active,
+      assignedAt: iso(row.assigned_at) ?? row.assigned_at,
+      consentGranted: true as const,
+    })),
+  };
+}
+
+export async function grantCoachShareConsent(db: Database, actor: Actor) {
+  await db.query(
+    `INSERT INTO member_coach_share_consents (
+       member_user_id, purpose, policy_version, status, granted_at, withdrawn_at, evidence_reference
+     ) VALUES ($1, 'human_weekly_coaching_review', $2, 'granted', now(), NULL, 'in_app_acknowledgement')
+     ON CONFLICT (member_user_id, purpose) DO UPDATE
+       SET status = 'granted', policy_version = EXCLUDED.policy_version,
+           granted_at = now(), withdrawn_at = NULL`,
+    [actor.userId, COACH_SHARE_POLICY_VERSION],
+  );
+  return {
+    persisted: true,
+    purpose: 'human_weekly_coaching_review' as const,
+    status: 'granted' as const,
+    policyVersion: COACH_SHARE_POLICY_VERSION,
+    disclosure:
+      'An assigned human coach may see goals, approved plan, training adherence, weight trends, nutrition patterns, survey sleep when provided, your questions, data completeness, Yazan proposals, and safety flags. Daily sleep hours are unavailable until logging exists.',
+  };
+}
+
+export async function withdrawCoachShareConsent(db: Database, actor: Actor) {
+  await db.query(
+    `INSERT INTO member_coach_share_consents (
+       member_user_id, purpose, policy_version, status, granted_at, withdrawn_at, evidence_reference
+     ) VALUES ($1, 'human_weekly_coaching_review', $2, 'withdrawn', NULL, now(), 'in_app_acknowledgement')
+     ON CONFLICT (member_user_id, purpose) DO UPDATE
+       SET status = 'withdrawn', withdrawn_at = now()`,
+    [actor.userId, COACH_SHARE_POLICY_VERSION],
+  );
+  return {
+    persisted: true,
+    purpose: 'human_weekly_coaching_review' as const,
+    status: 'withdrawn' as const,
+    policyVersion: COACH_SHARE_POLICY_VERSION,
+  };
+}
+
+export async function coachShareConsentFor(db: Database, actor: Actor) {
+  const row = await db.query<{ status: string; policy_version: string; granted_at: string | null }>(
+    `SELECT status, policy_version, granted_at FROM member_coach_share_consents
+     WHERE member_user_id = $1 AND purpose = 'human_weekly_coaching_review' LIMIT 1`,
+    [actor.userId],
+  );
+  const found = row.rows[0];
+  return {
+    purpose: 'human_weekly_coaching_review' as const,
+    status: found?.status ?? 'none',
+    policyVersion: found?.policy_version ?? COACH_SHARE_POLICY_VERSION,
+    grantedAt: found?.granted_at ?? null,
+    disclosure:
+      'An assigned human coach may see coaching packet data listed in the grant response. Legal basis review remains blocked (P0-PRIV).',
+  };
+}
+
+async function loadWeeklyReview(
+  db: Database,
+  reviewId: string,
+): Promise<{
+  id: string;
+  memberUserId: string;
+  coachUserId: string | null;
+  weekOf: string;
+  status: WeeklyReviewStatus;
+  updatedAt: string;
+  packet: unknown;
+} | null> {
+  const rows = await db.query<{
+    id: string;
+    member_user_id: string;
+    coach_user_id: string | null;
+    week_of: string;
+    status: string;
+    updated_at: string;
+    packet: unknown;
+  }>(
+    `SELECT id::text AS id, member_user_id, coach_user_id, week_of::text AS week_of, status, updated_at, packet
+     FROM weekly_review_queue WHERE id = $1`,
+    [reviewId],
+  );
+  const row = rows.rows[0];
+  if (row === undefined) return null;
+  return {
+    id: row.id,
+    memberUserId: String(row.member_user_id),
+    coachUserId: row.coach_user_id === null ? null : String(row.coach_user_id),
+    weekOf: row.week_of.slice(0, 10),
+    status: row.status as WeeklyReviewStatus,
+    updatedAt: iso(row.updated_at) ?? row.updated_at,
+    packet: row.packet,
+  };
+}
+
+async function persistWeeklyReviewTransition(
+  db: Database,
+  actor: Actor,
+  reviewId: string,
+  next: WeeklyReviewStatus,
+  note: string,
+  coachUserId?: string | null,
+) {
+  const current = await loadWeeklyReview(db, reviewId);
+  if (current === null) {
+    throw new ApiError(404, 'REVIEW_NOT_FOUND', 'Weekly review not found');
+  }
+  const at = new Date().toISOString();
+  let transitioned;
+  try {
+    transitioned = transitionWeeklyReview(
+      {
+        id: current.id,
+        memberUserId: current.memberUserId,
+        coachUserId: current.coachUserId,
+        weekOf: current.weekOf,
+        status: current.status,
+        updatedAt: current.updatedAt,
+      },
+      next,
+      at,
+      coachUserId,
+    );
+  } catch (error) {
+    throw asApi(error);
+  }
+  await db.query(
+    `UPDATE weekly_review_queue
+     SET status = $2, coach_user_id = $3, updated_at = $4::timestamptz
+     WHERE id = $1`,
+    [reviewId, transitioned.status, transitioned.coachUserId, at],
+  );
+  await db.query(
+    `INSERT INTO weekly_review_events (review_id, actor_user_id, from_status, to_status, note)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [reviewId, actor.userId, current.status, transitioned.status, note.slice(0, 500)],
+  );
+  return { ...transitioned, packet: current.packet };
+}
+
+/** Prepare authorized weekly packet and queue for human review. */
+export async function prepareWeeklyReviewForMember(
+  db: Database,
+  actor: Actor,
+  memberUserId: string,
+  weekOf: string,
+) {
+  if (!actor.roles.includes('admin') && actor.userId !== memberUserId) {
+    await requireAssignedCoach(db, actor, memberUserId);
+  }
+  const stateActor: Actor =
+    actor.userId === memberUserId || actor.roles.includes('admin')
+      ? { userId: memberUserId, roles: ['member', ...actor.roles.filter((role) => role !== 'member')], gymOrganizationIds: actor.gymOrganizationIds }
+      : actor;
+  const stateResult = await memberStateFor(db, stateActor, {
+    subjectUserId: memberUserId,
+    timeZone: 'Asia/Riyadh',
+    asOfDay: weekOf,
+  });
+  const recs = await db.query<{
+    id: string;
+    user_id: string;
+    category: string;
+    status: string;
+    summary: string;
+    rationale: string;
+    confidence: string;
+    missing_data: unknown;
+    evidence: unknown;
+    policy_version: string;
+    expires_at: string;
+    payload: unknown;
+    requires_human_review: boolean;
+    requires_member_confirmation: boolean;
+    audit: unknown;
+    created_at: string;
+    updated_at: string;
+  }>(
+    `SELECT * FROM coaching_recommendations WHERE user_id = $1 AND status IN ('REVIEW_REQUIRED', 'VALIDATED', 'DRAFT')
+     ORDER BY updated_at DESC LIMIT 20`,
+    [memberUserId],
+  );
+  const survey = await db.query<{ survey: unknown }>(
+    `SELECT survey FROM coach_weekly_briefs WHERE user_id = $1 AND week_of = $2::date LIMIT 1`,
+    [memberUserId, weekOf],
+  );
+  const surveyObj =
+    survey.rows[0] === undefined
+      ? null
+      : asJson<{ sleep?: number; questionForCoach?: string; difficulties?: string }>(survey.rows[0].survey);
+  const surveySleep = surveyObj !== null && typeof surveyObj.sleep === 'number' ? surveyObj.sleep : null;
+  const memberQuestions = [
+    ...stateResult.state.openCoachingQuestions,
+    ...(surveyObj?.questionForCoach && surveyObj.questionForCoach.trim().length > 0
+      ? [surveyObj.questionForCoach.trim()]
+      : []),
+    ...(surveyObj?.difficulties && surveyObj.difficulties.trim().length > 0
+      ? [`Difficulties: ${surveyObj.difficulties.trim()}`]
+      : []),
+  ];
+  const packet = buildAuthorizedCoachPacket({
+    weekOf,
+    memberUserId,
+    state: stateResult.state,
+    recommendations: recs.rows.map(recommendationRowToDomain),
+    surveySleep,
+    memberQuestions,
+  });
+  const assignment = await db.query<{ coach_user_id: string }>(
+    `SELECT coach_user_id FROM coach_member_assignments
+     WHERE member_user_id = $1 AND active = true LIMIT 1`,
+    [memberUserId],
+  );
+  const coachUserId = assignment.rows[0] === undefined ? null : String(assignment.rows[0].coach_user_id);
+  const upserted = await db.query<{ id: string; status: string }>(
+    `INSERT INTO weekly_review_queue (member_user_id, coach_user_id, week_of, status, packet, updated_at)
+     VALUES ($1, $2, $3::date, 'AUTO_SUMMARY_READY', $4::jsonb, now())
+     ON CONFLICT (member_user_id, week_of) DO UPDATE
+       SET packet = EXCLUDED.packet, coach_user_id = COALESCE(EXCLUDED.coach_user_id, weekly_review_queue.coach_user_id),
+           status = CASE
+             WHEN weekly_review_queue.status = 'FAILED' THEN weekly_review_queue.status
+             WHEN weekly_review_queue.status IN ('COMPLETED', 'FEEDBACK_SENT') THEN 'REOPENED'
+             ELSE 'AUTO_SUMMARY_READY'
+           END,
+           updated_at = now()
+     RETURNING id::text AS id, status`,
+    [memberUserId, coachUserId, weekOf, JSON.stringify(packet)],
+  );
+  const reviewId = String(upserted.rows[0]?.id);
+  const statusAfter = upserted.rows[0]?.status;
+  await db.query(
+    `INSERT INTO weekly_review_events (review_id, actor_user_id, from_status, to_status, note)
+     VALUES ($1, $2, NULL, $3, 'packet_prepared')`,
+    [reviewId, actor.userId, statusAfter ?? 'AUTO_SUMMARY_READY'],
+  );
+  if (statusAfter === 'AUTO_SUMMARY_READY' || statusAfter === 'REOPENED') {
+    const queued = await persistWeeklyReviewTransition(db, actor, reviewId, 'QUEUED_FOR_HUMAN', 'queued_after_summary');
+    return { review: queued, packet };
+  }
+  return { review: await loadWeeklyReview(db, reviewId), packet };
+}
+
+export async function listWeeklyReviewsForCoach(db: Database, actor: Actor) {
+  if (actor.roles.includes('admin') || actor.roles.includes('coach_supervisor')) {
+    const rows = await db.query<{
+      id: string;
+      member_user_id: string;
+      coach_user_id: string | null;
+      week_of: string;
+      status: string;
+      updated_at: string;
+      consent_granted: boolean;
+    }>(
+      `SELECT q.id::text AS id, q.member_user_id, q.coach_user_id, q.week_of::text AS week_of, q.status, q.updated_at,
+              EXISTS (
+                SELECT 1 FROM member_coach_share_consents c
+                WHERE c.member_user_id = q.member_user_id
+                  AND c.purpose = 'human_weekly_coaching_review'
+                  AND c.status = 'granted'
+              ) AS consent_granted
+       FROM weekly_review_queue q
+       WHERE q.status NOT IN ('COMPLETED', 'FAILED')
+       ORDER BY q.updated_at ASC
+       LIMIT 100`,
+    );
+    return {
+      reviews: rows.rows.map((row) => ({
+        id: row.id,
+        memberUserId: String(row.member_user_id),
+        coachUserId: row.coach_user_id === null ? null : String(row.coach_user_id),
+        weekOf: row.week_of.slice(0, 10),
+        status: row.status,
+        updatedAt: iso(row.updated_at) ?? row.updated_at,
+        consentGranted: row.consent_granted === true,
+      })),
+    };
+  }
+  if (!actor.roles.includes('coach_reviewer')) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  const rows = await db.query<{
+    id: string;
+    member_user_id: string;
+    coach_user_id: string | null;
+    week_of: string;
+    status: string;
+    updated_at: string;
+  }>(
+    `SELECT q.id::text AS id, q.member_user_id, q.coach_user_id, q.week_of::text AS week_of, q.status, q.updated_at
+     FROM weekly_review_queue q
+     INNER JOIN coach_member_assignments a
+       ON a.member_user_id = q.member_user_id AND a.coach_user_id = $1 AND a.active = true
+     INNER JOIN member_coach_share_consents c
+       ON c.member_user_id = q.member_user_id
+      AND c.purpose = 'human_weekly_coaching_review'
+      AND c.status = 'granted'
+     WHERE q.status NOT IN ('COMPLETED', 'FAILED')
+       AND (q.coach_user_id IS NULL OR q.coach_user_id = $1)
+     ORDER BY q.updated_at ASC
+     LIMIT 100`,
+    [actor.userId],
+  );
+  return {
+    reviews: rows.rows.map((row) => ({
+      id: row.id,
+      memberUserId: String(row.member_user_id),
+      coachUserId: row.coach_user_id === null ? null : String(row.coach_user_id),
+      weekOf: row.week_of.slice(0, 10),
+      status: row.status,
+      updatedAt: iso(row.updated_at) ?? row.updated_at,
+      consentGranted: true as const,
+    })),
+  };
+}
+
+export async function claimWeeklyReview(db: Database, actor: Actor, reviewId: string) {
+  if (!actor.roles.includes('coach_reviewer') && !actor.roles.includes('admin')) {
+    denyReviewAccess();
+  }
+  const current = await loadWeeklyReview(db, reviewId);
+  if (current === null) {
+    denyReviewAccess();
+  }
+  try {
+    await requireAssignedCoach(db, actor, current.memberUserId);
+  } catch {
+    denyReviewAccess();
+  }
+  // Optimistic claim — only one concurrent claim wins from queue states.
+  if (
+    current.status === 'QUEUED_FOR_HUMAN' ||
+    current.status === 'REASSIGNED' ||
+    current.status === 'OVERDUE'
+  ) {
+    const claimed = await db.query<{ id: string }>(
+      `UPDATE weekly_review_queue
+       SET status = 'ASSIGNED', coach_user_id = $2, updated_at = now()
+       WHERE id = $1 AND status = $3
+       RETURNING id`,
+      [reviewId, actor.userId, current.status],
+    );
+    if (claimed.rows[0] === undefined) {
+      throw new ApiError(409, 'REVIEW_CLAIM_CONFLICT', 'Another coach claimed this review');
+    }
+    await db.query(
+      `INSERT INTO weekly_review_events (review_id, actor_user_id, from_status, to_status, note)
+       VALUES ($1, $2, $3, 'ASSIGNED', 'coach_claim')`,
+      [reviewId, actor.userId, current.status],
+    );
+    await persistWeeklyReviewTransition(db, actor, reviewId, 'IN_REVIEW', 'start_review', actor.userId);
+  } else if (current.status === 'ASSIGNED') {
+    if (current.coachUserId !== null && current.coachUserId !== actor.userId && !actor.roles.includes('admin')) {
+      denyReviewAccess();
+    }
+    await persistWeeklyReviewTransition(db, actor, reviewId, 'IN_REVIEW', 'start_review', actor.userId);
+  } else {
+    throw new ApiError(422, 'INVALID_REVIEW_TRANSITION', 'Review cannot be claimed in its current status');
+  }
+  await writeCoachAccessAudit(db, actor.userId, current.memberUserId, 'review.claim');
+  return { review: await loadWeeklyReview(db, reviewId) };
+}
+
+export async function readWeeklyReviewPacket(db: Database, actor: Actor, reviewId: string) {
+  const current = await loadWeeklyReview(db, reviewId);
+  if (current === null) {
+    denyReviewAccess();
+  }
+  if (actor.userId === current.memberUserId) {
+    return { review: current, packet: current.packet };
+  }
+  try {
+    await requireAssignedCoach(db, actor, current.memberUserId);
+  } catch {
+    denyReviewAccess();
+  }
+  await writeCoachAccessAudit(db, actor.userId, current.memberUserId, 'packet.read');
+  return { review: current, packet: current.packet };
+}
+
+export async function escalateWeeklyReview(db: Database, actor: Actor, reviewId: string, note = '') {
+  if (
+    !actor.roles.includes('coach_reviewer') &&
+    !actor.roles.includes('coach_supervisor') &&
+    !actor.roles.includes('admin')
+  ) {
+    denyReviewAccess();
+  }
+  const current = await loadWeeklyReview(db, reviewId);
+  if (current === null) {
+    denyReviewAccess();
+  }
+  if (!actor.roles.includes('admin') && !actor.roles.includes('coach_supervisor')) {
+    try {
+      await requireAssignedCoach(db, actor, current.memberUserId);
+    } catch {
+      denyReviewAccess();
+    }
+  }
+  const review = await persistWeeklyReviewTransition(db, actor, reviewId, 'ESCALATED', note || 'escalated');
+  return { review };
+}
+
+export async function sendCoachFeedback(
+  db: Database,
+  actor: Actor,
+  reviewId: string,
+  body: string,
+) {
+  if (!actor.roles.includes('coach_reviewer') && !actor.roles.includes('admin')) {
+    denyReviewAccess();
+  }
+  const current = await loadWeeklyReview(db, reviewId);
+  if (current === null) {
+    denyReviewAccess();
+  }
+  try {
+    await requireAssignedCoach(db, actor, current.memberUserId);
+  } catch {
+    denyReviewAccess();
+  }
+  if (current.status !== 'IN_REVIEW' && current.status !== 'ASSIGNED' && current.status !== 'REOPENED') {
+    throw new ApiError(422, 'INVALID_REVIEW_TRANSITION', 'Feedback requires an in-review assignment');
+  }
+  if (current.status === 'ASSIGNED' || current.status === 'REOPENED') {
+    await persistWeeklyReviewTransition(db, actor, reviewId, 'IN_REVIEW', 'enter_review_before_feedback', actor.userId);
+  }
+  const at = new Date().toISOString();
+  let feedback;
+  try {
+    feedback = createCoachFeedback({
+      id: randomUUID(),
+      reviewId,
+      coachUserId: actor.userId,
+      memberUserId: current.memberUserId,
+      body,
+      createdAt: at,
+    });
+  } catch (error) {
+    throw asApi(error);
+  }
+  await db.query(
+    `INSERT INTO coach_feedback (id, review_id, coach_user_id, member_user_id, body, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6::timestamptz)`,
+    [feedback.id, reviewId, actor.userId, current.memberUserId, feedback.body, at],
+  );
+  await persistWeeklyReviewTransition(db, actor, reviewId, 'FEEDBACK_SENT', 'human_feedback_sent', actor.userId);
+  await persistWeeklyReviewTransition(db, actor, reviewId, 'COMPLETED', 'review_completed', actor.userId);
+  await writeCoachAccessAudit(db, actor.userId, current.memberUserId, 'feedback.send');
+  const conversationId = await conversationFor(db, current.memberUserId);
+  await db.query(`INSERT INTO coach_messages (conversation_id, role, body) VALUES ($1, 'human_coach', $2)`, [
+    conversationId,
+    feedback.body,
+  ]);
+  return { persisted: true, feedback };
+}
+
+export async function listMemberCoachFeedback(db: Database, actor: Actor) {
+  const rows = await db.query<{
+    id: string;
+    review_id: string;
+    coach_user_id: string;
+    body: string;
+    created_at: string;
+  }>(
+    `SELECT id::text AS id, review_id::text AS review_id, coach_user_id, body, created_at
+     FROM coach_feedback WHERE member_user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+    [actor.userId],
+  );
+  return {
+    feedback: rows.rows.map((row) => ({
+      id: row.id,
+      reviewId: row.review_id,
+      coachUserId: String(row.coach_user_id),
+      body: row.body,
+      createdAt: iso(row.created_at) ?? row.created_at,
+      authorKind: 'human_coach' as const,
+    })),
+  };
+}
+
+export async function addCoachNote(db: Database, actor: Actor, memberUserId: string, body: string) {
+  await requireAssignedCoach(db, actor, memberUserId);
+  const trimmed = body.trim();
+  if (trimmed.length < 1 || trimmed.length > 4000) {
+    throw new ApiError(400, 'INVALID_NOTE', 'Note must be 1–4000 characters');
+  }
+  const id = randomUUID();
+  await db.query(
+    `INSERT INTO coach_notes (id, coach_user_id, member_user_id, body) VALUES ($1, $2, $3, $4)`,
+    [id, actor.userId, memberUserId, trimmed],
+  );
+  return { persisted: true, id, internal: true as const };
+}
+
+export async function listCoachNotes(db: Database, actor: Actor, memberUserId: string) {
+  await requireAssignedCoach(db, actor, memberUserId);
+  const rows = await db.query<{ id: string; body: string; created_at: string }>(
+    `SELECT id::text AS id, body, created_at FROM coach_notes
+     WHERE member_user_id = $1 AND coach_user_id = $2
+     ORDER BY created_at DESC LIMIT 50`,
+    [memberUserId, actor.userId],
+  );
+  return {
+    notes: rows.rows.map((row) => ({
+      id: row.id,
+      body: row.body,
+      createdAt: iso(row.created_at) ?? row.created_at,
+      internal: true as const,
+    })),
+  };
+}
+
+export async function coachWorkloadMetrics(db: Database, actor: Actor) {
+  if (!actor.roles.includes('coach_reviewer') && !actor.roles.includes('admin') && !actor.roles.includes('coach_supervisor')) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  const coachFilter = actor.roles.includes('admin') || actor.roles.includes('coach_supervisor') ? null : actor.userId;
+  const assigned = await db.query<{ n: string }>(
+    coachFilter === null
+      ? `SELECT COUNT(*)::text AS n FROM coach_member_assignments WHERE active = true`
+      : `SELECT COUNT(*)::text AS n FROM coach_member_assignments WHERE active = true AND coach_user_id = $1`,
+    coachFilter === null ? [] : [coachFilter],
+  );
+  const inbox = await db.query<{ n: string }>(
+    coachFilter === null
+      ? `SELECT COUNT(*)::text AS n FROM weekly_review_queue WHERE status IN ('QUEUED_FOR_HUMAN','ASSIGNED','IN_REVIEW','OVERDUE','ESCALATED')`
+      : `SELECT COUNT(*)::text AS n FROM weekly_review_queue q
+         INNER JOIN coach_member_assignments a ON a.member_user_id = q.member_user_id AND a.active = true AND a.coach_user_id = $1
+         WHERE q.status IN ('QUEUED_FOR_HUMAN','ASSIGNED','IN_REVIEW','OVERDUE','ESCALATED')`,
+    coachFilter === null ? [] : [coachFilter],
+  );
+  const completed = await db.query<{ n: string }>(
+    coachFilter === null
+      ? `SELECT COUNT(*)::text AS n FROM weekly_review_queue WHERE status = 'COMPLETED' AND updated_at > now() - interval '14 days'`
+      : `SELECT COUNT(*)::text AS n FROM weekly_review_queue
+         WHERE status = 'COMPLETED' AND coach_user_id = $1 AND updated_at > now() - interval '14 days'`,
+    coachFilter === null ? [] : [coachFilter],
+  );
+  const overdue = await db.query<{ n: string }>(
+    coachFilter === null
+      ? `SELECT COUNT(*)::text AS n FROM weekly_review_queue WHERE status = 'OVERDUE'`
+      : `SELECT COUNT(*)::text AS n FROM weekly_review_queue WHERE status = 'OVERDUE' AND coach_user_id = $1`,
+    coachFilter === null ? [] : [coachFilter],
+  );
+  const capacity = coachFilter === null
+    ? null
+    : await db.query<{ max_active_members: number; response_hours_target: number; available: boolean }>(
+        `SELECT max_active_members, response_hours_target, available FROM coach_capacity WHERE coach_user_id = $1`,
+        [coachFilter],
+      );
+  const cap = capacity?.rows[0];
+  const assignedCount = Number(assigned.rows[0]?.n ?? 0);
+  const maxMembers = cap?.max_active_members ?? 40;
+  return {
+    assignedMembers: assignedCount,
+    openReviews: Number(inbox.rows[0]?.n ?? 0),
+    completedLast14Days: Number(completed.rows[0]?.n ?? 0),
+    overdueReviews: Number(overdue.rows[0]?.n ?? 0),
+    capacity: {
+      maxActiveMembers: maxMembers,
+      availableSlots: Math.max(0, maxMembers - assignedCount),
+      responseHoursTarget: cap?.response_hours_target ?? 72,
+      available: cap?.available ?? true,
+      atCapacity: assignedCount >= maxMembers,
+    },
+  };
+}
+
+/** Mark queued/assigned reviews older than SLA as OVERDUE. Admin/supervisor only. */
+export async function markOverdueWeeklyReviews(db: Database, actor: Actor, olderThanHours = 72) {
+  if (!actor.roles.includes('admin') && !actor.roles.includes('coach_supervisor')) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  const hours = Math.min(336, Math.max(1, olderThanHours));
+  const updated = await db.query<{ id: string; status: string }>(
+    `UPDATE weekly_review_queue
+     SET status = 'OVERDUE', updated_at = now()
+     WHERE status IN ('QUEUED_FOR_HUMAN', 'ASSIGNED', 'IN_REVIEW')
+       AND updated_at < now() - make_interval(hours => $1::int)
+     RETURNING id::text AS id, status`,
+    [hours],
+  );
+  for (const row of updated.rows) {
+    await db.query(
+      `INSERT INTO weekly_review_events (review_id, actor_user_id, from_status, to_status, note)
+       VALUES ($1, $2, 'SLA_BREACH', 'OVERDUE', $3)`,
+      [row.id, actor.userId, `older_than_${hours}h`],
+    );
+  }
+  return { marked: updated.rows.length, olderThanHours: hours };
+}
+
+export async function memberWeeklyHumanReviewStatus(db: Database, actor: Actor) {
+  const review = await db.query<{
+    id: string;
+    week_of: string;
+    status: string;
+    updated_at: string;
+    coach_user_id: string | null;
+  }>(
+    `SELECT id::text AS id, week_of::text AS week_of, status, updated_at, coach_user_id
+     FROM weekly_review_queue WHERE member_user_id = $1
+     ORDER BY week_of DESC LIMIT 1`,
+    [actor.userId],
+  );
+  const feedback = await listMemberCoachFeedback(db, actor);
+  const assignment = await db.query<{ coach_user_id: string }>(
+    `SELECT coach_user_id FROM coach_member_assignments
+     WHERE member_user_id = $1 AND active = true LIMIT 1`,
+    [actor.userId],
+  );
+  const row = review.rows[0];
+  return {
+    hasAssignedCoach: assignment.rows[0] !== undefined,
+    coachAvailable: assignment.rows[0] !== undefined,
+    noCoachMessage:
+      assignment.rows[0] === undefined
+        ? 'No human coach is assigned yet. Your weekly file stays queued until an authorized coach is assigned.'
+        : null,
+    review:
+      row === undefined
+        ? null
+        : {
+            id: row.id,
+            weekOf: row.week_of.slice(0, 10),
+            status: row.status,
+            updatedAt: iso(row.updated_at) ?? row.updated_at,
+          },
+    unreadHumanFeedback: feedback.feedback.slice(0, 5),
+  };
+}
+
+/** Preview of what will be shared with an assigned coach — facts only; does not queue a review. */
+export async function previewWeeklySharePacket(db: Database, actor: Actor, weekOf: string) {
+  const consent = await coachShareConsentFor(db, actor);
+  const stateResult = await memberStateFor(db, actor, {
+    subjectUserId: actor.userId,
+    timeZone: 'Asia/Riyadh',
+    asOfDay: weekOf,
+  });
+  const survey = await db.query<{ survey: unknown }>(
+    `SELECT survey FROM coach_weekly_briefs WHERE user_id = $1 AND week_of = $2::date LIMIT 1`,
+    [actor.userId, weekOf],
+  );
+  const surveyObj =
+    survey.rows[0] === undefined
+      ? null
+      : asJson<{ sleep?: number; questionForCoach?: string; difficulties?: string }>(survey.rows[0].survey);
+  const packet = buildAuthorizedCoachPacket({
+    weekOf,
+    memberUserId: actor.userId,
+    state: stateResult.state,
+    recommendations: [],
+    surveySleep: surveyObj !== null && typeof surveyObj.sleep === 'number' ? surveyObj.sleep : null,
+    memberQuestions: [
+      ...stateResult.state.openCoachingQuestions,
+      ...(surveyObj?.questionForCoach?.trim() ? [surveyObj.questionForCoach.trim()] : []),
+    ],
+  });
+  return {
+    consentStatus: consent.status,
+    disclosure: consent.disclosure,
+    packet,
+    inventsMissingValues: false as const,
+  };
+}
+
+export async function addCoachFollowUp(
+  db: Database,
+  actor: Actor,
+  reviewId: string,
+  body: string,
+  dueOn?: string,
+) {
+  const current = await loadWeeklyReview(db, reviewId);
+  if (current === null) denyReviewAccess();
+  try {
+    await requireAssignedCoach(db, actor, current.memberUserId);
+  } catch {
+    denyReviewAccess();
+  }
+  const trimmed = body.trim();
+  if (trimmed.length < 1 || trimmed.length > 2000) {
+    throw new ApiError(400, 'INVALID_FOLLOW_UP', 'Follow-up must be 1–2000 characters');
+  }
+  const id = randomUUID();
+  await db.query(
+    `INSERT INTO coach_follow_ups (id, review_id, coach_user_id, member_user_id, body, due_on)
+     VALUES ($1, $2, $3, $4, $5, $6::date)`,
+    [id, reviewId, actor.userId, current.memberUserId, trimmed, dueOn ?? null],
+  );
+  return { persisted: true, id, status: 'open' as const };
+}
+
+export async function listCoachFollowUps(db: Database, actor: Actor) {
+  if (!actor.roles.includes('coach_reviewer') && !actor.roles.includes('admin')) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  const rows = await db.query<{
+    id: string;
+    review_id: string;
+    member_user_id: string;
+    body: string;
+    due_on: string | null;
+    status: string;
+  }>(
+    `SELECT id::text AS id, review_id::text AS review_id, member_user_id, body, due_on::text AS due_on, status
+     FROM coach_follow_ups
+     WHERE coach_user_id = $1 AND status = 'open'
+     ORDER BY due_on NULLS LAST, created_at
+     LIMIT 50`,
+    [actor.userId],
+  );
+  return {
+    followUps: rows.rows.map((row) => ({
+      id: row.id,
+      reviewId: row.review_id,
+      memberUserId: String(row.member_user_id),
+      body: row.body,
+      dueOn: row.due_on === null ? null : row.due_on.slice(0, 10),
+      status: row.status,
+    })),
+  };
+}
+
+/** Human coach approve/reject — never AI; nutrition still blocked from APPLIED by ENERGY_POLICY. */
+export async function coachDecideRecommendation(
+  db: Database,
+  actor: Actor,
+  memberUserId: string,
+  recommendationId: string,
+  decision: 'APPROVED' | 'REJECTED',
+  reason: string,
+) {
+  if (!actor.roles.includes('coach_reviewer') && !actor.roles.includes('admin')) {
+    throw new ApiError(403, 'FORBIDDEN', 'Access denied');
+  }
+  await requireAssignedCoach(db, actor, memberUserId);
+  const rows = await db.query<{
+    id: string;
+    user_id: string;
+    category: string;
+    status: string;
+    summary: string;
+    rationale: string;
+    confidence: string;
+    missing_data: unknown;
+    evidence: unknown;
+    policy_version: string;
+    expires_at: string;
+    payload: unknown;
+    requires_human_review: boolean;
+    requires_member_confirmation: boolean;
+    audit: unknown;
+    created_at: string;
+    updated_at: string;
+  }>(`SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`, [recommendationId, memberUserId]);
+  const row = rows.rows[0];
+  if (row === undefined) {
+    throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
+  }
+  let current = recommendationRowToDomain(row);
+  if (current.status !== 'REVIEW_REQUIRED' && current.status !== 'VALIDATED') {
+    throw new ApiError(422, 'INVALID_RECOMMENDATION_TRANSITION', 'Only review-required recommendations can be decided by a coach');
+  }
+  const at = new Date().toISOString();
+  try {
+    if (current.status === 'VALIDATED' && current.requiresHumanReview) {
+      current = transitionRecommendation(current, 'REVIEW_REQUIRED', at, {
+        actorId: actor.userId,
+        note: 'human_coach_claimed_review',
+      });
+    }
+    current = transitionRecommendation(current, decision, at, {
+      actorId: actor.userId,
+      note: `human_coach_${decision.toLowerCase()}:${reason.slice(0, 200)}`,
+    });
+  } catch (error) {
+    throw asApi(error);
+  }
+  await persistRecommendation(db, current);
+  await writeCoachAccessAudit(
+    db,
+    actor.userId,
+    memberUserId,
+    decision === 'APPROVED' ? 'recommendation.approve' : 'recommendation.reject',
+  );
+  return {
+    persisted: true,
+    recommendation: current,
+    humanApproved: decision === 'APPROVED',
+    authorKind: 'human_coach' as const,
+    energyPolicyBlocksApply: current.category === 'nutrition',
+  };
 }
 
 export async function listReadyMeals() {
@@ -2204,6 +3247,7 @@ export async function listCoachMessages(db: Database, userId: string) {
     role: row.role,
     body: row.body,
     createdAt: row.created_at,
+    authorKind: row.role === 'human_coach' ? ('human_coach' as const) : row.role === 'assistant' ? ('yazan_ai' as const) : ('member' as const),
   }));
 }
 
@@ -2294,6 +3338,11 @@ export async function submitWeeklyCoachBrief(
     sleep: number;
     stress: number;
     hunger: number;
+    effort?: number;
+    recovery?: number;
+    satisfaction?: number;
+    difficulties?: string;
+    questionForCoach?: string;
     notes?: string;
   },
 ) {
@@ -2345,12 +3394,18 @@ export async function submitWeeklyCoachBrief(
         sleep: input.sleep,
         stress: input.stress,
         hunger: input.hunger,
+        effort: input.effort,
+        recovery: input.recovery,
+        satisfaction: input.satisfaction,
+        difficulties: (input.difficulties ?? '').trim(),
+        questionForCoach: (input.questionForCoach ?? '').trim(),
         notes: input.notes ?? '',
       },
     });
   } catch (error) {
     throw asApi(error);
   }
+  // Idempotent per member+week — updates the same brief/review rather than creating duplicates.
   const saved = await db.query<{ id: string }>(
     `INSERT INTO coach_weekly_briefs (user_id, week_of, survey, packet, status)
      VALUES ($1, $2, $3::jsonb, $4::jsonb, 'queued_for_human')
@@ -2367,12 +3422,15 @@ export async function submitWeeklyCoachBrief(
     conversationId,
     notice,
   ]);
+  // Bridge into the human-ops weekly_review_queue (authorized packet + status machine).
+  const queued = await prepareWeeklyReviewForMember(db, actor, actor.userId, weekStart);
   return {
     id: String(saved.rows[0]?.id),
     persisted: true,
     escalateToHuman: true as const,
     status: 'queued_for_human' as const,
     packet,
+    review: queued.review,
   };
 }
 

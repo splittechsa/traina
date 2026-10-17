@@ -388,6 +388,14 @@ export const weeklyCoachSurveySchema = z
     sleep: z.number().int().min(1).max(5),
     stress: z.number().int().min(1).max(5),
     hunger: z.number().int().min(1).max(5),
+    /** Perceived training effort this week. */
+    effort: z.number().int().min(1).max(5).optional(),
+    /** Recovery quality (distinct from nightly sleep score). */
+    recovery: z.number().int().min(1).max(5).optional(),
+    /** How satisfied the member is with the week. */
+    satisfaction: z.number().int().min(1).max(5).optional(),
+    difficulties: z.string().max(500).optional().default(''),
+    questionForCoach: z.string().max(500).optional().default(''),
     notes: z.string().max(500).optional().default(''),
   })
   .strict();
@@ -424,6 +432,30 @@ export const coachingRuleSchema = z
   .strict();
 
 export const ruleDecisionSchema = z.object({ decision: z.enum(['approved', 'rejected']) }).strict();
+
+export const coachAssignmentSchema = z
+  .object({
+    coachUserId: z.string().uuid(),
+    memberUserId: z.string().uuid(),
+    reason: z.string().max(500).optional().default(''),
+  })
+  .strict();
+
+export const coachFeedbackSchema = z.object({ body: z.string().trim().min(1).max(8000) }).strict();
+
+export const coachRecommendationDecisionSchema = z
+  .object({
+    decision: z.enum(['APPROVED', 'REJECTED']),
+    reason: z.string().max(500).optional().default(''),
+  })
+  .strict();
+
+export const weeklyReviewPrepareSchema = z
+  .object({
+    memberUserId: z.string().uuid(),
+    weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .strict();
 
 export const simulateSchema = z
   .object({
