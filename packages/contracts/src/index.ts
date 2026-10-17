@@ -425,6 +425,30 @@ export const coachingRuleSchema = z
 
 export const ruleDecisionSchema = z.object({ decision: z.enum(['approved', 'rejected']) }).strict();
 
+export const coachAssignmentSchema = z
+  .object({
+    coachUserId: z.string().uuid(),
+    memberUserId: z.string().uuid(),
+    reason: z.string().max(500).optional().default(''),
+  })
+  .strict();
+
+export const coachFeedbackSchema = z.object({ body: z.string().trim().min(1).max(8000) }).strict();
+
+export const coachRecommendationDecisionSchema = z
+  .object({
+    decision: z.enum(['APPROVED', 'REJECTED']),
+    reason: z.string().max(500).optional().default(''),
+  })
+  .strict();
+
+export const weeklyReviewPrepareSchema = z
+  .object({
+    memberUserId: z.string().uuid(),
+    weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .strict();
+
 export const simulateSchema = z
   .object({
     asOf: z.string().min(10),

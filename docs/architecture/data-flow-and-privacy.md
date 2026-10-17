@@ -18,7 +18,7 @@ Mobile → HTTPS /v1 → Fastify → PostgreSQL
 
 | Capability | Status |
 | --- | --- |
-| Purpose-tagged consent ledger | Missing |
+| Purpose-tagged consent ledger | Partial — `member_coach_share_consents` for human coaching; full ledger + legal bases still **P0-PRIV blocked** |
 | Role-based coach access (assigned members only) | Missing |
 | Retention jobs + deletion workflow | Partial / undocumented ops |
 | Cross-border transfer assessment | Docs stub (`0009`, `0015`) |

@@ -93,6 +93,22 @@ import {
   listMemberRecommendations,
   advanceMemberRecommendation,
   assignCoachToMember,
+  revokeCoachAssignment,
+  listCoachAssignmentsForActor,
+  grantCoachShareConsent,
+  withdrawCoachShareConsent,
+  coachShareConsentFor,
+  prepareWeeklyReviewForMember,
+  listWeeklyReviewsForCoach,
+  claimWeeklyReview,
+  escalateWeeklyReview,
+  readWeeklyReviewPacket,
+  sendCoachFeedback,
+  listMemberCoachFeedback,
+  addCoachNote,
+  listCoachNotes,
+  coachWorkloadMetrics,
+  coachDecideRecommendation,
   nutritionDisciplineFor,
   ensureDailyYazanCheckin,
   latestWeeklyCoachBrief,
@@ -709,13 +725,48 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   });
 
   app.post('/v1/coach/assignments', async (request) => {
-    const body = request.body as { coachUserId?: string; memberUserId?: string };
+    const body = request.body as { coachUserId?: string; memberUserId?: string; reason?: string };
     if (typeof body?.coachUserId !== 'string' || typeof body?.memberUserId !== 'string') {
       throw new ApiError(400, 'INVALID_ASSIGNMENT', 'coachUserId and memberUserId are required');
     }
-    // Temporary admin-style bootstrap for pilots; production must gate by role + org.
-    return assignCoachToMember(dbOf(options), body.coachUserId, body.memberUserId);
+    return assignCoachToMember(
+      dbOf(options),
+      actorOf(request.claims),
+      body.coachUserId,
+      body.memberUserId,
+      typeof body.reason === 'string' ? body.reason : '',
+    );
   });
+
+  app.delete('/v1/coach/assignments', async (request) => {
+    const body = request.body as { coachUserId?: string; memberUserId?: string; reason?: string };
+    if (typeof body?.coachUserId !== 'string' || typeof body?.memberUserId !== 'string') {
+      throw new ApiError(400, 'INVALID_ASSIGNMENT', 'coachUserId and memberUserId are required');
+    }
+    return revokeCoachAssignment(
+      dbOf(options),
+      actorOf(request.claims),
+      body.coachUserId,
+      body.memberUserId,
+      typeof body.reason === 'string' ? body.reason : '',
+    );
+  });
+
+  app.get('/v1/coach/assignments', async (request) => (
+    listCoachAssignmentsForActor(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.get('/v1/member/coach-share-consent', async (request) => (
+    coachShareConsentFor(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.post('/v1/member/coach-share-consent', async (request) => (
+    grantCoachShareConsent(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.delete('/v1/member/coach-share-consent', async (request) => (
+    withdrawCoachShareConsent(dbOf(options), actorOf(request.claims))
+  ));
 
   app.get('/v1/coach/members/:memberUserId/state', async (request) => {
     const params = request.params as { memberUserId: string };
@@ -723,6 +774,91 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
       subjectUserId: params.memberUserId,
       timeZone: 'Asia/Riyadh',
     });
+  });
+
+  app.get('/v1/coach/workspace/inbox', async (request) => (
+    listWeeklyReviewsForCoach(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.get('/v1/coach/workspace/metrics', async (request) => (
+    coachWorkloadMetrics(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.post('/v1/coach/reviews/prepare', async (request) => {
+    const body = request.body as { memberUserId?: string; weekOf?: string };
+    if (typeof body?.memberUserId !== 'string' || typeof body?.weekOf !== 'string') {
+      throw new ApiError(400, 'INVALID_REVIEW', 'memberUserId and weekOf are required');
+    }
+    return prepareWeeklyReviewForMember(
+      dbOf(options),
+      actorOf(request.claims),
+      body.memberUserId,
+      body.weekOf,
+    );
+  });
+
+  app.get('/v1/coach/reviews/:id/packet', async (request) => {
+    const params = request.params as { id: string };
+    return readWeeklyReviewPacket(dbOf(options), actorOf(request.claims), params.id);
+  });
+
+  app.post('/v1/coach/reviews/:id/claim', async (request) => {
+    const params = request.params as { id: string };
+    return claimWeeklyReview(dbOf(options), actorOf(request.claims), params.id);
+  });
+
+  app.post('/v1/coach/reviews/:id/feedback', async (request) => {
+    const body = request.body as { body?: string };
+    if (typeof body?.body !== 'string') {
+      throw new ApiError(400, 'INVALID_FEEDBACK', 'body is required');
+    }
+    const params = request.params as { id: string };
+    return sendCoachFeedback(dbOf(options), actorOf(request.claims), params.id, body.body);
+  });
+
+  app.post('/v1/coach/reviews/:id/escalate', async (request) => {
+    const body = request.body as { note?: string };
+    const params = request.params as { id: string };
+    return escalateWeeklyReview(
+      dbOf(options),
+      actorOf(request.claims),
+      params.id,
+      typeof body?.note === 'string' ? body.note : '',
+    );
+  });
+
+  app.get('/v1/member/coach-feedback', async (request) => (
+    listMemberCoachFeedback(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.get('/v1/coach/members/:memberUserId/notes', async (request) => {
+    const params = request.params as { memberUserId: string };
+    return listCoachNotes(dbOf(options), actorOf(request.claims), params.memberUserId);
+  });
+
+  app.post('/v1/coach/members/:memberUserId/notes', async (request) => {
+    const body = request.body as { body?: string };
+    if (typeof body?.body !== 'string') {
+      throw new ApiError(400, 'INVALID_NOTE', 'body is required');
+    }
+    const params = request.params as { memberUserId: string };
+    return addCoachNote(dbOf(options), actorOf(request.claims), params.memberUserId, body.body);
+  });
+
+  app.post('/v1/coach/members/:memberUserId/recommendations/:id/decide', async (request) => {
+    const body = request.body as { decision?: string; reason?: string };
+    if (body?.decision !== 'APPROVED' && body?.decision !== 'REJECTED') {
+      throw new ApiError(400, 'INVALID_DECISION', 'decision must be APPROVED or REJECTED');
+    }
+    const params = request.params as { memberUserId: string; id: string };
+    return coachDecideRecommendation(
+      dbOf(options),
+      actorOf(request.claims),
+      params.memberUserId,
+      params.id,
+      body.decision,
+      typeof body.reason === 'string' ? body.reason : '',
+    );
   });
 
   app.get('/v1/gyms/:organizationId', async (request) => {
