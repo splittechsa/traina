@@ -281,6 +281,67 @@ describe('P2 human coaching ops (security + workflow)', () => {
     expect(missing.json().error.code).toBe('FORBIDDEN');
   }, 120_000);
 
+  it('lets Yazan mock retrieve human feedback without inventing comments', async () => {
+    const memberToken = await tokenFor('yazan-feedback@sahhti.test');
+    const coachToken = await tokenFor('yazan-feedback-coach@sahhti.test');
+    const adminToken = await tokenFor('yazan-feedback-admin@sahhti.test');
+    const memberId = await userIdFor(memberToken);
+    const coachId = await userIdFor(coachToken);
+    const adminId = await userIdFor(adminToken);
+    await database.query(`INSERT INTO role_assignments (user_id, role) VALUES ($1, 'coach_reviewer')`, [coachId]);
+    await database.query(`INSERT INTO role_assignments (user_id, role) VALUES ($1, 'admin')`, [adminId]);
+    await app.inject({
+      method: 'POST',
+      url: '/v1/member/coach-share-consent',
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/v1/coach/assignments',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { coachUserId: coachId, memberUserId: memberId },
+    });
+    const empty = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/messages',
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { message: 'any human feedback for me?' },
+    });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json().tool).toBe('getHumanCoachFeedback');
+    expect(String(empty.json().text)).toMatch(/No human coach feedback/i);
+
+    const weekOf = '2026-08-03';
+    const brief = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/weekly-brief',
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { weekOf, energy: 3, sleep: 3, stress: 2, hunger: 3 },
+    });
+    const reviewId = brief.json().review.id as string;
+    await app.inject({
+      method: 'POST',
+      url: `/v1/coach/reviews/${reviewId}/claim`,
+      headers: { authorization: `Bearer ${coachToken}` },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/v1/coach/reviews/${reviewId}/feedback`,
+      headers: { authorization: `Bearer ${coachToken}` },
+      payload: { body: 'Recover well before the next heavy session.' },
+    });
+    const withFb = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/messages',
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { message: 'show human feedback' },
+    });
+    expect(withFb.statusCode).toBe(200);
+    expect(withFb.json().tool).toBe('getHumanCoachFeedback');
+    expect(String(withFb.json().text)).toContain('Recover well');
+    expect(String(withFb.json().text)).toContain('human_coach');
+  }, 120_000);
+
   it('keeps weekly submit idempotent and serializes concurrent claims', async () => {
     const memberToken = await tokenFor('member-concurrent@sahhti.test');
     const coachA = await tokenFor('coach-a-concurrent@sahhti.test');

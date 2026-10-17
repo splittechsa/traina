@@ -92,6 +92,7 @@ import {
   generateMemberRecommendations,
   listMemberRecommendations,
   advanceMemberRecommendation,
+  previewTrainingRecommendationApply,
   assignCoachToMember,
   revokeCoachAssignment,
   listCoachAssignmentsForActor,
@@ -105,6 +106,8 @@ import {
   readWeeklyReviewPacket,
   sendCoachFeedback,
   listMemberCoachFeedback,
+  listMemberNotifications,
+  markMemberNotificationRead,
   addCoachNote,
   listCoachNotes,
   coachWorkloadMetrics,
@@ -714,11 +717,28 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     listMemberRecommendations(dbOf(options), actorOf(request.claims))
   ));
 
+  app.get('/v1/member/recommendations/:id/preview-apply', async (request) => {
+    const params = request.params as { id: string };
+    return previewTrainingRecommendationApply(dbOf(options), actorOf(request.claims), params.id);
+  });
+
   app.post('/v1/member/recommendations/:id/advance', async (request, reply) => {
     const body = request.body as { status?: string };
-    const allowed = ['APPROVED', 'REJECTED', 'APPLIED', 'MEMBER_CONFIRMATION_REQUIRED'] as const;
+    const allowed = [
+      'APPROVED',
+      'REJECTED',
+      'APPLIED',
+      'MEMBER_CONFIRMATION_REQUIRED',
+      'MONITORED',
+      'CANCELED',
+      'REVERTED',
+    ] as const;
     if (body?.status === undefined || !(allowed as readonly string[]).includes(body.status)) {
-      throw new ApiError(400, 'INVALID_STATUS', 'status must be APPROVED, REJECTED, APPLIED, or MEMBER_CONFIRMATION_REQUIRED');
+      throw new ApiError(
+        400,
+        'INVALID_STATUS',
+        'status must be APPROVED, REJECTED, APPLIED, MEMBER_CONFIRMATION_REQUIRED, MONITORED, CANCELED, or REVERTED',
+      );
     }
     const params = request.params as { id: string };
     return advanceMemberRecommendation(
@@ -875,6 +895,15 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   app.get('/v1/member/coach-feedback', async (request) => (
     listMemberCoachFeedback(dbOf(options), actorOf(request.claims))
   ));
+
+  app.get('/v1/member/notifications', async (request) => (
+    listMemberNotifications(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.post('/v1/member/notifications/:id/read', async (request) => {
+    const params = request.params as { id: string };
+    return markMemberNotificationRead(dbOf(options), actorOf(request.claims), params.id);
+  });
 
   app.get('/v1/coach/members/:memberUserId/notes', async (request) => {
     const params = request.params as { memberUserId: string };
