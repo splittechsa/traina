@@ -16,3 +16,4 @@ export * from './capabilities.js';
 export * from './daily.js';
 export * from './meal-plan.js';
 export * from './yazan-coach.js';
+export * from './member-state.js';

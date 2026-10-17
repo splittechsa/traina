@@ -16,7 +16,11 @@ export function goalForEstimate(goals: readonly string[]): Goal {
   return 'maintain';
 }
 
-/** Build the local estimate from onboarding facts — no second data-entry form. */
+/**
+ * Local free-tier estimate from onboarding facts — soft % goals only.
+ * Must NOT use `training` absolute deficits (P0-SAFE-01); those require an approved
+ * ENERGY_POLICY and a gated paid apply path on the server.
+ */
 export function targetsFromOnboarding(input: {
   sex: Sex;
   ageYears: number;
@@ -24,9 +28,12 @@ export function targetsFromOnboarding(input: {
   weightKg: number;
   activityLevel: string;
   goals: readonly string[];
+  /** Retained for call-site compatibility; ignored until ENERGY_POLICY is approved. */
   nutritionPace?: NutritionPace | null;
   horizonWeeks?: number | null;
 }): MacroTargets {
+  void input.nutritionPace;
+  void input.horizonWeeks;
   return estimateTargets(
     {
       sex: input.sex,
@@ -37,10 +44,6 @@ export function targetsFromOnboarding(input: {
       goal: goalForEstimate(input.goals),
     },
     new Date(),
-    'training',
-    {
-      pace: input.nutritionPace ?? 'steady',
-      horizonWeeks: input.horizonWeeks ?? null,
-    },
+    'free',
   );
 }

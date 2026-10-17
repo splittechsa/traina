@@ -75,6 +75,8 @@ describe('adaptive AI meal plan (Traina Training)', () => {
     expect(step.alert).toBe(true);
     expect(step.status).toBe('propose');
     expect(step.energyDeltaKcal).toBeGreaterThan(0);
+    expect(step.mayAutoApply).toBe(false);
+    expect(step.policyApprovedForPaidCoaching).toBe(false);
   });
 
   it('proposes a deeper weekly cut when weight stalls with decent meal+water adherence', () => {

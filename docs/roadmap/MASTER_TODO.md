@@ -51,16 +51,16 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 - **Priority:** P0 · **Owner:** Eng · **State:** REVIEW  
 - **Scope:** Document dirty tree vs `origin/master`; list migrations 0001–0020; confirm build/test commands.  
 - **Acceptance:** This file + gap matrix accurate; domain tests green; recoverable remote baseline.  
-- **Evidence:** `origin/master` @ `24327cf`; gap matrix above; dirty tree still local.  
-- **Privacy/safety:** None beyond honesty.
+- **Evidence:** Backup branch `backup/dirty-tree-2026-10-17` @ `0a45fdd`; inventory `DIRTY_TREE_INVENTORY.md`; `origin/master` @ `84f5639`.  
+- **Privacy/safety:** None beyond honesty. **Remaining:** Logical slice PRs from backup → master with per-slice tests.
 
 ### P0-SAFE-01 — Quarantine universal cut deficits
 - **Priority:** P0 · **Owner:** Domain + Nutrition SME · **State:** REVIEW  
-- **Files:** `packages/domain/src/meal-plan.ts`, `apps/mobile/src/nutrition/targets.ts`, `services/api/src/member/store.ts`  
-- **Scope:** Mark `CUT_DEFICIT_BY_PACE` as unapproved for paid coaching; block apply paths; safety tests.  
+- **Files:** `meal-plan.ts`, `targets.ts`, `fromProfile.ts`, `member/store.ts`, `energy-policy-gate.test.ts`  
+- **Scope:** Mark `CUT_DEFICIT_BY_PACE` as unapproved; block apply paths; bypass-matrix tests; free tracking preserved.  
 - **Acceptance:** Paid path cannot apply sprint deficit without `policyApproved` gate; docs reference SME review.  
-- **Tests:** Domain unit + mobile targets + API integration expect `ENERGY_POLICY_UNAPPROVED`.  
-- **Safety:** HIGH · **Remaining for VERIFIED:** SME sign-off; wire any other silent apply paths.
+- **Tests:** Domain gate suite + mobile free onboarding estimate + API integration `ENERGY_POLICY_UNAPPROVED`.  
+- **Safety:** HIGH · **Remaining for VERIFIED:** SME sign-off only (apply paths audited; proposals `mayAutoApply: false`).
 
 ### P0-DATA-01 — Personal/sensitive data inventory
 - **Priority:** P0 · **Owner:** Eng + Privacy · **State:** REVIEW  
@@ -94,7 +94,7 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 | ID | Title | State | Notes |
 | --- | --- | --- | --- |
-| P1-STATE-01 | MemberState engine from validated observations | BACKLOG | Confidence + data-quality gates |
+| P1-STATE-01 | MemberState engine from validated observations | IN_PROGRESS | Domain foundation + tests; API wire next |
 | P1-EVT-01 | Consistent MemberEvent model / idempotent writes | BACKLOG | Align with existing tables first |
 | P1-POL-01 | Versioned evidence/policy registry | BACKLOG | Replaces ad-hoc constants |
 | P1-REC-01 | Recommendation state machine + versioned apply | BACKLOG | Supersedes silent edits; maps #21 |
