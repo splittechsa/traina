@@ -36,21 +36,24 @@ async function resolveFoodId(food: LibraryFood): Promise<{ id: string; linkKey: 
   return { id, linkKey };
 }
 
-async function postPortion(foodItemId: string, grams: number, day: string) {
-  await apiRequest('/v1/nutrition/portions', { method: 'POST', body: { foodItemId, quantityGrams: grams, loggedOn: day } });
+async function postPortion(foodItemId: string, grams: number, day: string, mealSlot?: string) {
+  await apiRequest('/v1/nutrition/portions', {
+    method: 'POST',
+    body: { foodItemId, quantityGrams: grams, loggedOn: day, ...(mealSlot === undefined ? {} : { mealSlot }) },
+  });
 }
 
-export async function logLibraryFood(food: LibraryFood, grams: number, day: string): Promise<void> {
+export async function logLibraryFood(food: LibraryFood, grams: number, day: string, mealSlot?: string): Promise<void> {
   const { id, linkKey } = await resolveFoodId(food);
   try {
-    await postPortion(id, grams, day);
+    await postPortion(id, grams, day, mealSlot);
   } catch (error) {
     // A remembered link can go stale (account reset, food deleted) — recreate once.
     if (linkKey !== null && error instanceof ApiClientError && error.code === 'FOOD_NOT_FOUND') {
       await removeKey(linkKey);
       const fresh = await createMemberFood(food);
       await writeJson(linkKey, fresh);
-      await postPortion(fresh, grams, day);
+      await postPortion(fresh, grams, day, mealSlot);
     } else {
       throw error;
     }

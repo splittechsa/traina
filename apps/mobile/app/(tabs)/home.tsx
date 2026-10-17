@@ -1,6 +1,7 @@
 import { Pressable, Text, View, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { HomeDashboard } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
@@ -16,6 +17,7 @@ import { Button, Screen, ScreenBody } from '../../src/ui/Screen';
 import {
   ActivityRing,
   AppHeader,
+  BottomSheet,
   EmptyState,
   ErrorState,
   LoadingSkeleton,
@@ -25,6 +27,10 @@ import {
   SurfaceCard,
 } from '../../src/ui/kit';
 import { StepsCard } from '../../src/activity/StepsCard';
+import { DailyGlance } from '../../src/daily/DailyGlance';
+import { CoachingDesk } from '../../src/daily/CoachingDesk';
+import { DEFAULT_HOME_SHORTCUTS, HOME_SHORTCUTS, sanitizeHomeShortcuts, type HomeShortcutId } from '../../src/daily/homeShortcuts';
+import { LOCAL_KEYS, useLocalValue } from '../../src/storage/local';
 import { HeroPanel } from '../../src/ui/visual';
 
 type HomeResponse =
@@ -38,6 +44,9 @@ export default function HomeScreen() {
   const { locale } = useLocale();
   const { tokens } = useSession();
   const theme = useTheme();
+  const [customize, setCustomize] = useState(false);
+  const shortcuts = useLocalValue<HomeShortcutId[]>(LOCAL_KEYS.homeShortcuts, DEFAULT_HOME_SHORTCUTS);
+  const visibleIds = sanitizeHomeShortcuts(shortcuts.value);
   const home = useQuery({ queryKey: ['home', locale], queryFn: () => apiRequest<HomeResponse>('/v1/home') });
   const me = useQuery({
     queryKey: ['me', tokens?.accessToken],
@@ -97,12 +106,7 @@ export default function HomeScreen() {
   const latest = weights.length === 0 ? null : weights[weights.length - 1];
   const goal = dashboard.goal.status === 'ready' ? label(locale, 'goal', dashboard.goal.data) : null;
   const today = dashboard.todayWorkout.status === 'ready' ? dashboard.todayWorkout.data : null;
-  const actions = [
-    [text(locale, 'askCoach'), { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }, () => router.push('/(tabs)/coach')],
-    [text(locale, 'foodManual'), { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' }, () => router.push('/food-log')],
-    [text(locale, 'schedule'), { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }, () => router.push('/(tabs)/training')],
-    [text(locale, 'logWeight'), { ios: 'scalemass.fill', android: 'monitor_weight', web: 'monitor_weight' }, () => router.push('/weight')],
-  ] as const;
+  const actions = HOME_SHORTCUTS.filter((item) => visibleIds.includes(item.id));
 
   const logged = nutrition !== null && nutrition.entryCount > 0;
   const calories = logged && nutrition !== null ? nutrition.consumed.energyKcal : null;
@@ -145,7 +149,7 @@ export default function HomeScreen() {
             </Text>
             <View style={[styles.heroButton, { backgroundColor: theme.heroAccent }]}>
               <Text style={[styles.heroButtonText, { color: theme.goldInk, fontFamily: fontFamily.bold }]}>
-                {today === null ? text(locale, 'createPlan') : text(locale, 'start')}
+                {text(locale, 'start')}
               </Text>
             </View>
             </View>
@@ -166,15 +170,35 @@ export default function HomeScreen() {
         </Pressable>
 
         <View style={styles.quickGrid}>
-          {actions.map(([actionLabel, icon, onPress]) => (
-            <Pressable key={actionLabel} accessibilityRole="button" onPress={onPress} style={[styles.quickItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          {actions.map((action) => (
+            <Pressable key={action.id} accessibilityRole="button" onPress={action.href} style={[styles.quickItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={[styles.quickIcon, { backgroundColor: theme.surfaceMuted }]}>
-                <SymbolView name={icon} size={20} tintColor={theme.accent} />
+                <SymbolView name={action.icon} size={20} tintColor={theme.accent} />
               </View>
-              <Text numberOfLines={2} style={[styles.quickLabel, { color: theme.text, fontFamily: fontFamily.semibold }]}>{actionLabel}</Text>
+              <Text numberOfLines={2} style={[styles.quickLabel, { color: theme.text, fontFamily: fontFamily.semibold }]}>{text(locale, action.label)}</Text>
             </Pressable>
           ))}
         </View>
+        <Pressable accessibilityRole="button" onPress={() => setCustomize(true)} style={{ marginBottom: spacing[3] }}>
+          <Text style={{ color: theme.accent, fontFamily: fontFamily.bold }}>{text(locale, 'customizeHome')}</Text>
+        </Pressable>
+
+        <CoachingDesk
+          mealCount={nutrition?.entryCount ?? 0}
+          sessionsCompleted={weekAdherence?.completed ?? 0}
+          sessionsPlanned={weekAdherence?.planned ?? 0}
+          todaySessionStatus={
+            today === null
+              ? 'none'
+              : today.status === 'in_progress' || today.status === 'paused'
+                ? 'in_progress'
+                : today.status === 'completed'
+                  ? 'completed'
+                  : 'scheduled'
+          }
+        />
+
+        <DailyGlance calories={calories} />
 
         <StepsCard />
 
@@ -201,6 +225,29 @@ export default function HomeScreen() {
         ) : null}
         <View style={{ height: spacing[4] }} />
       </ScreenBody>
+      {customize ? (
+        <BottomSheet visible onClose={() => setCustomize(false)}>
+          <AppHeader title={text(locale, 'customizeHome')} subtitle={text(locale, 'quickActions')} />
+          {HOME_SHORTCUTS.map((action) => {
+            const on = visibleIds.includes(action.id);
+            return (
+              <Pressable
+                key={action.id}
+                accessibilityRole="button"
+                onPress={() => {
+                  const next = on ? visibleIds.filter((id) => id !== action.id) : [...visibleIds, action.id];
+                  void shortcuts.save(sanitizeHomeShortcuts(next.length === 0 ? DEFAULT_HOME_SHORTCUTS : next));
+                }}
+                style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }}
+              >
+                <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{text(locale, action.label)}</Text>
+                <Text style={{ color: on ? theme.accent : theme.textMuted, fontFamily: fontFamily.bold }}>{on ? '✓' : '+'}</Text>
+              </Pressable>
+            );
+          })}
+          <Button label={text(locale, 'save')} onPress={() => setCustomize(false)} />
+        </BottomSheet>
+      ) : null}
     </Screen>
   );
 }

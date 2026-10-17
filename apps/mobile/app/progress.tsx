@@ -5,7 +5,9 @@ import { fontFamily } from '../src/theme/tokens';
 import { useTheme } from '../src/theme/ThemeProvider';
 import { router } from 'expo-router';
 import { ApiClientError, apiRequest } from '../src/api/client';
-import { formatCount, formatKg, formatRiyadhDate, riyadhToday } from '../src/format';
+import { compareSessionLoad } from '@sahhti/domain';
+import { formatCount, formatDuration, formatKg, formatRiyadhDate, riyadhToday } from '../src/format';
+import { useSteps } from '../src/activity/useSteps';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text } from '../src/i18n/copy';
 import { Button, Screen, ScreenBody } from '../src/ui/Screen';
@@ -18,6 +20,7 @@ type Progress = {
   completedWorkouts: number;
   completedSessionDates: string[];
   exerciseSets: { exercise_id: string; date: string; load_grams: number; reps: number }[];
+  sessionLoads?: { completed_at: string; discipline: string; duration_seconds: number }[];
 };
 type Exercise = { id: string; name_ar: string; name_en: string };
 
@@ -56,6 +59,7 @@ export default function ProgressScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
   const isAr = locale === 'ar';
+  const { state: stepsState } = useSteps(7);
   const progress = useQuery({ queryKey: ['progress'], queryFn: () => apiRequest<Progress>('/v1/progress') });
   const exercises = useQuery({
     queryKey: ['exercises'],
@@ -85,6 +89,7 @@ export default function ProgressScreen() {
   const safePersonalRecords = progress.data.personalRecords ?? [];
   const safeCompletedSessionDates = progress.data.completedSessionDates ?? [];
   const safeExerciseSets = progress.data.exerciseSets ?? [];
+  const safeSessionLoads = progress.data.sessionLoads ?? [];
 
   if (safeWeights.length === 0 && safePersonalRecords.length === 0 && progress.data.completedWorkouts === 0) {
     return (
@@ -113,6 +118,7 @@ export default function ProgressScreen() {
     personalRecords: safePersonalRecords,
     completedSessionDates: safeCompletedSessionDates,
     exerciseSets: safeExerciseSets,
+    sessionLoads: safeSessionLoads,
   };
   const library = exercises.data?.exercises ?? [];
   const nameFor = (exerciseId: string): string => {
@@ -153,6 +159,10 @@ export default function ProgressScreen() {
     else break;
   }
   const weekBars = anchors.map((start, index) => ({ label: shortLabel(start, locale), value: weekCounts[index] ?? 0 }));
+  const comparison = compareSessionLoad(
+    data.sessionLoads ?? [],
+    stepsState.status === 'ready' ? stepsState.today : 0,
+  );
 
   // Exercise progression: group the real per-session top sets by exercise, keep the exercises
   // with the most logged sessions, most-trained first.
@@ -191,6 +201,22 @@ export default function ProgressScreen() {
             <View style={{ flex: 1, borderStartWidth: 1, borderStartColor: theme.border, paddingStart: 14 }}>
               <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12 }}>{isAr ? 'أرقام شخصية' : 'Records'}</Text>
               <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 30, marginTop: 2 }}>{formatCount(data.personalRecords.length, locale)}</Text>
+            </View>
+          </View>
+
+          <View style={{ ...card, marginBottom: 14 }}>
+            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 16, marginBottom: 12 }}>{text(locale, 'vsSteps')}</Text>
+            <View style={{ flexDirection: 'row' }}>
+              {[
+                [text(locale, 'strengthTime'), formatDuration(comparison.strengthSeconds)],
+                [text(locale, 'cardioTime'), formatDuration(comparison.cardioSeconds)],
+                [text(locale, 'stepsToday'), formatCount(comparison.steps, locale)],
+              ].map(([caption, value]) => (
+                <View key={String(caption)} style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 22 }}>{value}</Text>
+                  <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 11, marginTop: 3 }}>{caption}</Text>
+                </View>
+              ))}
             </View>
           </View>
 

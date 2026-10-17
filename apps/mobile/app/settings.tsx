@@ -11,16 +11,13 @@ export default function SettingsScreen() {
   const { locale, setLocale, restartRequired } = useLocale();
   const theme = useTheme();
 
-  // Switching ar<->en flips I18nManager's RTL flag, but React Native only applies that to
-  // the *next* native layout pass (see index.ts) — it cannot re-mirror an already-mounted
-  // app. There is no way around a real restart here; surfacing it honestly beats leaving
-  // the UI half-mirrored with no explanation.
   useEffect(() => {
     if (!restartRequired) return;
     Alert.alert(text(locale, 'restartRequiredTitle'), text(locale, 'restartRequiredBody'), [
       { text: text(locale, 'ok') },
     ]);
   }, [restartRequired, locale]);
+
   return (
     <Screen title={text(locale, 'settings')}>
       <ScreenBody>
@@ -50,14 +47,14 @@ export default function SettingsScreen() {
             onPress={() => router.push('/account')}
           />
           <SettingsRow
+            icon={{ ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }}
+            title={text(locale, 'coachTitle')}
+            onPress={() => router.push('/(tabs)/coach')}
+          />
+          <SettingsRow
             icon={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
             title={text(locale, 'progress')}
             onPress={() => router.push('/(tabs)/progress')}
-          />
-          <SettingsRow
-            icon={{ ios: 'person.3.fill', android: 'group', web: 'group' }}
-            title={text(locale, 'community')}
-            onPress={() => router.push('/(tabs)/community')}
             last
           />
         </SettingsGroup>
@@ -70,7 +67,7 @@ export default function SettingsScreen() {
           <SettingsRow
             icon={{ ios: 'chart.pie.fill', android: 'pie_chart', web: 'pie_chart' }}
             tint="#C76A3A"
-            title={locale === 'ar' ? 'حاسبة السعرات والماكروز' : 'Calorie & macro calculator'}
+            title={locale === 'ar' ? 'أهدافك اليومية' : 'Daily targets'}
             onPress={() => router.push('/macros')}
           />
           <SettingsRow
@@ -79,37 +76,14 @@ export default function SettingsScreen() {
             onPress={() => router.push('/activity')}
           />
           <SettingsRow
-            icon={{ ios: 'dumbbell.fill', android: 'fitness_center', web: 'fitness_center' }}
-            title={text(locale, 'exercises')}
-            onPress={() => router.push('/exercises')}
-            last
-          />
-        </SettingsGroup>
-        <SettingsGroup>
-          <SettingsRow
-            icon={{ ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' }}
-            title={text(locale, 'membership')}
-            onPress={() => router.push('/membership')}
-          />
-          <SettingsRow
-            icon={{ ios: 'building.2.fill', android: 'apartment', web: 'apartment' }}
-            title={text(locale, 'gyms')}
-            onPress={() => router.push('/gyms')}
-          />
-          <SettingsRow
-            icon={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
-            title={text(locale, 'notifications')}
-            onPress={() => router.push('/notifications')}
-          />
-          <SettingsRow
             icon={{ ios: 'pills.fill', android: 'medication', web: 'medication' }}
             title={text(locale, 'supplements')}
             onPress={() => router.push('/supplements')}
           />
           <SettingsRow
-            icon={{ ios: 'questionmark.circle.fill', android: 'help', web: 'help' }}
-            title={text(locale, 'help')}
-            onPress={() => router.push('/help')}
+            icon={{ ios: 'building.2.fill', android: 'apartment', web: 'apartment' }}
+            title={text(locale, 'gyms')}
+            onPress={() => router.push('/gyms')}
             last
           />
         </SettingsGroup>

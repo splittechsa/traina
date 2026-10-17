@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { parseScaledInteger } from '@sahhti/domain';
+import { MEAL_SLOTS, mealSlotEnergyKcal, parseScaledInteger, previousCalendarDay } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { messageFor } from '../../src/api/errors';
 import { formatCount, formatRiyadhWeekday, riyadhToday } from '../../src/format';
@@ -19,7 +19,7 @@ import { LOCAL_KEYS, useLocalValue } from '../../src/storage/local';
 import type { MacroTargets } from '../../src/nutrition/targets';
 import { stableRecordKey } from '../../src/lists/keys';
 
-type Entry = { id: string; energyKcal: number; proteinMg: number; carbohydrateMg: number; fatMg: number; source: string; label?: string | null };
+type Entry = { id: string; energyKcal: number; proteinMg: number; carbohydrateMg: number; fatMg: number; source: string; label?: string | null; mealSlot?: string | null };
 type Diary = {
   target: null;
   entries?: Entry[];
@@ -65,6 +65,8 @@ export default function NutritionScreen() {
   const [error, setError] = useState('');
   const [nameAr, setNameAr] = useState('');
   const [nameEn, setNameEn] = useState('');
+  const [manualSlot, setManualSlot] = useState<string | undefined>(undefined);
+  const [copying, setCopying] = useState(false);
   const targets = useLocalValue<MacroTargets | null>(LOCAL_KEYS.macroTargets, null);
   const diary = useQuery({
     queryKey: ['diary', day],
@@ -75,6 +77,12 @@ export default function NutritionScreen() {
   const week = useQuery({
     queryKey: ['diary-range', rangeStart, rangeEnd],
     queryFn: () => apiRequest<DiaryRange>(`/v1/nutrition/diary-range?from=${rangeStart}&to=${rangeEnd}`),
+  });
+  const previousDay = previousCalendarDay(day);
+  const previousDiary = useQuery({
+    queryKey: ['diary', previousDay],
+    enabled: diary.isSuccess && (diary.data?.entries?.length ?? -1) === 0,
+    queryFn: () => apiRequest<Diary>(`/v1/nutrition/diary?on=${previousDay}`),
   });
 
   function openFoodLog() {
@@ -112,6 +120,22 @@ export default function NutritionScreen() {
     }
   }
 
+  async function copyPrevious() {
+    setError('');
+    setCopying(true);
+    try {
+      await apiRequest('/v1/nutrition/diary/copy', { method: 'POST', body: { from: previousDay, to: day } });
+      await client.invalidateQueries({ queryKey: ['diary', day] });
+      await client.invalidateQueries({ queryKey: ['diary', previousDay] });
+      await client.invalidateQueries({ queryKey: ['diary-range'] });
+      await client.invalidateQueries({ queryKey: ['home'] });
+    } catch (caught) {
+      setError(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
+    } finally {
+      setCopying(false);
+    }
+  }
+
   async function save() {
     setError('');
     try {
@@ -124,6 +148,7 @@ export default function NutritionScreen() {
           carbohydrateMg: parseScaledInteger(carbs.trim().length === 0 ? '0' : carbs, 1000),
           fatMg: parseScaledInteger(fat.trim().length === 0 ? '0' : fat, 1000),
           source: 'manual',
+          ...(manualSlot === undefined ? {} : { mealSlot: manualSlot }),
         },
       });
       await client.invalidateQueries({ queryKey: ['diary', day] });
@@ -216,6 +241,13 @@ export default function NutritionScreen() {
             </Pressable>
           ) : null}
         </GlowCard>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push({ pathname: '/meal-plan', params: { day } })}
+          style={{ marginTop: spacing[3], marginBottom: spacing[1] }}
+        >
+          <Text style={{ color: theme.accent, fontFamily: fontFamily.bold }}>{text(locale, 'mealPlan')}</Text>
+        </Pressable>
         <View style={{ flexDirection: 'row', gap: spacing[2], marginTop: spacing[3] }}>
           <Pressable
             accessibilityRole="button"
@@ -236,7 +268,7 @@ export default function NutritionScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={text(locale, 'manualEntry')}
-            onPress={() => { setError(''); setManualOpen(true); }}
+            onPress={() => { setError(''); setManualSlot(undefined); setManualOpen(true); }}
             style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
           >
             <SymbolView name={{ ios: 'square.and.pencil', android: 'edit', web: 'edit' }} size={20} tintColor={theme.text} />
@@ -256,13 +288,65 @@ export default function NutritionScreen() {
           </View>
         ) : null}
         {consumed.imageEstimateEnergyKcal > 0 ? <Body>{text(locale, 'imageEstimate')}</Body> : null}
-        <SectionLabel>{locale === 'ar' ? 'سجل الوجبات' : 'Food diary'}</SectionLabel>
-        {entries.length === 0 ? (
-          <View style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 22, padding: 24, alignItems: 'center', gap: 10 }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 17 }}>{locale === 'ar' ? 'ابدأ بأول وجبة' : 'Start with your first meal'}</Text>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 13, textAlign: 'center', lineHeight: 22 }}>{locale === 'ar' ? 'سجل ما أكلته لتشوف استهلاكك الحقيقي وتتابع تغذيتك.' : 'Log what you eat to see your actual intake.'}</Text>
-          </View>
-        ) : entries.map((entry) => (
+        {entries.length === 0 && (previousDiary.data?.entries?.length ?? 0) > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void copyPrevious()}
+            disabled={copying}
+            style={({ pressed }) => ({
+              backgroundColor: theme.surface,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: 22,
+              padding: 16,
+              marginTop: 16,
+              opacity: pressed || copying ? 0.82 : 1,
+            })}
+          >
+            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 16 }}>{text(locale, 'copyYesterday')}</Text>
+            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12, marginTop: 4 }}>
+              {`${formatCount(previousDiary.data?.summary.consumed.energyKcal ?? 0, locale)} ${text(locale, 'kcal')} · ${text(locale, 'copyYesterdayHint')}`}
+            </Text>
+          </Pressable>
+        ) : null}
+        {error.length > 0 && !manualOpen && !customOpen ? <Body>{error}</Body> : null}
+        <SectionLabel>{locale === 'ar' ? 'الوجبات' : 'Meals'}</SectionLabel>
+        {MEAL_SLOTS.map((slot) => {
+          const slotEntries = entries.filter((entry) => entry.mealSlot === slot);
+          const slotKcal = mealSlotEnergyKcal(entries, slot);
+          return (
+            <View key={slot} style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 22, padding: 16, marginBottom: 10 }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/food-log', params: { day, slot } })}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 16 }}>{label(locale, 'meal', slot)}</Text>
+                  <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12, marginTop: 4 }}>
+                    {slotKcal === 0
+                      ? (ar ? 'أضف أكلاً مسجّلاً لهذه الوجبة' : 'Add logged food to this meal')
+                      : `${formatCount(slotKcal, locale)} ${text(locale, 'kcal')}`}
+                  </Text>
+                </View>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold, fontSize: 22, lineHeight: 24 }}>+</Text>
+                </View>
+              </Pressable>
+              {slotEntries.map((entry) => (
+                <ListRow
+                  key={stableRecordKey(entry.id)}
+                  title={entry.label ?? label(locale, 'foodSource', entry.source)}
+                  meta={`${formatCount(entry.energyKcal, locale)} ${text(locale, 'kcal')}`}
+                  trailing={text(locale, 'deleteEntry')}
+                  onPress={() => void removeEntry(entry.id)}
+                />
+              ))}
+            </View>
+          );
+        })}
+        {entries.some((entry) => entry.mealSlot == null) ? <SectionLabel>{locale === 'ar' ? 'بدون وجبة' : 'Unassigned'}</SectionLabel> : null}
+        {entries.filter((entry) => entry.mealSlot == null).map((entry) => (
           <ListRow
             key={stableRecordKey(entry.id)}
             title={entry.label ?? label(locale, 'foodSource', entry.source)}
@@ -278,6 +362,28 @@ export default function NutritionScreen() {
           <Field label={`${text(locale, 'protein')} (${text(locale, 'grams')})`} value={protein} onChangeText={setProtein} keyboardType="decimal-pad" />
           <Field label={`${text(locale, 'carbs')} (${text(locale, 'grams')})`} value={carbs} onChangeText={setCarbs} keyboardType="decimal-pad" />
           <Field label={`${text(locale, 'fat')} (${text(locale, 'grams')})`} value={fat} onChangeText={setFat} keyboardType="decimal-pad" />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            {MEAL_SLOTS.map((slot) => (
+              <Pressable
+                key={slot}
+                accessibilityRole="button"
+                accessibilityState={{ selected: manualSlot === slot }}
+                onPress={() => setManualSlot((current) => (current === slot ? undefined : slot))}
+                style={{
+                  paddingHorizontal: 12,
+                  height: 36,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: manualSlot === slot ? theme.accent : theme.border,
+                  backgroundColor: manualSlot === slot ? theme.surfaceMuted : theme.surface,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: theme.text, fontFamily: fontFamily.medium, fontSize: 13 }}>{label(locale, 'meal', slot)}</Text>
+              </Pressable>
+            ))}
+          </View>
           <Body>{text(locale, 'saudiHint')}</Body>
           {error.length > 0 ? <Body>{error}</Body> : null}
           <Button label={text(locale, 'save')} onPress={() => void save()} />

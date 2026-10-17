@@ -40,4 +40,6 @@ export const LOCAL_KEYS = {
   macroTargets: 'sahhti.macroTargets',
   recentFoods: 'sahhti.recentFoods',
   offLink: (code: string) => `sahhti.off.${code.replace(/[^\w.-]/g, '')}`,
+  waterGoal: 'sahhti.waterGoalMl',
+  homeShortcuts: 'sahhti.homeShortcuts',
 } as const;

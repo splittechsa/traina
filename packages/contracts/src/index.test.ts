@@ -34,6 +34,7 @@ describe('wire contracts', () => {
       ageYears: 30,
       heightCm: '170',
       weightKg: '70',
+      sex: 'male',
       trainingExperience: 'beginner',
       goals: ['general_health'],
       discipline: 'general_fitness',

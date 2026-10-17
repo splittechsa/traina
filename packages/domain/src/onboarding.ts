@@ -31,10 +31,14 @@ export type RiskFlag =
   | 'body_mass_extreme'
   | 'self_reported_calorie_target_ignored';
 
+export type BiologicalSex = 'male' | 'female';
+
 export type OnboardingInput = {
   ageYears: number;
   heightCm: string;
   weightKg: string;
+  /** Required for energy estimates (Mifflin). Collected in onboarding only. */
+  sex: BiologicalSex;
   trainingExperience: Experience;
   goals: readonly Goal[];
   discipline: Discipline;
@@ -52,6 +56,9 @@ export type OnboardingInput = {
   locale: 'ar' | 'en';
   userReportedCalorieTarget?: number;
   sports?: readonly Sport[];
+  /** Optional coaching pace for cut/bulk — Yazan builds from this. */
+  nutritionPace?: 'sprint' | 'steady' | 'gentle';
+  horizonWeeks?: number | null;
 };
 
 export type FieldError = { field: string; code: string };
@@ -61,6 +68,7 @@ export type NormalizedOnboarding = {
   heightMm: number;
   weightGrams: number;
   bmiHundredths: number;
+  sex: BiologicalSex;
   trainingExperience: Experience;
   goals: readonly Goal[];
   discipline: Discipline;
@@ -77,6 +85,8 @@ export type NormalizedOnboarding = {
   gymReferralCode: string | null;
   locale: 'ar' | 'en';
   sports: readonly Sport[];
+  nutritionPace: 'sprint' | 'steady' | 'gentle' | null;
+  horizonWeeks: number | null;
   authoritativeCalorieTarget: null;
   userReportedCalorieTarget: number | null;
   riskFlags: readonly RiskFlag[];
@@ -194,6 +204,17 @@ export function validateOnboarding(input: OnboardingInput): OnboardingResult {
   if (input.locale !== 'ar' && input.locale !== 'en') {
     errors.push({ field: 'locale', code: 'INVALID' });
   }
+  if (input.sex !== 'male' && input.sex !== 'female') {
+    errors.push({ field: 'sex', code: 'INVALID' });
+  }
+  if (input.nutritionPace !== undefined && input.nutritionPace !== 'sprint' && input.nutritionPace !== 'steady' && input.nutritionPace !== 'gentle') {
+    errors.push({ field: 'nutritionPace', code: 'INVALID' });
+  }
+  if (input.horizonWeeks !== undefined && input.horizonWeeks !== null) {
+    if (!Number.isSafeInteger(input.horizonWeeks) || input.horizonWeeks < 1 || input.horizonWeeks > 52) {
+      errors.push({ field: 'horizonWeeks', code: 'OUT_OF_RANGE' });
+    }
+  }
   const sports = [...(input.sports ?? [])];
   if (sports.length > SPORTS.length || sports.some((sport) => !includes(SPORTS, sport))) {
     errors.push({ field: 'sports', code: 'INVALID' });
@@ -235,6 +256,7 @@ export function validateOnboarding(input: OnboardingInput): OnboardingResult {
       heightMm,
       weightGrams,
       bmiHundredths: bmi,
+      sex: input.sex,
       trainingExperience: input.trainingExperience,
       goals: input.goals,
       discipline: input.discipline,
@@ -251,6 +273,8 @@ export function validateOnboarding(input: OnboardingInput): OnboardingResult {
       gymReferralCode: input.gymReferralCode?.trim() ? input.gymReferralCode.trim() : null,
       locale: input.locale,
       sports,
+      nutritionPace: input.nutritionPace ?? null,
+      horizonWeeks: input.horizonWeeks ?? null,
       authoritativeCalorieTarget: null,
       userReportedCalorieTarget: input.userReportedCalorieTarget ?? null,
       riskFlags,

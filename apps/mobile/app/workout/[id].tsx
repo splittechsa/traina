@@ -1,19 +1,18 @@
-import { useEffect, useState } from 'react';
-import { Pressable, Text, View, Alert } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import type { WorkoutSession } from '@sahhti/domain';
-import { parseScaledInteger } from '@sahhti/domain';
+import { compareSessionLoad, parseScaledInteger, workoutElapsedSeconds } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
-import { formatCount, formatKg } from '../../src/format';
-import { label } from '../../src/i18n/labels';
+import { formatCount, formatDuration, formatKg } from '../../src/format';
+import { useSteps } from '../../src/activity/useSteps';
 import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
 import { Button, Field, Screen, ScreenBody } from '../../src/ui/Screen';
 import { AppHeader, ErrorState, LoadingSkeleton } from '../../src/ui/kit';
-import { MovementDemo3D } from '../../src/training/MovementDemo3D';
-import { asLibraryList, type LibraryExercise } from '../../src/training/library';
+import { type LibraryExercise } from '../../src/training/library';
 import { fontFamily } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { useMotion } from '../../src/theme/motion';
@@ -26,8 +25,24 @@ type WorkoutProgress = {
   personalRecords: { exercise_id: string; load_grams: number; reps: number }[];
 };
 
+function sessionIdOf(id: string | string[] | undefined): string | null {
+  if (typeof id === 'string' && id.length > 0) return id;
+  if (Array.isArray(id) && typeof id[0] === 'string' && id[0].length > 0) return id[0];
+  return null;
+}
+
+function leaveToTraining() {
+  if (router.canGoBack()) {
+    router.back();
+    return;
+  }
+  router.replace('/(tabs)/training');
+}
+
 export default function WorkoutScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; select?: string }>();
+  const id = sessionIdOf(params.id);
+  const select = typeof params.select === 'string' ? params.select : undefined;
   const { locale } = useLocale();
   const { reduce } = useMotion();
   const client = useQueryClient();
@@ -36,11 +51,16 @@ export default function WorkoutScreen() {
   const [load, setLoad] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const [rest, setRest] = useState(0);
   const [activeExerciseId, setActiveExerciseId] = useState('');
+  const [tick, setTick] = useState(() => Date.now());
+  const [logOpen, setLogOpen] = useState(false);
+  const autoStarted = useRef(false);
+  const { state: stepsState } = useSteps(7);
   const session = useQuery({
     queryKey: ['session', id],
-    enabled: typeof id === 'string',
+    enabled: id !== null,
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: () => apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`),
   });
   const exerciseLibrary = useQuery({
@@ -52,43 +72,72 @@ export default function WorkoutScreen() {
     queryFn: () => apiRequest<WorkoutProgress>('/v1/progress'),
   });
 
-  useEffect(() => {
-    if (rest <= 0) {
-      return;
+  async function command(path: 'start' | 'resume' | 'complete') {
+    if (id === null) return;
+    const next = await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}/${path}`, {
+      method: 'POST',
+      body: { at: new Date().toISOString() },
+    });
+    client.setQueryData(['session', id], { session: next.session });
+    await client.invalidateQueries({ queryKey: ['sessions'] });
+    if (path === 'complete') {
+      await client.invalidateQueries({ queryKey: ['home'] });
+      await client.invalidateQueries({ queryKey: ['progress'] });
     }
-    const timer = setInterval(() => setRest((current) => (current <= 1 ? 0 : current - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [rest]);
+    return next.session;
+  }
 
   async function start() {
-    if (typeof id !== 'string') return;
-    await apiRequest(`/v1/training/sessions/${id}/start`, { method: 'POST', body: { at: new Date().toISOString() } });
-    await client.invalidateQueries({ queryKey: ['session', id] });
-  }
-
-  async function pause() {
-    if (typeof id !== 'string') return;
-    await apiRequest(`/v1/training/sessions/${id}/pause`, { method: 'POST', body: { at: new Date().toISOString() } });
-    await client.invalidateQueries({ queryKey: ['session', id] });
-  }
-
-  async function resume() {
-    if (typeof id !== 'string') return;
-    await apiRequest(`/v1/training/sessions/${id}/resume`, { method: 'POST', body: { at: new Date().toISOString() } });
-    await client.invalidateQueries({ queryKey: ['session', id] });
+    setNotice('');
+    try {
+      await command('start');
+    } catch (caught) {
+      setNotice(caught instanceof ApiClientError ? caught.message : text(locale, 'error'));
+    }
   }
 
   async function complete() {
-    if (typeof id !== 'string') return;
-    await apiRequest(`/v1/training/sessions/${id}/complete`, { method: 'POST', body: { at: new Date().toISOString() } });
-    await client.invalidateQueries({ queryKey: ['session', id] });
-    await client.invalidateQueries({ queryKey: ['sessions'] });
-    await client.invalidateQueries({ queryKey: ['home'] });
-    await client.invalidateQueries({ queryKey: ['progress'] });
+    setNotice('');
+    setBusy(true);
+    try {
+      const status = session.data?.session.status;
+      if (status === 'scheduled' || status === 'paused') {
+        await command('start');
+      }
+      await command('complete');
+      leaveToTraining();
+    } catch {
+      setNotice(text(locale, 'error'));
+    } finally {
+      setBusy(false);
+    }
   }
 
+  useEffect(() => {
+    const status = session.data?.session.status;
+    if (status !== 'in_progress' && status !== 'paused') return;
+    const timer = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [session.data?.session.status]);
+
+  useEffect(() => {
+    if (id === null || session.data?.session.status !== 'scheduled' || autoStarted.current) return;
+    autoStarted.current = true;
+    void start();
+  }, [id, session.data?.session.status]);
+
+  useEffect(() => {
+    if (select === undefined || select.length === 0 || session.data === undefined) return;
+    const inPlan = session.data.session.plannedExercises.some((item) => item.exerciseId === select);
+    if (inPlan) {
+      setActiveExerciseId(select);
+      return;
+    }
+    router.replace({ pathname: '/exercises', params: { select } });
+  }, [select, session.data]);
+
   async function logSet() {
-    if (typeof id !== 'string' || session.data === undefined || busy) return;
+    if (id === null || session.data === undefined || busy) return;
     if (!Number.isInteger(Number(reps)) || Number(reps) <= 0 || Number(reps) > 10000 || (load.trim() !== '' && (!Number.isFinite(Number(load)) || Number(load) < 0))) {
       setNotice(locale === 'ar' ? 'تحقق من التكرارات والوزن قبل التسجيل' : 'Check reps and weight before logging');
       return;
@@ -101,7 +150,7 @@ export default function WorkoutScreen() {
       return;
     }
     const bodyweight = planned.prescription.kind !== 'strength';
-    const command: PendingSetCommand = {
+    const pendingSet: PendingSetCommand = {
       clientEventId: Crypto.randomUUID(),
       sessionId: id,
       set: {
@@ -116,13 +165,10 @@ export default function WorkoutScreen() {
     };
     setBusy(true);
     try {
-      await apiRequest(`/v1/training/sessions/${id}/sets`, { method: 'POST', body: command.set });
+      await apiRequest(`/v1/training/sessions/${id}/sets`, { method: 'POST', body: pendingSet.set });
       await client.invalidateQueries({ queryKey: ['session', id] });
       setNotice('');
       tapSuccess(reduce);
-      if (planned.prescription.kind === 'strength') {
-        setRest(planned.prescription.restSeconds);
-      }
     } catch (caught) {
       if (!(caught instanceof ApiClientError) || caught.code !== 'OFFLINE') {
         setNotice(text(locale, 'error'));
@@ -130,8 +176,8 @@ export default function WorkoutScreen() {
       }
       const pending = await readPendingSets();
       const others = pending.filter((item) => item.sessionId !== id);
-      const plan = planOfflineSync(session.data.session, [...pending.filter((item) => item.sessionId === id), command]);
-      if (plan.conflicts.some((conflict) => conflict.clientEventId === command.clientEventId)) {
+      const plan = planOfflineSync(session.data.session, [...pending.filter((item) => item.sessionId === id), pendingSet]);
+      if (plan.conflicts.some((conflict) => conflict.clientEventId === pendingSet.clientEventId)) {
         setNotice(text(locale, 'conflict'));
         return;
       }
@@ -140,31 +186,6 @@ export default function WorkoutScreen() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function sync() {
-    if (typeof id !== 'string' || session.data === undefined) return;
-    const pending = await readPendingSets();
-    const mine = pending.filter((command) => command.sessionId === id);
-    const others = pending.filter((command) => command.sessionId !== id);
-    const plan = planOfflineSync(session.data.session, mine);
-    const remaining = [...others];
-    if (plan.conflicts.length > 0) {
-      setNotice(text(locale, 'conflict'));
-    }
-    for (const command of plan.send) {
-      try {
-        await apiRequest(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set });
-      } catch (caught) {
-        if (caught instanceof ApiClientError && caught.status === 409) {
-          setNotice(text(locale, 'conflict'));
-          continue;
-        }
-        remaining.push(command);
-      }
-    }
-    await writePendingSets(remaining);
-    await client.invalidateQueries({ queryKey: ['session', id] });
   }
 
   if (session.isPending) {
@@ -178,164 +199,138 @@ export default function WorkoutScreen() {
     const offline = session.error instanceof ApiClientError && session.error.code === 'OFFLINE';
     return (
       <Screen title={text(locale, 'workout')}>
-        <ErrorState body={text(locale, offline ? 'offline' : 'error')} />
+        <ErrorState body={text(locale, offline ? 'offline' : 'error')} onRetry={() => void session.refetch()} />
+        <Button label={text(locale, 'leaveWorkout')} variant="secondary" onPress={leaveToTraining} />
       </Screen>
     );
   }
+
   const current = session.data.session;
+  const isAr = locale === 'ar';
+  const isRunning = current.status === 'in_progress';
+  const isPaused = current.status === 'paused';
+  const isDone = current.status === 'completed';
+  const isOpen = current.status === 'scheduled' || isRunning || isPaused;
+  const elapsed = workoutElapsedSeconds(current, new Date(tick).toISOString());
+  const comparison = compareSessionLoad(
+    [{ completed_at: current.completedAt ?? new Date(tick).toISOString(), discipline: current.discipline, duration_seconds: elapsed }],
+    stepsState.status === 'ready' ? stepsState.today : 0,
+  );
   const active =
     current.plannedExercises.find((item) => item.exerciseId === activeExerciseId) ?? current.plannedExercises[0];
-  const primary =
-    current.status === 'scheduled'
-      ? { label: text(locale, 'start'), onPress: () => void start() }
-      : current.status === 'paused'
-        ? { label: text(locale, 'resume'), onPress: () => void resume() }
-        : current.status === 'in_progress'
-          ? { label: text(locale, 'logSet'), onPress: () => void logSet() }
-          : null;
-  const isAr = locale === 'ar';
-  const completedSets = current.sets.length;
-  const totalExercises = current.plannedExercises.length;
-  const isRunning = current.status === 'in_progress';
-  const isDone = current.status === 'completed';
-  const tile = { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 22, padding: 18, marginBottom: 14 } as const;
-  const titleStyle = { color: theme.text, fontFamily: fontFamily.bold, fontSize: 20, lineHeight: 30 } as const;
-  const mutedStyle = { color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 22 } as const;
-  const activeIndex = Math.max(0, current.plannedExercises.findIndex((item) => item.exerciseId === (activeExerciseId || current.plannedExercises[0]?.exerciseId)));
   const exerciseName = (exerciseId: string): string => {
     const exercise = exerciseLibrary.data?.exercises.find((item) => item.id === exerciseId);
-    return exercise === undefined
-      ? (isAr ? 'تمرين' : 'Exercise')
-      : (isAr ? exercise.name_ar : exercise.name_en);
+    return exercise === undefined ? (isAr ? 'تمرين' : 'Exercise') : isAr ? exercise.name_ar : exercise.name_en;
   };
+  const tile = { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 10 } as const;
+  const primary = isDone
+    ? { label: text(locale, 'backToTraining'), onPress: leaveToTraining }
+    : isOpen
+      ? { label: isPaused ? text(locale, 'resume') : isRunning ? text(locale, 'finish') : text(locale, 'start'), onPress: () => void (isRunning ? complete() : start()) }
+      : { label: text(locale, 'startFresh'), onPress: leaveToTraining };
+
   return (
     <Screen>
-      <ScreenBody footer={primary === null ? undefined : (
-        <View style={{ paddingHorizontal: 18, paddingTop: 12, backgroundColor: theme.background, borderTopWidth: 1, borderTopColor: theme.border }}>
-          <Button label={busy ? (isAr ? 'جارٍ حفظ المجموعة…' : 'Saving set…') : primary.label} onPress={() => { if (!busy) primary.onPress(); }} />
+      <ScreenBody footer={(
+        <View style={{ gap: 8 }}>
+          {notice ? <Text accessibilityRole="alert" style={{ color: theme.warning, fontFamily: fontFamily.medium, textAlign: isAr ? 'right' : 'left' }}>{notice}</Text> : null}
+          <Button label={busy ? text(locale, 'saving') : primary.label} disabled={busy} onPress={primary.onPress} />
+          <Button label={text(locale, 'leaveWorkout')} variant="secondary" onPress={leaveToTraining} />
         </View>
       )}>
-        <View style={{ paddingHorizontal: 18, paddingTop: 10 }}>
-          <AppHeader title={current.name} subtitle={label(locale, 'session', current.status)} />
-          <View style={{ backgroundColor: theme.hero, borderRadius: 26, padding: 22, marginTop: 10, marginBottom: 16 }}>
-            <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 12, letterSpacing: 1 }}>TRAINA  /  SESSION</Text>
-            <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 27, lineHeight: 39, marginTop: 8 }}>{isDone ? (isAr ? 'إنجاز يُحسب لك' : 'Session complete') : isRunning ? (isAr ? 'كل مجموعة تقرّبك' : 'One set at a time') : (isAr ? 'جاهز تبدأ؟' : 'Ready to train?')}</Text>
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-              {[{ n: String(totalExercises), label: isAr ? 'تمارين' : 'Exercises' }, { n: String(completedSets), label: isAr ? 'مجموعات مسجلة' : 'Logged sets' }].map((stat) => (
-                <View key={stat.label} style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.09)', padding: 14, borderRadius: 16 }}>
-                  <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 26 }}>{stat.n}</Text>
-                  <Text style={{ color: theme.heroText, opacity: 0.78, fontFamily: fontFamily.medium, fontSize: 12 }}>{stat.label}</Text>
-                </View>
+        <AppHeader
+          title={current.name}
+          subtitle={isDone ? text(locale, 'doneForToday') : text(locale, 'exerciseGuide')}
+          trailing={(
+            <Pressable accessibilityRole="button" onPress={leaveToTraining} hitSlop={10}>
+              <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold }}>{text(locale, 'leaveWorkout')}</Text>
+            </Pressable>
+          )}
+        />
+        <View style={{ backgroundColor: theme.hero, borderRadius: 26, padding: 22, marginTop: 8, marginBottom: 16, alignItems: 'center' }}>
+          <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 12 }}>{text(locale, 'elapsedTime')}</Text>
+          <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 64, lineHeight: 72, marginTop: 4 }}>{formatDuration(elapsed)}</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.78)', fontFamily: fontFamily.regular, fontSize: 13, marginTop: 6, textAlign: 'center' }}>
+            {isRunning ? text(locale, 'finish') : isPaused ? text(locale, 'resume') : text(locale, 'timeOnlyHint')}
+          </Text>
+        </View>
+        {isDone ? (
+          <View style={{ ...tile, flexDirection: 'row' }}>
+            {[
+              [text(locale, 'strengthTime'), formatDuration(comparison.strengthSeconds)],
+              [text(locale, 'cardioTime'), formatDuration(comparison.cardioSeconds)],
+              [text(locale, 'stepsToday'), formatCount(comparison.steps, locale)],
+            ].map(([caption, value]) => (
+              <View key={String(caption)} style={{ flex: 1 }}>
+                <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 18 }}>{value}</Text>
+                <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 11, marginTop: 3 }}>{caption}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 16, marginBottom: 10, textAlign: isAr ? 'right' : 'left' }}>
+          {isAr ? 'تمارين اليوم' : "Today's exercises"}
+        </Text>
+        {current.plannedExercises.map((planned, index) => {
+          const logged = current.sets.filter((set) => set.exerciseId === planned.exerciseId).length;
+          return (
+            <View key={`${planned.exerciseId}-${index}`} style={tile}>
+              <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{`${index + 1}. ${exerciseName(planned.exerciseId)}`}</Text>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12, marginTop: 4 }}>
+                {planned.prescription.kind === 'strength'
+                  ? `${planned.prescription.sets} × ${planned.prescription.reps}`
+                  : planned.prescription.kind === 'crossfit'
+                    ? planned.prescription.format
+                    : planned.prescription.progression}
+                {logged > 0 ? ` · ${formatCount(logged, locale)}` : ''}
+              </Text>
+            </View>
+          );
+        })}
+        {isRunning ? (
+          <Pressable accessibilityRole="button" onPress={() => setLogOpen((open) => !open)} style={{ ...tile, flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{text(locale, 'optionalSets')}</Text>
+            <Text style={{ color: theme.accent, fontFamily: fontFamily.bold }}>{logOpen ? (isAr ? 'إخفاء' : 'Hide') : formatCount(current.sets.length, locale)}</Text>
+          </Pressable>
+        ) : null}
+        {logOpen && isRunning && active !== undefined ? (
+          <View style={tile}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              {current.plannedExercises.map((planned) => (
+                <Pressable
+                  key={planned.exerciseId}
+                  accessibilityRole="button"
+                  onPress={() => setActiveExerciseId(planned.exerciseId)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 14,
+                    backgroundColor: planned.exerciseId === active.exerciseId ? theme.accent : theme.surfaceMuted,
+                  }}
+                >
+                  <Text style={{ color: planned.exerciseId === active.exerciseId ? theme.emphasisText : theme.text, fontFamily: fontFamily.semibold, fontSize: 12 }}>
+                    {exerciseName(planned.exerciseId)}
+                  </Text>
+                </Pressable>
               ))}
             </View>
-          </View>
-          {rest > 0 && isRunning ? (
-            <View style={{ ...tile, borderColor: theme.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View><Text style={mutedStyle}>{isAr ? 'استراحة بين المجموعات' : 'Rest between sets'}</Text><Text style={{ ...titleStyle, color: theme.accent, fontSize: 32 }}>{`${Math.floor(rest / 60).toString().padStart(2, '0')}:${(rest % 60).toString().padStart(2, '0')}`}</Text></View>
-              <Pressable accessibilityRole="button" onPress={() => setRest(0)} style={{ padding: 12, backgroundColor: theme.surfaceMuted, borderRadius: 14 }}><Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{isAr ? 'تخطي' : 'Skip'}</Text></Pressable>
-            </View>
-          ) : null}
-          <Text style={{ ...titleStyle, marginBottom: 12 }}>{isAr ? 'خطة الجلسة' : 'Session plan'}</Text>
-          {current.plannedExercises.map((planned, index) => {
-            const selected = index === activeIndex;
-            const logged = current.sets.filter((set) => set.exerciseId === planned.exerciseId).length;
-            const prescription = planned.prescription;
-            const detail = prescription.kind === 'strength' ? `${prescription.sets} × ${prescription.reps}` : prescription.kind === 'crossfit' ? prescription.format : prescription.progression;
-            return (
-              <Pressable key={planned.exerciseId} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => { setActiveExerciseId(planned.exerciseId); setNotice(''); }} style={{ ...tile, borderColor: selected ? theme.accent : theme.border, backgroundColor: selected ? theme.surfaceMuted : theme.surface, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                <View style={{ height: 42, width: 42, borderRadius: 14, backgroundColor: selected ? theme.accent : theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: selected ? theme.emphasisText : theme.text, fontFamily: fontFamily.bold }}>{String(index + 1).padStart(2, '0')}</Text></View>
-                <View style={{ flex: 1 }}><Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 15 }}>{exerciseName(planned.exerciseId)}</Text><Text style={mutedStyle}>{detail} · {isAr ? `${logged} مجموعات مسجلة` : `${logged} sets logged`}</Text></View>
-                <Text style={{ color: selected ? theme.accent : theme.textMuted, fontSize: 18 }}>{selected ? '●' : '○'}</Text>
-              </Pressable>
-            );
-          })}
-          {isRunning && active !== undefined ? (
-            <>
+            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, marginBottom: 10 }}>{exerciseName(active.exerciseId)}</Text>
             {(() => {
-              const demo = exerciseLibrary.data?.exercises.find((item) => item.id === active.exerciseId);
-              return (
-                <MovementDemo3D
-                  compact
-                  profile={demo?.demonstrationMedia?.profile ?? demo?.movement_pattern ?? 'neutral'}
-                  equipment={asLibraryList(demo?.equipment)}
-                />
-              );
+              const previous = progress.data?.personalRecords.find((record) => record.exercise_id === active.exerciseId);
+              if (previous === undefined) return null;
+              const reference = previous.load_grams > 0
+                ? `${formatKg(previous.load_grams, locale)} × ${formatCount(previous.reps, locale)}`
+                : `${formatCount(previous.reps, locale)} ${text(locale, 'reps')}`;
+              return <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginBottom: 10 }}>{isAr ? `أفضل أداء سابق: ${reference}` : `Previous best: ${reference}`}</Text>;
             })()}
-            <View style={{ ...tile, marginTop: 4 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={isAr ? 'التمرين السابق' : 'Previous exercise'}
-                  disabled={activeIndex <= 0}
-                  onPress={() => {
-                    const prev = current.plannedExercises[activeIndex - 1];
-                    if (prev !== undefined) { setActiveExerciseId(prev.exerciseId); setNotice(''); }
-                  }}
-                  style={{ opacity: activeIndex <= 0 ? 0.35 : 1, padding: 8 }}
-                >
-                  <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, fontSize: 18 }}>{isAr ? '›' : '‹'}</Text>
-                </Pressable>
-                <Text style={{ ...mutedStyle, color: theme.accent, marginBottom: 0 }}>{isAr ? `تسجيل التمرين ${activeIndex + 1} / ${totalExercises}` : `LOG EXERCISE ${activeIndex + 1} / ${totalExercises}`}</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={isAr ? 'التمرين التالي' : 'Next exercise'}
-                  disabled={activeIndex >= totalExercises - 1}
-                  onPress={() => {
-                    const next = current.plannedExercises[activeIndex + 1];
-                    if (next !== undefined) { setActiveExerciseId(next.exerciseId); setNotice(''); }
-                  }}
-                  style={{ opacity: activeIndex >= totalExercises - 1 ? 0.35 : 1, padding: 8 }}
-                >
-                  <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, fontSize: 18 }}>{isAr ? '‹' : '›'}</Text>
-                </Pressable>
-              </View>
-              <Text style={{ ...titleStyle, marginTop: 2 }}>{exerciseName(active.exerciseId)}</Text>
-              {(() => {
-                const previous = progress.data?.personalRecords.find((record) => record.exercise_id === active.exerciseId);
-                if (previous === undefined) return null;
-                const reference = previous.load_grams > 0
-                  ? `${formatKg(previous.load_grams, locale)} × ${formatCount(previous.reps, locale)}`
-                  : `${formatCount(previous.reps, locale)} ${text(locale, 'reps')}`;
-                return <Text style={{ ...mutedStyle, marginBottom: 16 }}>{isAr ? `أفضل أداء سابق: ${reference}` : `Previous best: ${reference}`}</Text>;
-              })()}
-              {progress.data?.personalRecords.some((record) => record.exercise_id === active.exerciseId) ? null : <View style={{ height: 16 }} />}
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                {['5', '8', '10', '12'].map((value) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: reps === value }} onPress={() => setReps(value)} style={{ flex: 1, minHeight: 46, borderRadius: 13, backgroundColor: reps === value ? theme.accent : theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: reps === value ? theme.emphasisText : theme.text, fontFamily: fontFamily.bold }}>{value}</Text></Pressable>)}
-              </View>
-              <Field label={active.prescription.kind === 'crossfit' ? text(locale, 'rounds') : active.prescription.kind === 'calisthenics' && active.prescription.holdSeconds !== null ? text(locale, 'hold') : text(locale, 'reps')} value={reps} onChangeText={setReps} keyboardType="number-pad" />
-              {active.prescription.kind === 'strength' ? (
-                <>
-                  <Field label={`${text(locale, 'load')} (${text(locale, 'kilograms')})`} value={load} onChangeText={setLoad} keyboardType="decimal-pad" />
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: -4, marginBottom: 4 }}>
-                    {[-5, -2.5, 2.5, 5].map((delta) => (
-                      <Pressable
-                        key={delta}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${delta > 0 ? '+' : ''}${delta} ${text(locale, 'kilograms')}`}
-                        onPress={() => {
-                          const loadNow = Number(load) || 0;
-                          const next = Math.max(0, loadNow + delta);
-                          setLoad(Number.isInteger(next) ? String(next) : next.toFixed(1));
-                        }}
-                        style={{ flex: 1, minHeight: 40, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 13 }}>{delta > 0 ? `+${delta}` : delta}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </>
-              ) : null}
-            </View>
-            </>
-          ) : null}
-          {current.sets.length > 0 ? <Text style={{ ...titleStyle, marginTop: 10, marginBottom: 12 }}>{isAr ? 'سجل المجموعات' : 'Logged sets'}</Text> : null}
-          {current.sets.slice().reverse().map((set) => <View key={set.id} style={{ ...tile, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 }}><Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{set.loadGrams === 0 ? formatCount(set.reps, locale) : `${formatCount(set.reps, locale)} × ${formatKg(set.loadGrams, locale)}`}</Text><Text style={mutedStyle}>{text(locale, 'sets')} {formatCount(set.setIndex, locale)} ✓</Text></View>)}
-          {notice ? <Text accessibilityRole="alert" style={{ color: theme.warning, fontFamily: fontFamily.medium, marginBottom: 14 }}>{notice}</Text> : null}
-          {isRunning ? <Button label={text(locale, 'pause')} variant="secondary" onPress={() => void pause()} /> : null}
-          {(isRunning || current.status === 'paused') ? <Button label={text(locale, 'finish')} variant="secondary" onPress={() => Alert.alert(isAr ? 'إنهاء التمرين؟' : 'Finish workout?', isAr ? 'سيتم حفظ الجلسة والمجموعات المسجلة.' : 'Your session and logged sets will be saved.', [{ text: isAr ? 'إلغاء' : 'Cancel', style: 'cancel' }, { text: isAr ? 'إنهاء' : 'Finish', onPress: () => void complete() }])} /> : null}
-          <Button label={text(locale, 'sync')} variant="secondary" onPress={() => void sync()} />
-          <View style={{ height: 22 }} />
-        </View>
+            <Field label={text(locale, 'reps')} value={reps} onChangeText={setReps} keyboardType="number-pad" />
+            {active.prescription.kind === 'strength' ? (
+              <Field label={`${text(locale, 'load')} (${text(locale, 'kilograms')})`} value={load} onChangeText={setLoad} keyboardType="decimal-pad" />
+            ) : null}
+            <Button label={text(locale, 'logSet')} disabled={busy} onPress={() => void logSet()} />
+          </View>
+        ) : null}
+        <View style={{ height: 12 }} />
       </ScreenBody>
     </Screen>
   );

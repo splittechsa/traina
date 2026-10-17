@@ -10,5 +10,7 @@ describe('api errors', () => {
     expect(messageFor('INVALID_CODE', 'ar', 'Request failed')).toContain('الرمز');
     expect(messageFor('CODE_EXPIRED', 'en', 'Request failed')).toContain('expired');
     expect(messageFor('UNKNOWN', 'en', 'Request failed')).toBe('Request failed');
+    expect(messageFor('NOTHING_TO_COPY', 'ar', 'Request failed')).toContain('لا توجد وجبات');
+    expect(messageFor('DIARY_DAY_NOT_EMPTY', 'en', 'Request failed')).toContain('already has logged food');
   });
 });

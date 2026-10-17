@@ -142,6 +142,104 @@ export function EnvironmentCards({ value, onChange }: { value: TrainingEnvironme
   );
 }
 
+const muscleGroups: { id: Exclude<import('./library').MuscleGroup, 'all'>; ar: string; en: string }[] = [
+  { id: 'chest', ar: 'صدر', en: 'Chest' },
+  { id: 'back', ar: 'ظهر', en: 'Back' },
+  { id: 'legs', ar: 'أرجل', en: 'Legs' },
+  { id: 'shoulders', ar: 'أكتاف', en: 'Shoulders' },
+  { id: 'arms', ar: 'ذراعان', en: 'Arms' },
+  { id: 'core', ar: 'جذع', en: 'Core' },
+  { id: 'full_body', ar: 'كامل الجسم', en: 'Full body' },
+];
+
+const equipmentKinds: { id: Exclude<import('./library').EquipmentKind, 'all'>; ar: string; en: string }[] = [
+  { id: 'barbell', ar: 'بار', en: 'Barbell' },
+  { id: 'dumbbell', ar: 'دمبل', en: 'Dumbbell' },
+  { id: 'machine', ar: 'جهاز', en: 'Machine' },
+  { id: 'cable', ar: 'كابل', en: 'Cable' },
+  { id: 'bodyweight', ar: 'وزن الجسم', en: 'Bodyweight' },
+  { id: 'kettlebell', ar: 'كيتل', en: 'Kettlebell' },
+];
+
+function ChipRow<T extends string>({
+  value,
+  onChange,
+  options,
+  allLabel,
+}: {
+  value: T | 'all';
+  onChange: (value: T | 'all') => void;
+  options: { id: T; ar: string; en: string }[];
+  allLabel: string;
+}) {
+  const theme = useTheme();
+  const { locale } = useLocale();
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing[2], paddingEnd: spacing[4], marginBottom: spacing[3] }}>
+      {[{ id: 'all' as const, label: allLabel }, ...options.map((item) => ({ id: item.id, label: item[locale] }))].map((item) => {
+        const selected = value === item.id;
+        return (
+          <Pressable
+            key={item.id}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(item.id)}
+            style={{
+              paddingHorizontal: spacing[3],
+              paddingVertical: 8,
+              borderRadius: radius.pill,
+              borderWidth: 1,
+              borderColor: selected ? theme.accent : theme.border,
+              backgroundColor: selected ? theme.accent : theme.surface,
+            }}
+          >
+            <Text style={{ color: selected ? theme.emphasisText : theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.micro }}>{item.label}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+export function MuscleGroupChips({
+  value,
+  onChange,
+}: {
+  value: import('./library').MuscleGroup;
+  onChange: (value: import('./library').MuscleGroup) => void;
+}) {
+  const { locale } = useLocale();
+  return <ChipRow value={value} onChange={onChange} options={muscleGroups} allLabel={locale === 'ar' ? 'كل العضلات' : 'All muscles'} />;
+}
+
+export function EquipmentKindChips({
+  value,
+  onChange,
+}: {
+  value: import('./library').EquipmentKind;
+  onChange: (value: import('./library').EquipmentKind) => void;
+}) {
+  const { locale } = useLocale();
+  return <ChipRow value={value} onChange={onChange} options={equipmentKinds} allLabel={locale === 'ar' ? 'كل الأدوات' : 'All equipment'} />;
+}
+
+const difficulties: { id: Exclude<import('./library').DifficultyFilter, 'all'>; ar: string; en: string }[] = [
+  { id: 'beginner', ar: 'مبتدئ', en: 'Beginner' },
+  { id: 'intermediate', ar: 'متوسط', en: 'Intermediate' },
+  { id: 'advanced', ar: 'متقدم', en: 'Advanced' },
+];
+
+export function DifficultyChips({
+  value,
+  onChange,
+}: {
+  value: import('./library').DifficultyFilter;
+  onChange: (value: import('./library').DifficultyFilter) => void;
+}) {
+  const { locale } = useLocale();
+  return <ChipRow value={value} onChange={onChange} options={difficulties} allLabel={locale === 'ar' ? 'كل المستويات' : 'All levels'} />;
+}
+
 export function EquipmentBrandCards({
   value,
   onChange,

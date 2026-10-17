@@ -1,11 +1,11 @@
-// Barcode scanner → food lookup. Reads EAN/UPC codes with the native camera scanner
-// (expo-camera, works in Expo Go) and hands the code to the food-log screen, which looks
-// the product up in Open Food Facts and opens the portion sheet directly.
+// Barcode scanner → food EAN/UPC, or gym machine codes (TRN-* / traina:exercise:<uuid>).
 import { useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
+import { apiRequest } from '../src/api/client';
 import { useLocale } from '../src/i18n/LocaleProvider';
+import { text } from '../src/i18n/copy';
 import { useTheme } from '../src/theme/ThemeProvider';
 import { useMotion } from '../src/theme/motion';
 import { fontFamily, radius, spacing, typeScale } from '../src/theme/tokens';
@@ -18,14 +18,37 @@ export default function ScannerScreen() {
   const theme = useTheme();
   const { reduce } = useMotion();
   const ar = locale === 'ar';
-  const params = useLocalSearchParams<{ day?: string }>();
+  const params = useLocalSearchParams<{ day?: string; intent?: string; session?: string }>();
+  const gymScan = params.intent === 'exercise';
+  const sessionId = typeof params.session === 'string' ? params.session : '';
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
+  const [scanError, setScanError] = useState('');
   const handled = useRef(false);
 
   function onScanned(result: BarcodeScanningResult) {
+    if (handled.current) return;
+    if (gymScan) {
+      const code = result.data.trim();
+      if (code.length < 4) return;
+      handled.current = true;
+      tapSuccess(reduce);
+      void apiRequest<{ exercise: { id: string } }>(`/v1/exercises/scan?code=${encodeURIComponent(code)}`)
+        .then((payload) => {
+          if (sessionId.length > 0) {
+            router.replace({ pathname: '/workout/[id]', params: { id: sessionId, select: payload.exercise.id } });
+            return;
+          }
+          router.replace({ pathname: '/exercises', params: { select: payload.exercise.id } });
+        })
+        .catch(() => {
+          handled.current = false;
+          setScanError(text(locale, 'unknownGymCode'));
+        });
+      return;
+    }
     const code = result.data.replace(/\D/g, '');
-    if (handled.current || code.length < 8) return;
+    if (code.length < 8) return;
     handled.current = true;
     tapSuccess(reduce);
     router.replace({ pathname: '/food-log', params: { code, ...(typeof params.day === 'string' ? { day: params.day } : {}) } });
@@ -33,8 +56,10 @@ export default function ScannerScreen() {
 
   const header = (
     <AppHeader
-      title={ar ? 'امسح الباركود' : 'Scan barcode'}
-      subtitle={ar ? 'وجّه الكاميرا إلى باركود المنتج' : "Point the camera at the product's barcode"}
+      title={gymScan ? text(locale, 'scanGym') : (ar ? 'امسح الباركود' : 'Scan barcode')}
+      subtitle={gymScan
+        ? (ar ? 'وجّه الكاميرا إلى ملصق الجهاز في النادي' : 'Point the camera at the gym machine label')
+        : (ar ? 'وجّه الكاميرا إلى باركود المنتج' : "Point the camera at the product's barcode")}
       trailing={
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
           <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>{ar ? 'إغلاق' : 'Close'}</Text>
@@ -78,13 +103,13 @@ export default function ScannerScreen() {
           style={StyleSheet.absoluteFill}
           facing="back"
           enableTorch={torch}
-          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+          barcodeScannerSettings={{ barcodeTypes: gymScan ? ['qr', 'code128', 'code39', 'ean13', 'ean8', 'upc_a', 'upc_e', 'datamatrix'] : ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
           onBarcodeScanned={onScanned}
         />
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
           <View style={{ width: '78%', aspectRatio: 1.6, borderRadius: radius.lg, borderWidth: 3, borderColor: theme.heroAccent }} />
           <Text style={{ color: '#FFFFFF', fontFamily: fontFamily.semibold, fontSize: typeScale.body, marginTop: spacing[4] }}>
-            {ar ? 'ضع الباركود داخل الإطار' : 'Fit the barcode inside the frame'}
+            {scanError.length > 0 ? scanError : (ar ? 'ضع الباركود داخل الإطار' : 'Fit the barcode inside the frame')}
           </Text>
         </View>
         <Pressable

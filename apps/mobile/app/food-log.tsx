@@ -7,9 +7,11 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { isMealSlot } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../src/api/client';
 import { messageFor } from '../src/api/errors';
 import { formatCount, riyadhToday } from '../src/format';
+import { label } from '../src/i18n/labels';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text } from '../src/i18n/copy';
 import { useTheme } from '../src/theme/ThemeProvider';
@@ -98,7 +100,7 @@ function FoodRow({ food, onPress }: { food: LibraryFood; onPress: () => void }) 
   );
 }
 
-function PortionSheet({ food, day, onClose }: { food: LibraryFood | null; day: string; onClose: () => void }) {
+function PortionSheet({ food, day, mealSlot, onClose }: { food: LibraryFood | null; day: string; mealSlot?: string; onClose: () => void }) {
   const theme = useTheme();
   const { locale } = useLocale();
   const { reduce } = useMotion();
@@ -106,12 +108,15 @@ function PortionSheet({ food, day, onClose }: { food: LibraryFood | null; day: s
   const ar = locale === 'ar';
   const [amount, setAmount] = useState(100);
   const [saving, setSaving] = useState(false);
+  const [favoriting, setFavoriting] = useState(false);
+  const [favorited, setFavorited] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (food !== null) {
       setAmount(food.servingGrams ?? 100);
       setError('');
+      setFavorited(false);
     }
   }, [food]);
 
@@ -124,11 +129,12 @@ function PortionSheet({ food, day, onClose }: { food: LibraryFood | null; day: s
     setSaving(true);
     setError('');
     try {
-      await logLibraryFood(food, amount, day);
+      await logLibraryFood(food, amount, day, mealSlot);
       await Promise.all([
         client.invalidateQueries({ queryKey: ['diary', day] }),
         client.invalidateQueries({ queryKey: ['home'] }),
         client.invalidateQueries({ queryKey: ['local', 'sahhti.recentFoods'] }),
+        client.invalidateQueries({ queryKey: ['food-favorites'] }),
       ]);
       tapSuccess(reduce);
       onClose();
@@ -203,6 +209,28 @@ function PortionSheet({ food, day, onClose }: { food: LibraryFood | null; day: s
 
       {error.length > 0 ? <Text style={{ color: theme.danger, fontFamily: fontFamily.medium, fontSize: typeScale.label, textAlign: 'center' }}>{error}</Text> : null}
       <Button label={saving ? (ar ? 'جارٍ الإضافة…' : 'Adding…') : ar ? 'أضف إلى يومياتي' : 'Add to diary'} onPress={() => void add()} disabled={saving || preview === null} />
+      {food.localId !== undefined ? (
+        <Button
+          label={favorited ? text(locale, 'savedFavorite') : text(locale, 'saveFavorite')}
+          variant="secondary"
+          disabled={favoriting || favorited}
+          onPress={() => {
+            void (async () => {
+              if (food.localId === undefined) return;
+              setFavoriting(true);
+              try {
+                await apiRequest(`/v1/nutrition/foods/${food.localId}/favorite`, { method: 'POST' });
+                await client.invalidateQueries({ queryKey: ['food-favorites'] });
+                setFavorited(true);
+              } catch (caught) {
+                setError(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
+              } finally {
+                setFavoriting(false);
+              }
+            })();
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -211,15 +239,21 @@ export default function FoodLogScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
   const ar = locale === 'ar';
-  const params = useLocalSearchParams<{ day?: string; code?: string }>();
+  const params = useLocalSearchParams<{ day?: string; code?: string; slot?: string }>();
   const day = typeof params.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.day) ? params.day : riyadhToday();
   const code = typeof params.code === 'string' ? params.code : undefined;
+  const slot = typeof params.slot === 'string' && isMealSlot(params.slot) ? params.slot : undefined;
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<LibraryFood | null>(null);
   const term = useDebounced(query.trim(), 420);
   const searching = term.length >= 2;
 
   const recents = useQuery({ queryKey: ['local', 'sahhti.recentFoods'], queryFn: readRecentFoods, staleTime: Infinity });
+  const favorites = useQuery({
+    queryKey: ['food-favorites'],
+    queryFn: () => apiRequest<{ foods: LocalFoodRow[] }>('/v1/nutrition/favorites'),
+  });
+  const favoriteFoods = useMemo(() => (favorites.data?.foods ?? []).map(normalizeLocalFood), [favorites.data]);
   const mine = useQuery({
     queryKey: ['foods', term],
     enabled: searching,
@@ -254,7 +288,7 @@ export default function FoodLogScreen() {
     <Screen>
       <ScreenBody>
         <AppHeader
-          title={ar ? 'أضف طعاماً' : 'Add food'}
+          title={slot ? label(locale, 'meal', slot) : ar ? 'أضف طعاماً' : 'Add food'}
           subtitle={ar ? 'ابحث، اختر الكمية، وأضف' : 'Search, set the amount, add'}
           trailing={
             <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
@@ -322,6 +356,14 @@ export default function FoodLogScreen() {
 
         {!searching ? (
           <>
+            {favoriteFoods.length > 0 ? (
+              <>
+                <SectionLabel>{text(locale, 'favorites')}</SectionLabel>
+                {favoriteFoods.map((food) => (
+                  <FoodRow key={food.key} food={food} onPress={() => setSelected(food)} />
+                ))}
+              </>
+            ) : null}
             <SectionLabel>{ar ? 'أضفتها مؤخراً' : 'Recent'}</SectionLabel>
             {(recents.data ?? []).length === 0 ? (
               <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.label, lineHeight: 20 }}>
@@ -363,7 +405,7 @@ export default function FoodLogScreen() {
       </ScreenBody>
 
       <BottomSheet visible={selected !== null} onClose={() => setSelected(null)}>
-        <PortionSheet food={selected} day={day} onClose={() => setSelected(null)} />
+        <PortionSheet food={selected} day={day} mealSlot={slot} onClose={() => setSelected(null)} />
       </BottomSheet>
     </Screen>
   );

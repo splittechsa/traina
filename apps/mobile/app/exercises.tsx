@@ -1,9 +1,8 @@
-import { useMemo, useState, type ComponentProps } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { FlashList } from '@shopify/flash-list';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { ApiClientError, apiRequest } from '../src/api/client';
 import { formatCount } from '../src/format';
@@ -13,17 +12,22 @@ import { label, labelList } from '../src/i18n/labels';
 import { useMotion } from '../src/theme/motion';
 import { useTheme } from '../src/theme/ThemeProvider';
 import { fontFamily, radius, spacing, typeScale } from '../src/theme/tokens';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Button, Screen } from '../src/ui/Screen';
 import { AppHeader, BottomSheet, EmptyState, ErrorState, LoadingSkeleton, SectionLabel } from '../src/ui/kit';
-import { EnvironmentCards, EquipmentBrandCards, TrainingFamilyCards, type TrainingFamily } from '../src/training/filterCards';
+import { DifficultyChips, EnvironmentCards, EquipmentBrandCards, EquipmentKindChips, MuscleGroupChips, TrainingFamilyCards, type TrainingFamily } from '../src/training/filterCards';
 import { MovementDemo3D } from '../src/training/MovementDemo3D';
+import { quickPlanFor, startWorkoutNow } from '../src/training/startSession';
 import {
   asLibraryList,
   brandLabel,
   filterExerciseLibrary,
+  type DifficultyFilter,
   type EquipmentBrand,
+  type EquipmentKind,
   type EquipmentManufacturer,
   type LibraryExercise,
+  type MuscleGroup,
   type TrainingEnvironment,
 } from '../src/training/library';
 
@@ -66,7 +70,39 @@ function iconFor(exercise: LibraryExercise): SymbolName {
   return movementSymbols[exercise.movement_pattern] ?? { ios: 'figure.strengthtraining.functional', android: 'fitness_center', web: 'fitness_center' };
 }
 
-function ExerciseRow({ exercise, index, onPress }: { exercise: LibraryExercise; index: number; onPress: () => void }) {
+function ExerciseTile({ exercise, onPress, onStart }: { exercise: LibraryExercise; onPress: () => void; onStart: () => void }) {
+  const theme = useTheme();
+  const { locale } = useLocale();
+  const ar = locale === 'ar';
+  return (
+    <View style={{ flex: 1, padding: 6 }}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: radius.lg, overflow: 'hidden' }}
+      >
+        <View style={{ height: 118, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
+          <SymbolView name={iconFor(exercise)} size={34} tintColor={theme.accent} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={text(locale, 'startNow')}
+            onPress={onStart}
+            style={{ position: 'absolute', end: 8, bottom: 8, width: 36, height: 36, borderRadius: 18, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold, fontSize: 22, lineHeight: 24 }}>+</Text>
+          </Pressable>
+        </View>
+        <View style={{ padding: 10, minHeight: 52, justifyContent: 'center' }}>
+          <Text numberOfLines={2} style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 13, textAlign: ar ? 'right' : 'left' }}>
+            {ar ? exercise.name_ar : exercise.name_en}
+          </Text>
+        </View>
+      </Pressable>
+    </View>
+  );
+}
+
+function ExerciseRow({ exercise, index, onPress, onStart }: { exercise: LibraryExercise; index: number; onPress: () => void; onStart: () => void }) {
   const theme = useTheme();
   const { locale } = useLocale();
   const { reduce, duration } = useMotion();
@@ -100,9 +136,15 @@ function ExerciseRow({ exercise, index, onPress }: { exercise: LibraryExercise; 
             {[labelList(locale, 'muscle', muscles), labelList(locale, 'equipment', equipment)].filter(Boolean).join('  •  ')}
           </Text>
         </View>
-        <View style={{ alignItems: 'center', backgroundColor: theme.surfaceMuted, borderRadius: radius.pill, paddingHorizontal: spacing[2], paddingVertical: 6 }}>
-          <Text style={{ color: theme.textMuted, fontFamily: fontFamily.semibold, fontSize: typeScale.micro }}>{label(locale, 'experience', exercise.difficulty)}</Text>
-        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={text(locale, 'startNow')}
+          hitSlop={8}
+          onPress={onStart}
+          style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <SymbolView name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }} size={18} tintColor={theme.emphasisText} />
+        </Pressable>
       </Pressable>
     </Animated.View>
   );
@@ -120,13 +162,36 @@ function DetailTag({ children }: { children: string }) {
 export default function ExercisesScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
+  const client = useQueryClient();
   const ar = locale === 'ar';
+  const params = useLocalSearchParams<{ select?: string }>();
   const [query, setQuery] = useState('');
   const [discipline, setDiscipline] = useState<TrainingFamily>('all');
   const [environment, setEnvironment] = useState<TrainingEnvironment>('all');
   const [brand, setBrand] = useState<EquipmentBrand | 'all'>('all');
+  const [muscle, setMuscle] = useState<MuscleGroup>('all');
+  const [equipmentKind, setEquipmentKind] = useState<EquipmentKind>('all');
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>('all');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [grid, setGrid] = useState(true);
   const [selected, setSelected] = useState<LibraryExercise | null>(null);
+  const [starting, setStarting] = useState(false);
+  const beginExercise = (picked: LibraryExercise) => {
+    if (starting) return;
+    setStarting(true);
+    const quick = quickPlanFor([picked]);
+    void startWorkoutNow({
+      name: ar ? picked.name_ar : picked.name_en,
+      discipline: quick.discipline,
+      exercises: quick.plan,
+    })
+      .then(async (id) => {
+        await client.invalidateQueries({ queryKey: ['sessions'] });
+        await client.invalidateQueries({ queryKey: ['home'] });
+        router.push({ pathname: '/workout/[id]', params: { id } });
+      })
+      .finally(() => setStarting(false));
+  };
   const exercises = useQuery({
     queryKey: ['exercises'],
     queryFn: () => apiRequest<{ exercises: LibraryExercise[] }>('/v1/exercises'),
@@ -136,8 +201,8 @@ export default function ExercisesScreen() {
     queryFn: () => apiRequest<{ manufacturers: EquipmentManufacturer[] }>('/v1/equipment/manufacturers'),
   });
   const visible = useMemo(
-    () => filterExerciseLibrary(exercises.data?.exercises ?? [], { query, discipline, environment, brand }),
-    [brand, discipline, environment, exercises.data?.exercises, query],
+    () => filterExerciseLibrary(exercises.data?.exercises ?? [], { query, discipline, environment, brand, muscle, equipmentKind, difficulty }),
+    [brand, difficulty, discipline, environment, equipmentKind, exercises.data?.exercises, muscle, query],
   );
   const familyCounts = useMemo(() => {
     const library = exercises.data?.exercises ?? [];
@@ -155,7 +220,14 @@ export default function ExercisesScreen() {
       ...items.map((exercise) => ({ kind: 'exercise' as const, key: exercise.id, exercise })),
     ]);
   }, [locale, visible]);
-  const activeFilters = [discipline !== 'all', environment !== 'all', brand !== 'all'].filter(Boolean).length;
+  const activeFilters = [discipline !== 'all', environment !== 'all', brand !== 'all', muscle !== 'all', equipmentKind !== 'all', difficulty !== 'all'].filter(Boolean).length;
+
+  useEffect(() => {
+    const wanted = typeof params.select === 'string' ? params.select : '';
+    if (wanted.length === 0) return;
+    const match = (exercises.data?.exercises ?? []).find((item) => item.id === wanted);
+    if (match !== undefined) setSelected(match);
+  }, [exercises.data?.exercises, params.select]);
 
   if (exercises.isPending) {
     return <Screen><LoadingSkeleton /></Screen>;
@@ -165,21 +237,19 @@ export default function ExercisesScreen() {
     return <Screen title={text(locale, 'exercises')}><ErrorState body={text(locale, offline ? 'offline' : 'error')} onRetry={() => void exercises.refetch()} /></Screen>;
   }
 
-  return (
-    <Screen>
-      <FlashList
-        data={rows}
-        keyExtractor={(item) => item.key}
-        getItemType={(item) => item.kind}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: spacing[7] }}
-        ListHeaderComponent={(
+  const libraryHeader = (
           <View>
             <AppHeader
               title={ar ? 'مكتبة الحركة' : 'Movement library'}
               subtitle={ar ? 'ابحث باسم التمرين، العضلة، أو الجهاز' : 'Search by exercise, muscle or equipment'}
-              trailing={<Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}><Text style={{ color: theme.accent, fontFamily: fontFamily.semibold }}>{ar ? 'إغلاق' : 'Close'}</Text></Pressable>}
+              trailing={(
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <Pressable accessibilityRole="button" onPress={() => setGrid((value) => !value)}>
+                    <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold }}>{text(locale, grid ? 'listView' : 'gridView')}</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}><Text style={{ color: theme.accent, fontFamily: fontFamily.semibold }}>{ar ? 'إغلاق' : 'Close'}</Text></Pressable>
+                </View>
+              )}
             />
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
               <View style={{ flex: 1, height: 50, flexDirection: 'row', alignItems: 'center', gap: spacing[2], borderRadius: radius.pill, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, paddingHorizontal: spacing[4] }}>
@@ -205,24 +275,70 @@ export default function ExercisesScreen() {
                 {activeFilters > 0 ? <View style={{ position: 'absolute', top: -3, end: -2, minWidth: 19, height: 19, borderRadius: 10, backgroundColor: theme.ember, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: theme.emberInk, fontFamily: fontFamily.bold, fontSize: 10 }}>{activeFilters}</Text></View> : null}
               </Pressable>
             </View>
-            <View style={{ height: spacing[4] }} />
+            <View style={{ height: spacing[3] }} />
+            <View style={{ flexDirection: 'row', gap: spacing[2], marginBottom: spacing[3] }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/scanner', params: { intent: 'exercise' } })}
+                style={{ flex: 1, minHeight: 46, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing[2] }}
+              >
+                <SymbolView name={{ ios: 'barcode.viewfinder', android: 'qr_code_scanner', web: 'qr_code_scanner' }} size={18} tintColor={theme.accent} />
+                <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.label }}>{text(locale, 'scanGym')}</Text>
+              </Pressable>
+            </View>
             <TrainingFamilyCards value={discipline} onChange={setDiscipline} counts={familyCounts} />
+            <MuscleGroupChips value={muscle} onChange={setMuscle} />
+            <EquipmentKindChips value={equipmentKind} onChange={setEquipmentKind} />
+            <DifficultyChips value={difficulty} onChange={setDifficulty} />
             <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: typeScale.label, marginBottom: spacing[2], textAlign: ar ? 'right' : 'left' }}>
               {ar ? `${formatCount(visible.length, locale)} تمرين مطابق` : `${formatCount(visible.length, locale)} matching exercises`}
             </Text>
           </View>
-        )}
-        ListEmptyComponent={<EmptyState compact title={ar ? 'لا توجد نتائج' : 'No results'} body={ar ? 'جرّب كلمة أقصر أو غيّر التصفية.' : 'Try a shorter search or change the filters.'} />}
-        renderItem={({ item, index }) => item.kind === 'section'
-          ? <SectionLabel>{item.title}</SectionLabel>
-          : <ExerciseRow exercise={item.exercise} index={index} onPress={() => setSelected(item.exercise)} />}
-      />
+  );
+
+  return (
+    <Screen>
+      {grid ? (
+        <FlashList
+          data={visible}
+          numColumns={2}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: spacing[7] }}
+          ListHeaderComponent={libraryHeader}
+          ListEmptyComponent={<EmptyState compact title={ar ? 'لا توجد نتائج' : 'No results'} body={ar ? 'جرّب كلمة أقصر أو غيّر التصفية.' : 'Try a shorter search or change the filters.'} />}
+          renderItem={({ item }) => (
+            <ExerciseTile exercise={item} onPress={() => setSelected(item)} onStart={() => beginExercise(item)} />
+          )}
+        />
+      ) : (
+        <FlashList
+          data={rows}
+          keyExtractor={(item) => item.key}
+          getItemType={(item) => item.kind}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: spacing[7] }}
+          ListHeaderComponent={libraryHeader}
+          ListEmptyComponent={<EmptyState compact title={ar ? 'لا توجد نتائج' : 'No results'} body={ar ? 'جرّب كلمة أقصر أو غيّر التصفية.' : 'Try a shorter search or change the filters.'} />}
+          renderItem={({ item, index }) => item.kind === 'section'
+            ? <SectionLabel>{item.title}</SectionLabel>
+            : <ExerciseRow exercise={item.exercise} index={index} onPress={() => setSelected(item.exercise)} onStart={() => beginExercise(item.exercise)} />}
+        />
+      )}
 
       {filtersOpen ? <BottomSheet visible onClose={() => setFiltersOpen(false)}>
         <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 580 }}>
           <AppHeader title={ar ? 'تصفية المكتبة' : 'Filter library'} subtitle={ar ? 'أظهر ما يناسب رياضتك ومكانك فقط' : 'Show what fits your sport and place'} />
           <SectionLabel>{ar ? 'الرياضة' : 'Discipline'}</SectionLabel>
           <TrainingFamilyCards value={discipline} onChange={setDiscipline} counts={familyCounts} />
+          <SectionLabel>{ar ? 'العضلة' : 'Muscle'}</SectionLabel>
+          <MuscleGroupChips value={muscle} onChange={setMuscle} />
+          <SectionLabel>{ar ? 'الأداة' : 'Equipment'}</SectionLabel>
+          <EquipmentKindChips value={equipmentKind} onChange={setEquipmentKind} />
+          <SectionLabel>{ar ? 'المستوى' : 'Level'}</SectionLabel>
+          <DifficultyChips value={difficulty} onChange={setDifficulty} />
           <SectionLabel>{ar ? 'مكان التدريب' : 'Training place'}</SectionLabel>
           <EnvironmentCards
             value={environment}
@@ -237,7 +353,7 @@ export default function ExercisesScreen() {
               <EquipmentBrandCards value={brand} onChange={setBrand} manufacturers={manufacturers.data?.manufacturers ?? []} />
             </>
           ) : null}
-          <Button label={ar ? 'مسح التصفية' : 'Clear filters'} variant="secondary" onPress={() => { setDiscipline('all'); setEnvironment('all'); setBrand('all'); }} />
+          <Button label={ar ? 'مسح التصفية' : 'Clear filters'} variant="secondary" onPress={() => { setDiscipline('all'); setEnvironment('all'); setBrand('all'); setMuscle('all'); setEquipmentKind('all'); setDifficulty('all'); }} />
           <Button label={ar ? 'عرض النتائج' : 'Show results'} onPress={() => setFiltersOpen(false)} />
         </ScrollView>
       </BottomSheet> : null}
@@ -278,6 +394,13 @@ export default function ExercisesScreen() {
               </View>
             ))}
             <Text style={{ color: theme.warning, fontFamily: fontFamily.medium, fontSize: typeScale.micro, lineHeight: 17, marginTop: spacing[2], textAlign: ar ? 'right' : 'left' }}>{text(locale, 'unreviewed')}</Text>
+            <Button
+              label={starting ? text(locale, 'saving') : text(locale, 'startNow')}
+              disabled={starting}
+              onPress={() => {
+                if (selected !== null) beginExercise(selected);
+              }}
+            />
         </ScrollView>
       </BottomSheet> : null}
     </Screen>

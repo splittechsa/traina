@@ -16,6 +16,9 @@ import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
 import { parseOnboardingDraft, type OnboardingDraft } from '../../src/onboarding/draft';
 import { measurementIssue, measurementPayload, onboardingFailure } from '../../src/onboarding/measurements';
+import { targetsFromOnboarding } from '../../src/nutrition/fromProfile';
+import { LOCAL_KEYS, useLocalValue } from '../../src/storage/local';
+import type { MacroTargets } from '../../src/nutrition/targets';
 import { Body, Button, Field, Screen, StatusLine } from '../../src/ui/Screen';
 import { EditorialFrame, EditorialHint, editorialPhotos } from '../../src/ui/editorial';
 import { LoadingSkeleton } from '../../src/ui/kit';
@@ -124,6 +127,7 @@ export default function OnboardingScreen() {
   const [ageYears, setAgeYears] = useState('');
   const [heightCm, setHeightCm] = useState('');
   const [weightKg, setWeightKg] = useState('');
+  const [sex, setSex] = useState<'male' | 'female'>('male');
   const [experience, setExperience] = useState<(typeof EXPERIENCES)[number]>('beginner');
   const [goal, setGoal] = useState<(typeof GOALS)[number]>('general_health');
   const [sports, setSports] = useState<Sport[]>(['general_fitness']);
@@ -132,9 +136,12 @@ export default function OnboardingScreen() {
   const [activity, setActivity] = useState<(typeof ACTIVITY_LEVELS)[number]>('moderate');
   const [when, setWhen] = useState<(typeof times)[number]>('evening');
   const [diet, setDiet] = useState<(typeof diets)[number]>('no_preference');
+  const [nutritionPace, setNutritionPace] = useState<'sprint' | 'steady' | 'gentle'>('steady');
+  const [horizonWeeks, setHorizonWeeks] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [storyIndex, setStoryIndex] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  const macroStore = useLocalValue<MacroTargets | null>(LOCAL_KEYS.macroTargets, null);
   const meKey = ['me', tokens?.accessToken] as const;
   const me = useQuery({
     queryKey: meKey,
@@ -155,6 +162,7 @@ export default function OnboardingScreen() {
         setAgeYears(draft.ageYears);
         setHeightCm(draft.heightCm);
         setWeightKg(draft.weightKg);
+        setSex(draft.sex);
         setExperience(pick(draft.experience, EXPERIENCES, 'beginner'));
         setGoal(pick(draft.goal, GOALS, 'general_health'));
         setSports(draft.sports.filter((item): item is Sport => (SPORTS as readonly string[]).includes(item)));
@@ -163,6 +171,8 @@ export default function OnboardingScreen() {
         setActivity(pick(draft.activity, ACTIVITY_LEVELS, 'moderate'));
         setWhen(pick(draft.when, times, 'evening'));
         setDiet(pick(draft.diet, diets, 'no_preference'));
+        setNutritionPace(draft.nutritionPace);
+        setHorizonWeeks(draft.horizonWeeks);
       })
       .finally(() => setHydrated(true));
   }, []);
@@ -192,6 +202,7 @@ export default function OnboardingScreen() {
       ageYears,
       heightCm,
       weightKg,
+      sex,
       experience,
       goal,
       discipline: disciplineForSports(sports),
@@ -201,9 +212,11 @@ export default function OnboardingScreen() {
       activity,
       when,
       diet,
+      nutritionPace,
+      horizonWeeks,
     };
     void SecureStore.setItemAsync(DRAFT_KEY, JSON.stringify(draft));
-  }, [hydrated, serverComplete, step, storyIndex, displayName, ageYears, heightCm, weightKg, experience, goal, sports, sessionsPerWeek, environment, activity, when, diet]);
+  }, [hydrated, serverComplete, step, storyIndex, displayName, ageYears, heightCm, weightKg, sex, experience, goal, sports, sessionsPerWeek, environment, activity, when, diet, nutritionPace, horizonWeeks]);
 
   if (!hydrated || (tokens !== null && me.isPending)) {
     return (
@@ -247,6 +260,7 @@ export default function OnboardingScreen() {
           ageYears: measurements.ageYears,
           heightCm: measurements.heightCm,
           weightKg: measurements.weightKg,
+          sex,
           trainingExperience: experience,
           goals: [goal],
           discipline: disciplineForSports(sports),
@@ -263,6 +277,8 @@ export default function OnboardingScreen() {
           hasGymMembership: environment === 'gym',
           locale,
           measurementUnits: 'metric',
+          nutritionPace: asksFuel ? nutritionPace : undefined,
+          horizonWeeks: asksFuel ? horizonWeeks : null,
         },
       });
       if (saved.persisted !== true) {
@@ -270,6 +286,22 @@ export default function OnboardingScreen() {
       }
       if (displayName.trim().length > 0) {
         await apiRequest('/v1/profile', { method: 'PATCH', body: { displayName: displayName.trim() } });
+      }
+      const heightNum = Number(measurements.heightCm.replace(',', '.'));
+      const weightNum = Number(measurements.weightKg.replace(',', '.'));
+      if (Number.isFinite(heightNum) && Number.isFinite(weightNum)) {
+        await macroStore.save(
+          targetsFromOnboarding({
+            sex,
+            ageYears: measurements.ageYears,
+            heightCm: heightNum,
+            weightKg: weightNum,
+            activityLevel: activity,
+            goals: [goal],
+            nutritionPace: asksFuel ? nutritionPace : 'steady',
+            horizonWeeks: asksFuel ? horizonWeeks : null,
+          }),
+        );
       }
       const fresh = await apiRequest<Me>('/v1/me');
       if (!profileIsComplete(fresh)) {
@@ -296,6 +328,7 @@ export default function OnboardingScreen() {
   const offeredGoals = goalsForSports(sports);
   const asksFuel = (fuelGoals as readonly string[]).includes(goal);
   const actionLabel = last ? (saving ? text(locale, 'saving') : text(locale, 'save')) : text(locale, 'continue');
+  // asksFuel is used by submit() via closure after this render completes.
 
   function toggleSport(id: string) {
     const sport = id as Sport;
@@ -373,6 +406,15 @@ export default function OnboardingScreen() {
       {current === 'measurements' ? (
         <View>
           <Field inverse label={text(locale, 'displayName')} value={displayName} onChangeText={setDisplayName} textContentType="name" autoComplete="name" autoCapitalize="words" />
+          <EditorialHint>{locale === 'ar' ? 'الجنس (لحساب الطاقة)' : 'Sex (for energy estimate)'}</EditorialHint>
+          <ChoiceList
+            value={sex}
+            onChange={(id) => setSex(id === 'female' ? 'female' : 'male')}
+            options={[
+              { id: 'male', label: locale === 'ar' ? 'ذكر' : 'Male' },
+              { id: 'female', label: locale === 'ar' ? 'أنثى' : 'Female' },
+            ]}
+          />
           <Field inverse label={text(locale, 'age')} value={ageYears} onChangeText={setAgeYears} keyboardType="number-pad" />
           <Field inverse label={`${text(locale, 'height')} (${text(locale, 'centimeters')})`} value={heightCm} onChangeText={setHeightCm} keyboardType="decimal-pad" />
           <Field inverse label={`${text(locale, 'weight')} (${text(locale, 'kilograms')})`} value={weightKg} onChangeText={setWeightKg} keyboardType="decimal-pad" />
@@ -387,13 +429,48 @@ export default function OnboardingScreen() {
         </View>
       ) : null}
       {current === 'nutrition' ? (
-        <ChoiceList value={diet} onChange={(id) => setDiet(id as (typeof diets)[number])} options={diets.map((item) => ({ id: item, label: label(locale, 'diet', item) }))} />
+        <View>
+          <ChoiceList value={diet} onChange={(id) => setDiet(id as (typeof diets)[number])} options={diets.map((item) => ({ id: item, label: label(locale, 'diet', item) }))} />
+          {asksFuel ? (
+            <View style={{ marginTop: spacing[3], gap: spacing[2] }}>
+              <EditorialHint>{locale === 'ar' ? 'سرعة الفترة ليزن (مو حاسبة ثانية)' : 'Pace for Yazan (not a second calculator)'}</EditorialHint>
+              <ChoiceList
+                value={horizonWeeks === null ? nutritionPace : `w${horizonWeeks}`}
+                onChange={(id) => {
+                  if (id === 'sprint' || id === 'steady' || id === 'gentle') {
+                    setNutritionPace(id);
+                    setHorizonWeeks(null);
+                    return;
+                  }
+                  if (id === 'w3') { setHorizonWeeks(3); return; }
+                  if (id === 'w6') { setHorizonWeeks(6); return; }
+                  if (id === 'w12') { setHorizonWeeks(12); }
+                }}
+                options={[
+                  { id: 'sprint', label: locale === 'ar' ? 'سريع وقوي' : 'Sprint' },
+                  { id: 'steady', label: locale === 'ar' ? 'طبيعي' : 'Natural' },
+                  { id: 'gentle', label: locale === 'ar' ? 'هادئ' : 'Gentle' },
+                  { id: 'w3', label: locale === 'ar' ? '٣ أسابيع' : '3 weeks' },
+                  { id: 'w6', label: locale === 'ar' ? '٦ أسابيع' : '6 weeks' },
+                  { id: 'w12', label: locale === 'ar' ? '١٢ أسبوع' : '12 weeks' },
+                ]}
+              />
+            </View>
+          ) : null}
+        </View>
       ) : null}
       {current === 'review' ? (
         <View style={{ gap: 4 }}>
           <EditorialHint>{labelListSafe(locale, sports)}</EditorialHint>
           <EditorialHint>{`${label(locale, 'goal', goal)} · ${label(locale, 'experience', experience)}`}</EditorialHint>
-          <EditorialHint>{`${displayName} · ${ageYears} · ${heightCm} ${text(locale, 'centimeters')} · ${weightKg} ${text(locale, 'kilograms')}`}</EditorialHint>
+          <EditorialHint>{`${displayName} · ${sex === 'male' ? (locale === 'ar' ? 'ذكر' : 'Male') : (locale === 'ar' ? 'أنثى' : 'Female')} · ${ageYears} · ${heightCm} ${text(locale, 'centimeters')} · ${weightKg} ${text(locale, 'kilograms')}`}</EditorialHint>
+          {asksFuel ? (
+            <EditorialHint>
+              {locale === 'ar'
+                ? `وتيرة يزن: ${horizonWeeks !== null ? `${horizonWeeks} أسابيع` : nutritionPace}`
+                : `Yazan pace: ${horizonWeeks !== null ? `${horizonWeeks} weeks` : nutritionPace}`}
+            </EditorialHint>
+          ) : null}
           <EditorialHint>{text(locale, 'planNote')}</EditorialHint>
         </View>
       ) : null}

@@ -6,6 +6,7 @@ function input(overrides: Partial<OnboardingInput> = {}): OnboardingInput {
     ageYears: 28,
     heightCm: '170.5',
     weightKg: '70.25',
+    sex: 'male',
     trainingExperience: 'intermediate',
     goals: ['strength'],
     discipline: 'powerlifting',

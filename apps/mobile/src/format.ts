@@ -23,6 +23,15 @@ export function formatCount(value: number, locale: Locale): string {
   }).format(value);
 }
 
+export function formatDuration(totalSeconds: number): string {
+  const safe = Number.isFinite(totalSeconds) ? Math.max(0, Math.floor(totalSeconds)) : 0;
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${pad(minutes)}:${pad(seconds)}`;
+}
+
 export function formatKg(grams: number, locale: Locale): string {
   return formatCount(Number(formatKgFromGrams(grams)), locale);
 }

@@ -5,6 +5,7 @@ export type OnboardingDraft = {
   ageYears: string;
   heightCm: string;
   weightKg: string;
+  sex: 'male' | 'female';
   experience: string;
   goal: string;
   discipline: string;
@@ -14,6 +15,8 @@ export type OnboardingDraft = {
   activity: string;
   when: string;
   diet: string;
+  nutritionPace: 'sprint' | 'steady' | 'gentle';
+  horizonWeeks: number | null;
 };
 
 const empty: OnboardingDraft = {
@@ -23,6 +26,7 @@ const empty: OnboardingDraft = {
   ageYears: '',
   heightCm: '',
   weightKg: '',
+  sex: 'male',
   experience: 'beginner',
   goal: 'general_health',
   discipline: 'general_fitness',
@@ -32,6 +36,8 @@ const empty: OnboardingDraft = {
   activity: 'moderate',
   when: 'evening',
   diet: 'no_preference',
+  nutritionPace: 'steady',
+  horizonWeeks: null,
 };
 
 function stringList(value: unknown, fallback: string[]): string[] {
@@ -60,6 +66,7 @@ export function parseOnboardingDraft(raw: string | null): OnboardingDraft | null
       ageYears: textOf(parsed.ageYears, ''),
       heightCm: textOf(parsed.heightCm, ''),
       weightKg: textOf(parsed.weightKg, ''),
+      sex: parsed.sex === 'female' ? 'female' : 'male',
       experience: textOf(parsed.experience, empty.experience),
       goal: textOf(parsed.goal, empty.goal),
       discipline: textOf(parsed.discipline, empty.discipline),
@@ -69,6 +76,14 @@ export function parseOnboardingDraft(raw: string | null): OnboardingDraft | null
       activity: textOf(parsed.activity, empty.activity),
       when: textOf(parsed.when, empty.when),
       diet: textOf(parsed.diet, empty.diet),
+      nutritionPace:
+        parsed.nutritionPace === 'sprint' || parsed.nutritionPace === 'gentle' || parsed.nutritionPace === 'steady'
+          ? parsed.nutritionPace
+          : empty.nutritionPace,
+      horizonWeeks:
+        typeof parsed.horizonWeeks === 'number' && Number.isInteger(parsed.horizonWeeks) && parsed.horizonWeeks >= 1 && parsed.horizonWeeks <= 52
+          ? parsed.horizonWeeks
+          : null,
     };
   } catch {
     return null;

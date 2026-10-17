@@ -1,75 +1,87 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, View, Text, Pressable } from 'react-native';
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DISCIPLINES, type Discipline } from '@sahhti/domain';
+import { DISCIPLINES, nextProgramDayIndex } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { messageFor } from '../../src/api/errors';
-import { formatCount, formatKg, formatRiyadhDate, formatRiyadhWeekday, riyadhToday } from '../../src/format';
+import { formatCount, formatDuration, formatRiyadhDate, riyadhToday } from '../../src/format';
 import { label } from '../../src/i18n/labels';
 import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
-import { featuredSession, uniqueById } from '../../src/lists/unique';
-import { editorialPhotos, PhotoWash } from '../../src/ui/editorial';
+import { uniqueById } from '../../src/lists/unique';
 import { plannedExercises } from '../../src/training/plan';
 import { fontFamily } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
-import { stableRecordKey } from '../../src/lists/keys';
 import { Body, Button, Field, Screen, ScreenBody } from '../../src/ui/Screen';
-import { AppHeader, BottomSheet, ErrorState, ExerciseCard, ListRow, LoadingSkeleton, MediaRow, SectionLabel, SectionTitle, SegmentedControl, SurfaceCard } from '../../src/ui/kit';
+import { AppHeader, BottomSheet, ErrorState, ExerciseCard, LoadingSkeleton, SectionLabel, SegmentedControl } from '../../src/ui/kit';
 import {
-  asLibraryList,
   filterExerciseLibrary,
+  type DifficultyFilter,
   type EquipmentBrand,
+  type EquipmentKind,
   type EquipmentManufacturer,
   type LibraryExercise,
+  type MuscleGroup,
   type TrainingEnvironment,
 } from '../../src/training/library';
-import { EnvironmentCards, EquipmentBrandCards, TrainingFamilyCards, familyForDiscipline, type TrainingFamily } from '../../src/training/filterCards';
+import { DifficultyChips, EnvironmentCards, EquipmentBrandCards, EquipmentKindChips, MuscleGroupChips, TrainingFamilyCards, familyForDiscipline } from '../../src/training/filterCards';
 
-// Every discipline gets a deliberate photo instead of every history row reusing the same
-// running shot regardless of what was actually trained.
-const disciplinePhoto: Record<Discipline, keyof typeof editorialPhotos> = {
-  bodybuilding: 'strength',
-  powerlifting: 'strength',
-  crossfit: 'run',
-  calisthenics: 'recovery',
-  functional_training: 'run',
-  general_fitness: 'strength',
-  hybrid: 'strength',
-};
-
-function photoFor(discipline: string): keyof typeof editorialPhotos {
-  return (disciplinePhoto as Record<string, keyof typeof editorialPhotos>)[discipline] ?? 'strength';
-}
-
-function weekDays(): string[] {
+function lastSevenDays(): string[] {
   const todayIso = riyadhToday();
   const [year, month, day] = todayIso.split('-').map(Number);
   const anchor = new Date(Date.UTC(year ?? 2026, (month ?? 1) - 1, day ?? 1, 12));
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(anchor);
-    date.setUTCDate(anchor.getUTCDate() - 3 + index);
+    date.setUTCDate(anchor.getUTCDate() - (6 - index));
     return date.toISOString().slice(0, 10);
   });
 }
 
 type Exercise = LibraryExercise;
-type SessionRow = { id: string; name: string; status: string; discipline: string; scheduled_for: string };
-type Progress = { personalRecords: { id: string; exercise_id: string; load_grams: number; reps: number }[] };
+type SessionRow = {
+  id: string;
+  name: string;
+  status: string;
+  discipline: string;
+  scheduled_for: string;
+  duration_seconds?: number;
+  completed_at?: string | null;
+};
+type ProgramDay = { name_ar: string; name_en: string; exerciseCount: number };
+type ProgramTemplate = {
+  id: string;
+  discipline: string;
+  name_ar: string;
+  name_en: string;
+  summary_ar: string;
+  summary_en: string;
+  daysPerWeek?: number;
+  recommended?: boolean;
+  days: ProgramDay[];
+};
+type ProgramRecommendation = { id: string; score: number; reason_ar: string; reason_en: string };
+type ProgramsPayload = {
+  templates: ProgramTemplate[];
+  recommended?: ProgramRecommendation[];
+  active: { id: string; templateId: string | null; name: string; discipline: string; days: ProgramDay[] } | null;
+};
 
 export default function TrainingScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
   const client = useQueryClient();
-  const [filter, setFilter] = useState<TrainingFamily>('all');
+  const isAr = locale === 'ar';
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [discipline, setDiscipline] = useState<(typeof DISCIPLINES)[number]>('general_fitness');
   const [environment, setEnvironment] = useState<TrainingEnvironment>('all');
   const [equipmentBrand, setEquipmentBrand] = useState<EquipmentBrand | 'all'>('all');
+  const [muscle, setMuscle] = useState<MuscleGroup>('all');
+  const [equipmentKind, setEquipmentKind] = useState<EquipmentKind>('all');
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>('all');
+  const [builderQuery, setBuilderQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [format, setFormat] = useState<'amrap' | 'emom' | 'for_time'>('amrap');
   const [minutes, setMinutes] = useState('12');
@@ -79,6 +91,8 @@ export default function TrainingScreen() {
   const [sets, setSets] = useState('3');
   const [reps, setReps] = useState('8');
   const [message, setMessage] = useState('');
+  const [programOpen, setProgramOpen] = useState(false);
+  const [programBusy, setProgramBusy] = useState(false);
   const exercises = useQuery({
     queryKey: ['exercises'],
     queryFn: () => apiRequest<{ exercises: Exercise[] }>('/v1/exercises'),
@@ -91,28 +105,31 @@ export default function TrainingScreen() {
     queryKey: ['sessions'],
     queryFn: () => apiRequest<{ sessions: SessionRow[] }>('/v1/training/sessions'),
   });
-  const progress = useQuery({
-    queryKey: ['progress'],
-    queryFn: () => apiRequest<Progress>('/v1/progress'),
+  const programs = useQuery({
+    queryKey: ['programs'],
+    queryFn: () => apiRequest<ProgramsPayload>('/v1/training/programs'),
   });
 
   const allRows = useMemo(() => uniqueById(sessions.data?.sessions ?? []), [sessions.data?.sessions]);
-  const rows = useMemo(
-    () => filter === 'all' ? allRows : allRows.filter((session) => familyForDiscipline(session.discipline) === filter),
-    [allRows, filter],
-  );
-  const sessionFamilyCounts = useMemo(() => ({
-    all: allRows.length,
-    strength: allRows.filter((session) => familyForDiscipline(session.discipline) === 'strength').length,
-    crossfit: allRows.filter((session) => familyForDiscipline(session.discipline) === 'crossfit').length,
-    calisthenics: allRows.filter((session) => familyForDiscipline(session.discipline) === 'calisthenics').length,
-  }), [allRows]);
-  const featured = featuredSession(rows, riyadhToday());
-  const rest = rows.filter((session) => session.id !== featured?.id);
-  const today = riyadhToday();
-  const todayCount = rows.filter((session) => String(session.scheduled_for).slice(0, 10) === today).length;
-  const completedCount = rows.filter((session) => session.status === 'completed').length;
-  const activeCount = rows.filter((session) => session.status === 'in_progress' || session.status === 'paused').length;
+  const liveSession = allRows.find((session) => session.status === 'in_progress') ?? allRows.find((session) => session.status === 'paused');
+  const history = allRows.filter((session) => session.id !== liveSession?.id).slice(0, 5);
+  const recentSet = new Set(lastSevenDays());
+  const completedThisWeek = allRows.filter((session) => session.status === 'completed' && recentSet.has(String(session.scheduled_for).slice(0, 10))).length;
+  const nextDay = nextProgramDayIndex(completedThisWeek, programs.data?.active?.days.length ?? 0);
+  const active = programs.data?.active ?? null;
+  const templates = programs.data?.templates ?? [];
+  const recommended = (programs.data?.recommended ?? [])
+    .map((item) => templates.find((template) => template.id === item.id))
+    .filter((template): template is ProgramTemplate => template !== undefined);
+  const picks = recommended.length > 0 ? recommended.slice(0, 4) : templates.slice(0, 4);
+  const todayDay = active?.days[nextDay];
+
+  async function openSession(sessionId: string) {
+    await client.invalidateQueries({ queryKey: ['sessions'] });
+    await client.invalidateQueries({ queryKey: ['session'] });
+    await client.invalidateQueries({ queryKey: ['home'] });
+    router.push({ pathname: '/workout/[id]', params: { id: sessionId } });
+  }
 
   async function schedule() {
     if (saving) return;
@@ -129,7 +146,7 @@ export default function TrainingScreen() {
       setMessage(text(locale, 'error'));
       return;
     }
-    const exercises = plannedExercises({
+    const planned = plannedExercises({
       discipline,
       exerciseIds: selected,
       sets: Number(sets),
@@ -148,15 +165,14 @@ export default function TrainingScreen() {
           name: name.trim().length > 0 ? name.trim() : text(locale, 'workout'),
           discipline,
           scheduledFor: new Date().toISOString(),
-          exercises,
+          exercises: planned,
+          startNow: true,
         },
       });
-      await client.invalidateQueries({ queryKey: ['sessions'] });
-      await client.invalidateQueries({ queryKey: ['home'] });
       setOpen(false);
       setName('');
       setSelected([]);
-      router.push({ pathname: '/workout/[id]', params: { id: created.session.id } });
+      await openSession(created.session.id);
     } catch (caught) {
       setMessage(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
     } finally {
@@ -164,15 +180,95 @@ export default function TrainingScreen() {
     }
   }
 
-  if (sessions.isPending || exercises.isPending) {
+  async function startProgramDay(dayIndex: number) {
+    if (programBusy || active === null) return;
+    setProgramBusy(true);
+    setMessage('');
+    try {
+      const created = await apiRequest<{ session: { id: string } }>(`/v1/training/programs/${active.id}/start-day`, {
+        method: 'POST',
+        body: { dayIndex, startNow: true },
+      });
+      if (created.session?.id === undefined) {
+        setMessage(text(locale, 'error'));
+        return;
+      }
+      setProgramOpen(false);
+      await openSession(created.session.id);
+    } catch (caught) {
+      setMessage(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
+    } finally {
+      setProgramBusy(false);
+    }
+  }
+
+  async function startTemplate(templateId: string) {
+    if (programBusy) return;
+    setProgramBusy(true);
+    setMessage('');
+    try {
+      const activated = await apiRequest<{ program: { id: string } }>('/v1/training/programs', {
+        method: 'POST',
+        body: { templateId },
+      });
+      await client.invalidateQueries({ queryKey: ['programs'] });
+      const created = await apiRequest<{ session: { id: string } }>(`/v1/training/programs/${activated.program.id}/start-day`, {
+        method: 'POST',
+        body: { dayIndex: 0, startNow: true },
+      });
+      if (created.session?.id === undefined) {
+        setMessage(text(locale, 'error'));
+        return;
+      }
+      setProgramOpen(false);
+      await openSession(created.session.id);
+    } catch (caught) {
+      setMessage(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
+    } finally {
+      setProgramBusy(false);
+    }
+  }
+
+  async function finishLive() {
+    if (programBusy || liveSession === undefined) return;
+    setProgramBusy(true);
+    setMessage('');
+    const at = new Date().toISOString();
+    try {
+      if (liveSession.status !== 'in_progress') {
+        await apiRequest(`/v1/training/sessions/${liveSession.id}/start`, { method: 'POST', body: { at } });
+      }
+      await apiRequest(`/v1/training/sessions/${liveSession.id}/complete`, { method: 'POST', body: { at: new Date().toISOString() } });
+      await client.invalidateQueries({ queryKey: ['sessions'] });
+      await client.invalidateQueries({ queryKey: ['session'] });
+      await client.invalidateQueries({ queryKey: ['home'] });
+      await client.invalidateQueries({ queryKey: ['progress'] });
+    } catch (caught) {
+      setMessage(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
+    } finally {
+      setProgramBusy(false);
+    }
+  }
+
+  function startToday() {
+    if (active !== null) {
+      void startProgramDay(nextDay);
+      return;
+    }
+    const first = picks[0];
+    if (first !== undefined) void startTemplate(first.id);
+    else setProgramOpen(true);
+  }
+
+  if (sessions.isPending) {
     return (
       <Screen>
-        <AppHeader title={text(locale, 'training')} subtitle={locale === 'ar' ? 'نجهّز جلستك' : 'Preparing your session'} />
+        <AppHeader title={text(locale, 'training')} subtitle={text(locale, 'timeOnlyHint')} />
         <LoadingSkeleton />
       </Screen>
     );
   }
-  if (sessions.isError || exercises.isError) {
+  if (sessions.isError) {
     const offline = sessions.error instanceof ApiClientError && sessions.error.code === 'OFFLINE';
     return (
       <Screen>
@@ -184,109 +280,166 @@ export default function TrainingScreen() {
 
   const library = exercises.data?.exercises ?? [];
   const builderLibrary = filterExerciseLibrary(library, {
-    query: '',
+    query: builderQuery,
     discipline,
     environment,
     brand: equipmentBrand,
+    muscle,
+    equipmentKind,
+    difficulty,
   });
   const builderFamily = familyForDiscipline(discipline);
+  const card = { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 20, padding: 16, marginBottom: 10 } as const;
+  const primaryLabel = liveSession !== undefined
+    ? text(locale, 'continueWorkout')
+    : programBusy
+      ? text(locale, 'saving')
+      : text(locale, 'start');
+
   return (
     <Screen>
-      <ScreenBody footer={<Button label={text(locale, 'createPlan')} onPress={() => setOpen(true)} />}>
-        <AppHeader title={text(locale, 'training')} subtitle={locale === 'ar' ? 'خطتك، قوتك، وتقدمك في مكان واحد' : 'Your plan, strength and progress'} />
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-          {[
-            [locale === 'ar' ? 'اليوم' : 'Today', todayCount],
-            [locale === 'ar' ? 'مكتملة' : 'Completed', completedCount],
-            [locale === 'ar' ? 'نشطة' : 'Active', activeCount],
-          ].map(([caption, value]) => (
-            <SurfaceCard key={String(caption)} padding={12} style={{ flex: 1 }}>
-              <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 28 }}>{formatCount(Number(value), locale)}</Text>
-              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 11, marginTop: 3 }}>{caption}</Text>
-            </SurfaceCard>
-          ))}
+      <ScreenBody footer={(
+        <View style={{ gap: 8 }}>
+          {message.length > 0 ? <Text style={{ color: theme.warning, fontFamily: fontFamily.medium, textAlign: isAr ? 'right' : 'left' }}>{message}</Text> : null}
+          {liveSession !== undefined ? (
+            <>
+              <Button
+                label={text(locale, 'continueWorkout')}
+                onPress={() => router.push({ pathname: '/workout/[id]', params: { id: liveSession.id } })}
+              />
+              <Button
+                label={programBusy ? text(locale, 'saving') : text(locale, 'finish')}
+                disabled={programBusy}
+                onPress={() => void finishLive()}
+              />
+            </>
+          ) : (
+            <Button label={primaryLabel} disabled={programBusy || programs.isPending} onPress={startToday} />
+          )}
         </View>
+      )}>
+        <AppHeader title={text(locale, 'training')} subtitle={text(locale, 'timeOnlyHint')} />
 
-        {/* A real training photo instead of a flat color block — Home's hero already owns that
-            composition, so Training reaches for movement and texture instead of repeating it. */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => (featured ? router.push({ pathname: '/workout/[id]', params: { id: featured.id } }) : setOpen(true))}
-        >
-          <PhotoWash source={editorialPhotos[photoFor(featured?.discipline ?? 'general_fitness')]} height={204}>
-            <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
-              <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 11, letterSpacing: 1.2, marginBottom: 6 }}>
-                {locale === 'ar' ? 'جلستك' : 'YOUR SESSION'}
-              </Text>
-              <Text style={{ color: '#FFFFFF', fontFamily: fontFamily.bold, fontSize: 23, lineHeight: 29, marginBottom: 4 }} numberOfLines={2}>
-                {featured?.name ?? (locale === 'ar' ? 'ابنِ خطتك وابدأ' : 'Build your plan')}
-              </Text>
-              <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 19, marginBottom: 14 }}>
-                {featured === null ? (locale === 'ar' ? 'اختر رياضتك وابدأ أول جلسة' : 'Choose a sport and start the first session') : `${label(locale, 'discipline', featured.discipline)} · ${label(locale, 'session', featured.status)}`}
-              </Text>
-              <View style={{ minHeight: 42, borderRadius: 16, backgroundColor: theme.heroAccent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, alignSelf: 'flex-start' }}>
-                <Text style={{ color: theme.goldInk, fontFamily: fontFamily.bold, fontSize: 14 }}>{featured ? text(locale, 'start') : text(locale, 'createPlan')}</Text>
-              </View>
-            </View>
-          </PhotoWash>
-        </Pressable>
+        {liveSession !== undefined ? (
+          <View style={{ backgroundColor: theme.hero, borderRadius: 26, padding: 22, marginBottom: 16 }}>
+            <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 12 }}>{text(locale, 'liveNow')}</Text>
+            <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 26, lineHeight: 32, marginTop: 6 }}>{liveSession.name}</Text>
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: fontFamily.regular, fontSize: 13, marginTop: 8 }}>{text(locale, 'exerciseGuide')}</Text>
+          </View>
+        ) : active !== null ? (
+          <View style={{ backgroundColor: theme.hero, borderRadius: 26, padding: 22, marginBottom: 16 }}>
+            <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 12 }}>{text(locale, 'recommendedForYou')}</Text>
+            <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 26, lineHeight: 32, marginTop: 6 }}>
+              {isAr ? (todayDay?.name_ar ?? active.name) : (todayDay?.name_en ?? active.name)}
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: fontFamily.regular, fontSize: 13, marginTop: 8 }}>
+              {todayDay === undefined
+                ? text(locale, 'timeOnlyHint')
+                : isAr
+                  ? `${formatCount(todayDay.exerciseCount, locale)} تمارين · اضغط ابدأ`
+                  : `${formatCount(todayDay.exerciseCount, locale)} exercises · tap Start`}
+            </Text>
+          </View>
+        ) : (
+          <View style={{ backgroundColor: theme.hero, borderRadius: 26, padding: 22, marginBottom: 16 }}>
+            <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 12 }}>{text(locale, 'pickSplit')}</Text>
+            <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 26, lineHeight: 32, marginTop: 6 }}>
+              {isAr ? 'ابدأ جدول جاهز' : 'Start a ready split'}
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: fontFamily.regular, fontSize: 13, marginTop: 8 }}>{text(locale, 'timeOnlyHint')}</Text>
+          </View>
+        )}
 
-        {/* Real schedule, not decoration — a day is filled only when a session actually exists on it. */}
-        <View style={{ flexDirection: 'row', marginBottom: 18 }}>
-          {weekDays().map((day) => {
-            const has = rows.some((session) => String(session.scheduled_for).slice(0, 10) === day);
-            const isToday = day === riyadhToday();
-            return (
-              <View key={day} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-                <Text style={{ color: isToday ? theme.text : theme.textMuted, fontFamily: fontFamily.medium, fontSize: 11 }}>{formatRiyadhWeekday(day, locale).slice(0, 2)}</Text>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: has ? theme.accent : theme.border }} />
-              </View>
-            );
-          })}
-        </View>
+        {liveSession === undefined && active !== null ? (
+          <View style={{ marginBottom: 8 }}>
+            {active.days.map((day, index) => (
+              <Pressable
+                key={`${day.name_en}-${index}`}
+                accessibilityRole="button"
+                onPress={() => void startProgramDay(index)}
+                style={{ ...card, borderColor: index === nextDay ? theme.accent : theme.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{isAr ? day.name_ar : day.name_en}</Text>
+                  <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12 }}>
+                    {isAr ? `${formatCount(day.exerciseCount, locale)} تمارين` : `${formatCount(day.exerciseCount, locale)} exercises`}
+                  </Text>
+                </View>
+                <Text style={{ color: theme.accent, fontFamily: fontFamily.bold }}>
+                  {programBusy ? text(locale, 'saving') : index === nextDay ? text(locale, 'start') : text(locale, 'startDay')}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable accessibilityRole="button" onPress={() => setProgramOpen(true)} style={{ marginBottom: 16 }}>
+              <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, textAlign: isAr ? 'right' : 'left' }}>{text(locale, 'switchProgram')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
-        <TrainingFamilyCards value={filter} onChange={setFilter} counts={sessionFamilyCounts} />
-        {rest.length > 0 ? <SectionLabel>{text(locale, 'history')}</SectionLabel> : null}
-        {rest.map((session) => (
-          <SurfaceCard key={session.id} padding={8} style={{ marginBottom: 10 }}>
-            <MediaRow
-              title={session.name}
-              meta={`${label(locale, 'discipline', session.discipline)} · ${formatRiyadhDate(String(session.scheduled_for), locale)}`}
-              leading={<Image source={editorialPhotos[photoFor(session.discipline)]} style={{ width: 56, height: 56, borderRadius: 16 }} contentFit="cover" cachePolicy="memory-disk" />}
-              trailing={<Text style={{ color: theme.accent, fontFamily: fontFamily.bold }}>{text(locale, 'start')}</Text>}
-              onPress={() => router.push({ pathname: '/workout/[id]', params: { id: session.id } })}
-            />
-          </SurfaceCard>
-        ))}
-        <SectionTitle title={text(locale, 'exercises')} action={locale === 'ar' ? 'عرض الكل' : 'See all'} onAction={() => router.push('/exercises')} />
-        {library.slice(0, 5).map((exercise, index) => (
-          <ExerciseCard
-            key={exercise.id}
-            index={index}
-            title={locale === 'ar' ? exercise.name_ar : exercise.name_en}
-            meta={[
-              label(locale, 'equipment', Array.isArray(exercise.equipment) ? exercise.equipment[0] ?? '' : exercise.equipment),
-              exercise.difficulty === undefined ? '' : label(locale, 'experience', exercise.difficulty),
-              asLibraryList(exercise.primary_muscles).slice(0, 2).join(' · '),
-            ].filter((part) => part.length > 0).join(' · ')}
+        {liveSession === undefined && active === null ? (
+          <View style={{ marginBottom: 8 }}>
+            {picks.map((template) => (
+              <Pressable
+                key={template.id}
+                accessibilityRole="button"
+                onPress={() => void startTemplate(template.id)}
+                style={card}
+              >
+                <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: 11 }}>{text(locale, 'suggestedForYou')}</Text>
+                <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 18, marginTop: 4 }}>{isAr ? template.name_ar : template.name_en}</Text>
+                <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 13, marginTop: 4, lineHeight: 20 }}>
+                  {isAr ? template.summary_ar : template.summary_en}
+                </Text>
+                <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, marginTop: 10 }}>
+                  {programBusy ? text(locale, 'saving') : text(locale, 'start')}
+                </Text>
+              </Pressable>
+            ))}
+            <Pressable accessibilityRole="button" onPress={() => setProgramOpen(true)} style={{ marginBottom: 16 }}>
+              <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, textAlign: isAr ? 'right' : 'left' }}>{text(locale, 'chooseProgram')}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {history.length > 0 ? <SectionLabel>{text(locale, 'history')}</SectionLabel> : null}
+        {history.map((row) => (
+          <Pressable
+            key={row.id}
+            accessibilityRole="button"
             onPress={() => {
-              setSelected((current) => (current.includes(exercise.id) ? current : [...current, exercise.id].slice(0, 8)));
-              setOpen(true);
+              if (row.status === 'completed') return;
+              if (row.status === 'abandoned') {
+                startToday();
+                return;
+              }
+              router.push({ pathname: '/workout/[id]', params: { id: row.id } });
             }}
-          />
+            style={{ ...card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{row.name}</Text>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12 }}>
+                {`${label(locale, 'discipline', row.discipline)} · ${formatRiyadhDate(String(row.scheduled_for), locale)}`}
+              </Text>
+            </View>
+            <Text style={{ color: theme.accent, fontFamily: fontFamily.bold }}>
+              {row.status === 'completed'
+                ? formatDuration(Number(row.duration_seconds ?? 0))
+                : row.status === 'in_progress' || row.status === 'paused'
+                  ? text(locale, 'continueWorkout')
+                  : row.status === 'abandoned'
+                    ? text(locale, 'startFresh')
+                    : text(locale, 'start')}
+            </Text>
+          </Pressable>
         ))}
-        {(progress.data?.personalRecords.length ?? 0) === 0 ? null : <SectionLabel>{text(locale, 'records')}</SectionLabel>}
-        {progress.data?.personalRecords.map((record) => {
-          const exercise = library.find((item) => item.id === record.exercise_id);
-          const exerciseName = exercise === undefined ? (locale === 'ar' ? 'تمرين' : 'Exercise') : locale === 'ar' ? exercise.name_ar : exercise.name_en;
-          return (
-            <ListRow
-              key={stableRecordKey(record.id)}
-              title={exerciseName}
-              meta={`${formatKg(Number(record.load_grams), locale)} × ${formatCount(Number(record.reps), locale)}`}
-            />
-          );
-        })}
+
+        <Pressable accessibilityRole="button" onPress={() => router.push('/exercises')} style={{ marginTop: 8 }}>
+          <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, textAlign: isAr ? 'right' : 'left' }}>{text(locale, 'exercises')}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" onPress={() => setOpen(true)} style={{ marginTop: 8, marginBottom: 20 }}>
+          <Text style={{ color: theme.textMuted, fontFamily: fontFamily.semibold, textAlign: isAr ? 'right' : 'left' }}>{text(locale, 'customSession')}</Text>
+        </Pressable>
       </ScreenBody>
       {open ? <BottomSheet visible onClose={() => setOpen(false)}>
         <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 24 }}>
@@ -311,6 +464,12 @@ export default function TrainingScreen() {
               ]}
             />
           ) : null}
+          <SectionLabel>{locale === 'ar' ? 'العضلة' : 'Muscle'}</SectionLabel>
+          <MuscleGroupChips value={muscle} onChange={(next) => { setMuscle(next); setSelected([]); }} />
+          <SectionLabel>{locale === 'ar' ? 'الأداة' : 'Equipment'}</SectionLabel>
+          <EquipmentKindChips value={equipmentKind} onChange={(next) => { setEquipmentKind(next); setSelected([]); }} />
+          <SectionLabel>{locale === 'ar' ? 'المستوى' : 'Level'}</SectionLabel>
+          <DifficultyChips value={difficulty} onChange={(next) => { setDifficulty(next); setSelected([]); }} />
           <SectionLabel>{locale === 'ar' ? 'مكان التدريب' : 'Training place'}</SectionLabel>
           <EnvironmentCards
             value={environment}
@@ -320,6 +479,7 @@ export default function TrainingScreen() {
               if (next !== 'gym') setEquipmentBrand('all');
             }}
           />
+          <Field label={locale === 'ar' ? 'بحث في التمارين' : 'Search exercises'} value={builderQuery} onChangeText={setBuilderQuery} />
           {environment === 'gym' ? (
             <>
               <SectionLabel>{locale === 'ar' ? 'شركة الأجهزة' : 'Equipment brand'}</SectionLabel>
@@ -333,20 +493,14 @@ export default function TrainingScreen() {
               />
             </>
           ) : null}
-          <View style={{ backgroundColor: theme.surfaceMuted, borderRadius: 18, padding: 14, marginBottom: 12 }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 16, textAlign: locale === 'ar' ? 'right' : 'left' }}>
-              {locale === 'ar' ? 'اختيار ذكي للبداية' : 'Smart starting selection'}
-            </Text>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 12, lineHeight: 20, marginTop: 3, textAlign: locale === 'ar' ? 'right' : 'left' }}>
-              {locale === 'ar' ? 'نختار تمارين متوافقة مع رياضتك ومكانك، ويمكنك تعديلها قبل الحفظ.' : 'Pick exercises that match your sport and place, then edit before saving.'}
-            </Text>
-            <Button
-              label={locale === 'ar' ? 'اقترح لي تمارين' : 'Suggest exercises'}
-              variant="secondary"
-              disabled={builderLibrary.length === 0}
-              onPress={() => setSelected(builderLibrary.slice(0, discipline === 'crossfit' || discipline === 'calisthenics' ? 4 : 6).map((exercise) => exercise.id))}
-            />
-          </View>
+          <Button
+            label={text(locale, 'scanGym')}
+            variant="secondary"
+            onPress={() => {
+              setOpen(false);
+              router.push({ pathname: '/scanner', params: { intent: 'exercise' } });
+            }}
+          />
           <Body>{`${text(locale, 'chooseExercise')} · ${formatCount(selected.length, locale)}`}</Body>
           {builderLibrary.map((exercise, index) => (
             <ExerciseCard
@@ -388,8 +542,33 @@ export default function TrainingScreen() {
             </>
           )}
           {message.length > 0 ? <Body>{message}</Body> : null}
-          <Button label={saving ? text(locale, 'saving') : text(locale, 'save')} disabled={saving} onPress={() => void schedule()} />
-          <View />
+          <Button label={saving ? text(locale, 'saving') : text(locale, 'startNow')} disabled={saving} onPress={() => void schedule()} />
+        </ScrollView>
+      </BottomSheet> : null}
+      {programOpen ? <BottomSheet visible onClose={() => setProgramOpen(false)}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 24 }}>
+          <AppHeader title={text(locale, 'programs')} subtitle={text(locale, 'programHint')} />
+          {[...templates].sort((left, right) => Number(right.recommended) - Number(left.recommended)).map((template) => (
+            <Pressable
+              key={template.id}
+              accessibilityRole="button"
+              onPress={() => void startTemplate(template.id)}
+              style={{ borderWidth: 1, borderColor: active?.templateId === template.id ? theme.accent : theme.border, backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 10 }}
+            >
+              {template.recommended ? (
+                <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: 11, marginBottom: 4 }}>{text(locale, 'suggestedForYou')}</Text>
+              ) : null}
+              <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 16, textAlign: isAr ? 'right' : 'left' }}>
+                {isAr ? template.name_ar : template.name_en}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 20, marginTop: 4, textAlign: isAr ? 'right' : 'left' }}>
+                {isAr ? template.summary_ar : template.summary_en}
+              </Text>
+              <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, marginTop: 8 }}>
+                {programBusy ? text(locale, 'saving') : text(locale, 'start')}
+              </Text>
+            </Pressable>
+          ))}
         </ScrollView>
       </BottomSheet> : null}
     </Screen>

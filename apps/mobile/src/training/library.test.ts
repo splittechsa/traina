@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brandLabel, demoProfileFor, filterExerciseLibrary, type LibraryExercise } from './library';
+import { brandLabel, demoProfileFor, disciplineForExercise, filterExerciseLibrary, normalizeScanCode, type LibraryExercise } from './library';
 
 const base: LibraryExercise = {
   id: 'exercise',
@@ -63,6 +63,47 @@ describe('filterExerciseLibrary', () => {
     }).map((item) => item.id)).toEqual(['exercise', 'power']);
   });
 
+  it('filters by muscle group, equipment, difficulty, and muscle search', () => {
+    const rows = [
+      base,
+      { ...base, id: 'row', name_ar: 'سحب', name_en: 'Row', primary_muscles: ['back'], equipment: ['cable'], difficulty: 'advanced' },
+    ];
+    expect(filterExerciseLibrary(rows, {
+      query: 'سحب',
+      discipline: 'all',
+      environment: 'all',
+      brand: 'all',
+    }).map((item) => item.id)).toEqual(['row']);
+    expect(filterExerciseLibrary(rows, {
+      query: '',
+      discipline: 'all',
+      environment: 'all',
+      brand: 'all',
+      muscle: 'chest',
+      equipmentKind: 'machine',
+      difficulty: 'beginner',
+    }).map((item) => item.id)).toEqual(['exercise']);
+  });
+
+  it('matches Arabic muscle and equipment aliases without the name containing them', () => {
+    const rows = [
+      { ...base, id: 'bench', name_ar: 'بنش', name_en: 'Bench', primary_muscles: ['chest'], equipment: ['barbell'] },
+      { ...base, id: 'row', name_ar: 'رو', name_en: 'Row', primary_muscles: ['back'], equipment: ['cable'] },
+    ];
+    expect(filterExerciseLibrary(rows, {
+      query: 'صدر',
+      discipline: 'all',
+      environment: 'all',
+      brand: 'all',
+    }).map((item) => item.id)).toEqual(['bench']);
+    expect(filterExerciseLibrary(rows, {
+      query: 'كابل',
+      discipline: 'all',
+      environment: 'all',
+      brand: 'all',
+    }).map((item) => item.id)).toEqual(['row']);
+  });
+
   it('keeps functional training inside the CrossFit family', () => {
     expect(filterExerciseLibrary([{ ...base, disciplines: ['functional_training'] }], {
       query: '',
@@ -70,6 +111,14 @@ describe('filterExerciseLibrary', () => {
       environment: 'all',
       brand: 'all',
     })).toHaveLength(1);
+  });
+});
+
+describe('disciplineForExercise and scan codes', () => {
+  it('maps library tags to a startable discipline and normalizes gym codes', () => {
+    expect(disciplineForExercise(base)).toBe('bodybuilding');
+    expect(normalizeScanCode(' trn-legpress ')).toBe('TRN-LEGPRESS');
+    expect(normalizeScanCode('traina:exercise:10000000-0000-4000-8000-000000000019')).toBe('10000000-0000-4000-8000-000000000019');
   });
 });
 

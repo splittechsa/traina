@@ -32,6 +32,17 @@ export default function CoachScreen() {
     queryKey: ['coach-messages'],
     queryFn: () => apiRequest<History>('/v1/coach/messages'),
   });
+  const checkin = useQuery({
+    queryKey: ['coach-daily-checkin'],
+    queryFn: async () => {
+      const result = await apiRequest<{ text: string; created: boolean; persona: string }>('/v1/coach/daily-checkin', {
+        method: 'POST',
+        body: {},
+      });
+      await client.invalidateQueries({ queryKey: ['coach-messages'] });
+      return result;
+    },
+  });
   const me = useQuery({
     queryKey: ['me', tokens?.accessToken],
     enabled: tokens !== null,
@@ -202,8 +213,15 @@ export default function CoachScreen() {
             body={history.error instanceof ApiClientError ? messageFor(history.error.code, locale, text(locale, 'error')) : text(locale, 'error')}
           />
         ) : null}
-        {history.data !== undefined && !providerConfigured ? <EmptyState title={text(locale, 'unavailable')} body={text(locale, 'coachUnavailable')} /> : null}
-        {providerConfigured && messages.length === 0 && !send.isPending ? (
+        {history.data !== undefined && !providerConfigured ? (
+          <EmptyState
+            compact
+            title={text(locale, 'yazanDaily')}
+            body={isAr ? 'يزن يرسل رسالة يومية من مدخلاتك حتى بدون مزوّد نموذج. الرد الحر يحتاج إعداد المزوّد.' : 'Yazan still posts a daily check-in from your logs without a model provider. Free chat needs the provider configured.'}
+          />
+        ) : null}
+        {checkin.isPending ? <AIChatBubble role="coach" text={text(locale, 'coachThinking')} pending /> : null}
+        {messages.length === 0 && !send.isPending && !checkin.isPending ? (
           <View style={{ alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20 }}>
             <View style={{ height: 56, width: 56, borderRadius: 28, backgroundColor: theme.hero, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
               <SymbolView name={{ ios: 'bolt.heart.fill', android: 'favorite', web: 'favorite' }} size={24} tintColor={theme.heroAccent} />

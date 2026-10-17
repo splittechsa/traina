@@ -40,6 +40,7 @@ vi.mock('expo-secure-store', () => ({
       ageYears: '28',
       heightCm: '170,5',
       weightKg: '70',
+      sex: 'male',
       experience: 'beginner',
       goal: 'general_health',
       discipline: 'general_fitness',
@@ -105,6 +106,26 @@ vi.mock('../auth/SessionProvider', () => ({
 
 vi.mock('../i18n/LocaleProvider', () => ({
   useLocale: () => ({ locale: 'ar', direction: 'rtl', setLocale: () => undefined }),
+}));
+
+vi.mock('../theme/ThemeProvider', () => ({
+  useTheme: () => ({
+    accent: '#0a0',
+    text: '#fff',
+    textMuted: '#aaa',
+    surface: '#111',
+    surfaceMuted: '#222',
+    border: '#333',
+    hero: '#000',
+    heroAccent: '#fc0',
+    heroText: '#fff',
+    goldInk: '#000',
+    overlay: '#0008',
+    emphasis: '#0a0',
+    emphasisText: '#fff',
+    preference: 'dark',
+    setPreference: () => undefined,
+  }),
 }));
 
 vi.mock('../ui/editorial', () => {

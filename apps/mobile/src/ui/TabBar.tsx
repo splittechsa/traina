@@ -5,9 +5,11 @@ import { SymbolView } from 'expo-symbols';
 import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { useLocale } from '../i18n/LocaleProvider';
+import { text } from '../i18n/copy';
 import { useMotion } from '../theme/motion';
 import { tabBarClearance } from './insets';
 import { tapSelection } from './haptics';
+import { QuickActionsSheet } from '../daily/QuickActions';
 
 let measuredTabBarHeight = 0;
 const tabBarSubscribers = new Set<(height: number) => void>();
@@ -48,64 +50,115 @@ type TabBarProps = {
   };
 };
 
+function TabButton({
+  route,
+  focused,
+  label,
+  onPress,
+}: {
+  route: { key: string; name: string };
+  focused: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const icon = icons[route.name as keyof typeof icons] ?? icons.home;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: focused }}
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={styles.item}
+    >
+      <View style={[styles.iconWrap, { backgroundColor: focused ? theme.accent : 'transparent' }]}>
+        <SymbolView name={icon} size={20} tintColor={focused ? theme.emphasisText : theme.textMuted} />
+      </View>
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.15}
+        style={{
+          color: focused ? theme.accent : theme.textMuted,
+          fontFamily: focused ? fontFamily.semibold : fontFamily.regular,
+          fontSize: typeScale.micro,
+          lineHeight: 16,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function BottomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const theme = useTheme();
-  const { direction } = useLocale();
+  const { direction, locale } = useLocale();
   const { reduce } = useMotion();
   const insets = useSafeAreaInsets();
+  const [quick, setQuick] = useState(false);
+  const visible = state.routes.filter((route) => route.name !== 'community' && route.name !== 'coach');
+  const left = visible.slice(0, 2);
+  const right = visible.slice(2);
+
+  function press(route: { key: string; name: string }) {
+    const index = state.routes.findIndex((entry) => entry.key === route.key);
+    const focused = state.index === index;
+    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+    if (!focused && !event.defaultPrevented) {
+      tapSelection(reduce);
+      navigation.navigate(route.name);
+    }
+  }
+
   return (
-    <View
-      onLayout={(event) => publishTabBarHeight(event.nativeEvent.layout.height + spacing[2])}
-      style={[
-        styles.bar,
-        {
-          direction,
-          backgroundColor: theme.surfaceRaised,
-          borderColor: theme.border,
-          paddingBottom: Math.max(insets.bottom, spacing[2]),
-          shadowColor: theme.shadow,
-        },
-      ]}
-    >
-      {state.routes.filter((route) => route.name !== "community").map((route) => {
-        const index = state.routes.findIndex((entry) => entry.key === route.key);
-        const focused = state.index === index;
-        const label = descriptors[route.key]?.options.title ?? route.name;
-        const icon = icons[route.name as keyof typeof icons] ?? icons.home;
-        return (
-          <Pressable
+    <>
+      <View
+        onLayout={(event) => publishTabBarHeight(event.nativeEvent.layout.height + spacing[2])}
+        style={[
+          styles.bar,
+          {
+            direction,
+            backgroundColor: theme.surfaceRaised,
+            borderColor: theme.border,
+            paddingBottom: Math.max(insets.bottom, spacing[2]),
+            shadowColor: theme.shadow,
+          },
+        ]}
+      >
+        {left.map((route) => (
+          <TabButton
             key={route.key}
-            accessibilityRole="button"
-            accessibilityState={{ selected: focused }}
-            accessibilityLabel={label}
-            onPress={() => {
-              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-              if (!focused && !event.defaultPrevented) {
-                tapSelection(reduce);
-                navigation.navigate(route.name);
-              }
-            }}
-            style={styles.item}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: focused ? theme.accent : 'transparent' }]}>
-              <SymbolView name={icon} size={20} tintColor={focused ? theme.emphasisText : theme.textMuted} />
-            </View>
-            <Text
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.15}
-              style={{
-                color: focused ? theme.accent : theme.textMuted,
-                fontFamily: focused ? fontFamily.semibold : fontFamily.regular,
-                fontSize: typeScale.micro,
-                lineHeight: 16,
-              }}
-            >
-              {label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+            route={route}
+            focused={state.index === state.routes.findIndex((entry) => entry.key === route.key)}
+            label={descriptors[route.key]?.options.title ?? route.name}
+            onPress={() => press(route)}
+          />
+        ))}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={text(locale, 'quickActions')}
+          onPress={() => {
+            tapSelection(reduce);
+            setQuick(true);
+          }}
+          style={styles.fabSlot}
+        >
+          <View style={[styles.fab, { backgroundColor: theme.accent }]}>
+            <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold, fontSize: 28, lineHeight: 30 }}>+</Text>
+          </View>
+        </Pressable>
+        {right.map((route) => (
+          <TabButton
+            key={route.key}
+            route={route}
+            focused={state.index === state.routes.findIndex((entry) => entry.key === route.key)}
+            label={descriptors[route.key]?.options.title ?? route.name}
+            onPress={() => press(route)}
+          />
+        ))}
+      </View>
+      <QuickActionsSheet visible={quick} onClose={() => setQuick(false)} />
+    </>
   );
 }
 
@@ -127,4 +180,6 @@ const styles = StyleSheet.create({
   },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 52, paddingHorizontal: 2 },
   iconWrap: { width: 46, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  fabSlot: { width: 64, alignItems: 'center', justifyContent: 'center' },
+  fab: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', marginTop: -18 },
 });

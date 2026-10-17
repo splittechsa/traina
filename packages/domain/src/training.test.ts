@@ -44,8 +44,23 @@ const set = {
 };
 
 describe('workout sessions', () => {
-  it('refuses to complete a workout that has no logged sets', () => {
-    expect(() => completeWorkout(session(), '2026-06-01T15:20:00.000Z')).toThrow(DomainError);
+  it('starts an already running session without changing it', () => {
+    const current = session();
+    expect(startWorkout(current, '2026-06-01T15:06:00.000Z')).toEqual(current);
+  });
+
+  it('resumes a paused session when start is sent again', () => {
+    const paused = pauseWorkout(session(), '2026-06-01T15:08:00.000Z');
+    const resumed = startWorkout(paused, '2026-06-01T15:09:00.000Z');
+    expect(resumed.status).toBe('in_progress');
+    expect(resumed.pauses[0]?.resumedAt).toBe('2026-06-01T15:09:00.000Z');
+  });
+
+  it('completes a timed session without logged sets', () => {
+    const finished = completeWorkout(session(), '2026-06-01T15:20:00.000Z');
+    expect(finished.summary.setCount).toBe(0);
+    expect(finished.summary.exerciseCount).toBe(0);
+    expect(finished.summary.durationSeconds).toBe(15 * 60);
   });
 
   it('records only logged sets and subtracts paused time', () => {

@@ -7,6 +7,7 @@ export const onboardingRequestSchema = z
     ageYears: z.number().int(),
     heightCm: z.string().max(8),
     weightKg: z.string().max(8),
+    sex: z.enum(['male', 'female']),
     trainingExperience: z.string().max(40),
     goals: z.array(z.string()).min(1).max(3),
     discipline: z.string().max(40),
@@ -25,6 +26,8 @@ export const onboardingRequestSchema = z
     userReportedCalorieTarget: z.number().int().nonnegative().optional(),
     measurementUnits: z.enum(['metric', 'imperial']).optional(),
     sports: z.array(z.string().max(40)).max(7).optional(),
+    nutritionPace: z.enum(['sprint', 'steady', 'gentle']).optional(),
+    horizonWeeks: z.number().int().min(1).max(52).nullable().optional(),
   })
   .strict();
 
@@ -162,6 +165,19 @@ const calisthenicsPrescription = z
 
 const sessionPrescription = z.union([strengthPrescription, crossfitPrescription, calisthenicsPrescription]);
 
+export const activateProgramSchema = z
+  .object({
+    templateId: z.string().min(1).max(40),
+  })
+  .strict();
+
+export const startProgramDaySchema = z
+  .object({
+    dayIndex: z.number().int().min(0).max(13),
+    startNow: z.boolean().optional(),
+  })
+  .strict();
+
 export const scheduleSessionSchema = z
   .object({
     name: z.string().min(1).max(80),
@@ -178,6 +194,7 @@ export const scheduleSessionSchema = z
       )
       .min(1)
       .max(20),
+    startNow: z.boolean().optional(),
   })
   .strict();
 
@@ -211,6 +228,7 @@ export const foodPortionSchema = z
     foodItemId: z.string().uuid(),
     quantityGrams: z.number().int().min(1).max(2000),
     loggedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    mealSlot: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).optional(),
   })
   .strict();
 
@@ -222,6 +240,52 @@ export const foodLogSchema = z
     carbohydrateMg: z.number().int().nonnegative(),
     fatMg: z.number().int().nonnegative(),
     source: z.enum(['manual', 'barcode', 'image_estimate', 'recipe']),
+    mealSlot: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).optional(),
+  })
+  .strict();
+
+export const copyDiarySchema = z
+  .object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .strict();
+
+export const programNutritionSchema = z
+  .object({
+    phase: z.enum(['cutting', 'maintain', 'gain', 'fitness']),
+    maintenanceKcal: z.number().int().min(1000).max(8000),
+    pace: z.enum(['sprint', 'steady', 'gentle']).optional(),
+    horizonWeeks: z.number().int().min(1).max(52).nullable().optional(),
+    weeklyEnergyDeltaKcal: z.number().int().min(-1000).max(1000).optional(),
+  })
+  .strict();
+
+export const mealPlanSlotSchema = z
+  .object({
+    slot: z.enum(['breakfast', 'lunch', 'dinner', 'snack']),
+    templateId: z.string().min(1).max(80).optional(),
+    custom: z
+      .object({
+        label: z.string().trim().min(2).max(80),
+        energyKcal: z.number().int().nonnegative().max(2500),
+        proteinMg: z.number().int().nonnegative(),
+        carbohydrateMg: z.number().int().nonnegative(),
+        fatMg: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .refine((value) => (value.templateId !== undefined) !== (value.custom !== undefined), {
+    message: 'Provide either templateId or custom macros',
+  });
+
+export const mealPlanDaySchema = z
+  .object({
+    loggedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    targetKcal: z.number().int().min(1200).max(6000),
+    slots: z.array(mealPlanSlotSchema).max(4),
   })
   .strict();
 
@@ -232,9 +296,61 @@ export const weightSchema = z
   })
   .strict();
 
+export const waterLogSchema = z
+  .object({
+    milliliters: z.number().int().min(50).max(2000),
+    loggedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .strict();
+
+export const supplementNameSchema = z
+  .object({
+    name: z.string().trim().min(2).max(40),
+    loggedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+  .strict();
+
+export const supplementLogSchema = z
+  .object({
+    name: z.string().trim().min(2).max(40),
+    loggedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .strict();
+
+export const activityLogSchema = z
+  .object({
+    kind: z.string().min(1).max(40),
+    durationSeconds: z.number().int().min(60).max(28800),
+    loggedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .strict();
+
+export const bodyMeasurementSchema = z
+  .object({
+    recordedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    waistMm: z.number().int().min(200).max(2500).nullable().optional(),
+    chestMm: z.number().int().min(200).max(2500).nullable().optional(),
+    hipMm: z.number().int().min(200).max(2500).nullable().optional(),
+    armMm: z.number().int().min(200).max(2500).nullable().optional(),
+    thighMm: z.number().int().min(200).max(2500).nullable().optional(),
+    neckMm: z.number().int().min(200).max(2500).nullable().optional(),
+  })
+  .strict();
+
 export const profilePatchSchema = z.object({ displayName: z.string().min(1).max(80) }).strict();
 
 export const coachMessageSchema = z.object({ message: z.string().min(1).max(2000) }).strict();
+
+export const weeklyCoachSurveySchema = z
+  .object({
+    weekOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    energy: z.number().int().min(1).max(5),
+    sleep: z.number().int().min(1).max(5),
+    stress: z.number().int().min(1).max(5),
+    hunger: z.number().int().min(1).max(5),
+    notes: z.string().max(500).optional().default(''),
+  })
+  .strict();
 
 export const communityPostSchema = z
   .object({

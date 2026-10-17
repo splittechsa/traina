@@ -218,7 +218,7 @@ describe('HomeScreen hook order', () => {
     expect(renderedText(renderer)).toContain('صباح الخير');
     expect(renderedText(renderer)).toContain('اسأل المدرب');
     expect(renderedText(renderer)).toContain('الخطوة التالية');
-    expect(renderedText(renderer)).toContain('أنشئ خطتك الرياضية');
+    expect(renderedText(renderer)).toContain('ابدأ التمرين');
 
     state.phase = 'offline';
     await act(async () => {

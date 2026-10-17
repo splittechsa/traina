@@ -20,7 +20,7 @@ export default function TabLayout() {
       <Tabs.Screen name="training" options={{ title: text(locale, 'training') }} />
       <Tabs.Screen name="nutrition" options={{ title: text(locale, 'nutrition') }} />
       <Tabs.Screen name="progress" options={{ title: text(locale, 'progress') }} />
-      <Tabs.Screen name="coach" options={{ title: text(locale, 'coach') }} />
+      <Tabs.Screen name="coach" options={{ title: text(locale, 'coach'), href: null }} />
       <Tabs.Screen name="community" options={{ title: text(locale, 'community'), href: null }} />
     </Tabs>
   );

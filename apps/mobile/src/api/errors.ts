@@ -69,6 +69,18 @@ const messages: Record<string, Record<Locale, string>> = {
     ar: 'رمز النادي لا يطابق العقد.',
     en: 'The gym code does not match the contract.',
   },
+  NOTHING_TO_COPY: {
+    ar: 'لا توجد وجبات محفوظة في ذلك اليوم لنسخها.',
+    en: 'There is no logged food on that day to copy.',
+  },
+  DIARY_DAY_NOT_EMPTY: {
+    ar: 'هذا اليوم فيه طعام مسجّل. احذف الموجود أولاً إن أردت النسخ.',
+    en: 'That day already has logged food. Delete it first if you want to copy.',
+  },
+  SAME_DAY_COPY: {
+    ar: 'لا يمكن نسخ اليوم على نفسه.',
+    en: 'A day cannot be copied onto itself.',
+  },
 };
 
 export function messageFor(code: string, locale: Locale, fallback: string): string {

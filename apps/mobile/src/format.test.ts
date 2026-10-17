@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatKgFromGrams, formatRiyadhDate, formatSarFromHalalas, localizeDigits, riyadhToday } from './format';
+import { formatDuration, formatKgFromGrams, formatRiyadhDate, formatSarFromHalalas, localizeDigits, riyadhToday } from './format';
 
 describe('display formatting', () => {
   it('keeps Arabic digits and Saudi currency in integer units', () => {
@@ -7,6 +7,11 @@ describe('display formatting', () => {
     expect(localizeDigits('70.25', 'en')).toBe('70.25');
     expect(formatKgFromGrams(70250)).toBe('70.25');
     expect(formatSarFromHalalas(1655)).toBe('16.55 SAR');
+  });
+
+  it('formats elapsed session time as a clock', () => {
+    expect(formatDuration(75)).toBe('01:15');
+    expect(formatDuration(3723)).toBe('1:02:03');
   });
 
   it('formats Riyadh dates without exposing an ISO timestamp', () => {
