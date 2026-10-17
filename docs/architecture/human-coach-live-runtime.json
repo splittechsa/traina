@@ -1,0 +1,49 @@
+{
+  "at": "2026-10-17T21:06:50.339Z",
+  "mergeCommit": "ff2bb872f0cd7770fff151c6295a1268a84ec2e4",
+  "selfAssign": {
+    "status": 403,
+    "code": "FORBIDDEN"
+  },
+  "consent": "granted",
+  "assignPersisted": true,
+  "idor": {
+    "status": 403,
+    "hasState": false
+  },
+  "assignedRead": {
+    "status": 200,
+    "confidence": "insufficient"
+  },
+  "briefStatus": "QUEUED_FOR_HUMAN",
+  "reviewId": "1c4a296d-ab04-4a5b-9309-514a19ea2c5c",
+  "inboxCount": 1,
+  "claimStatus": "IN_REVIEW",
+  "packet": {
+    "sleepLoggingAvailable": false,
+    "memberQuestions": [
+      "How should I handle hotel gyms?",
+      "Difficulties: Travel mid-week"
+    ]
+  },
+  "feedbackAuthor": "human_coach",
+  "memberReceived": "Strong logging this week. Keep protein steady on travel days.",
+  "metrics": {
+    "assignedMembers": 1,
+    "openReviews": 0,
+    "completedLast14Days": 1,
+    "overdueReviews": 0,
+    "capacity": {
+      "maxActiveMembers": 40,
+      "availableSlots": 39,
+      "responseHoursTarget": 72,
+      "available": true,
+      "atCapacity": false
+    }
+  },
+  "revokeActive": false,
+  "afterRevoke": {
+    "status": 403,
+    "hasState": false
+  }
+}
