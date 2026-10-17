@@ -97,7 +97,16 @@ export function readPacket(token: string, reviewId: string) {
 }
 
 export function claimReview(token: string, reviewId: string) {
-  return request<{ review: { status: string } }>(`/v1/coach/reviews/${reviewId}/claim`, {
+  return request<{
+    review: {
+      id: string;
+      memberUserId: string;
+      coachUserId: string | null;
+      weekOf: string;
+      status: string;
+      updatedAt: string;
+    };
+  }>(`/v1/coach/reviews/${reviewId}/claim`, {
     method: 'POST',
     token,
   });

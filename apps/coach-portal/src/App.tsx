@@ -84,6 +84,10 @@ export function App() {
   useEffect(() => {
     if (session === null) return;
     void refreshWorkspace(session.accessToken).catch((err: Error) => setError(err.message));
+    const timer = window.setInterval(() => {
+      void refreshWorkspace(session.accessToken).catch(() => undefined);
+    }, 20_000);
+    return () => window.clearInterval(timer);
   }, [session?.accessToken]);
 
   async function onLogin(event: FormEvent) {
@@ -130,10 +134,16 @@ export function App() {
     setBusy(true);
     setError(null);
     try {
-      await claimReview(session.accessToken, selectedId);
+      const claimed = await claimReview(session.accessToken, selectedId);
       await refreshWorkspace(session.accessToken);
-      const current = inbox.find((row) => row.id === selectedId);
-      if (current) await openReview(current);
+      await openReview({
+        id: claimed.review.id,
+        memberUserId: claimed.review.memberUserId,
+        coachUserId: claimed.review.coachUserId,
+        weekOf: claimed.review.weekOf,
+        status: claimed.review.status,
+        updatedAt: claimed.review.updatedAt,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Claim failed');
     } finally {

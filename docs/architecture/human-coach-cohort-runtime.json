@@ -1,0 +1,89 @@
+{
+  "at": "2026-10-17T21:25:03.881Z",
+  "memberCount": 3,
+  "coachCount": 2,
+  "timingsMs": [
+    {
+      "memberIndex": 0,
+      "claimToFeedbackMs": 5820,
+      "claim": "IN_REVIEW",
+      "author": "human_coach"
+    },
+    {
+      "memberIndex": 1,
+      "claimToFeedbackMs": 5850,
+      "claim": "IN_REVIEW",
+      "author": "human_coach"
+    },
+    {
+      "memberIndex": 2,
+      "claimToFeedbackMs": 5620,
+      "claim": "IN_REVIEW",
+      "author": "human_coach"
+    }
+  ],
+  "meanClaimToFeedbackMs": 5763,
+  "results": {
+    "assignments": [
+      {
+        "status": 200,
+        "persisted": true
+      },
+      {
+        "status": 200,
+        "persisted": true
+      },
+      {
+        "status": 200,
+        "persisted": true
+      }
+    ],
+    "reviews": [
+      {
+        "reviewId": "8aa14b3a-b088-4251-a1e3-7dfbdb7cc045",
+        "briefStatus": "QUEUED_FOR_HUMAN"
+      },
+      {
+        "reviewId": "791de70d-f7d7-418b-867e-7703c0ed1bf6",
+        "briefStatus": "QUEUED_FOR_HUMAN"
+      },
+      {
+        "reviewId": "584e0c8a-755b-460c-98c4-695af397939e",
+        "briefStatus": "QUEUED_FOR_HUMAN"
+      }
+    ],
+    "revoke": {
+      "active": false,
+      "afterStatus": 403,
+      "hasState": false
+    },
+    "metrics": [
+      {
+        "assignedMembers": 2,
+        "openReviews": 0,
+        "completedLast14Days": 2,
+        "overdueReviews": 0,
+        "capacity": {
+          "maxActiveMembers": 40,
+          "availableSlots": 38,
+          "responseHoursTarget": 72,
+          "available": true,
+          "atCapacity": false
+        }
+      },
+      {
+        "assignedMembers": 1,
+        "openReviews": 0,
+        "completedLast14Days": 1,
+        "overdueReviews": 0,
+        "capacity": {
+          "maxActiveMembers": 40,
+          "availableSlots": 39,
+          "responseHoursTarget": 72,
+          "available": true,
+          "atCapacity": false
+        }
+      }
+    ]
+  }
+}

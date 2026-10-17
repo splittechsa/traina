@@ -38,7 +38,14 @@ type ReviewStatus = {
 };
 
 type Recommendations = {
-  recommendations: { id: string; category: string; status: string; summary: string; rationale: string }[];
+  recommendations: {
+    id: string;
+    category: string;
+    status: string;
+    summary: string;
+    rationale: string;
+    safetyClass?: string;
+  }[];
 };
 
 function mondayOfWeek(day = new Date()): string {
@@ -47,6 +54,22 @@ function mondayOfWeek(day = new Date()): string {
   const diff = weekday === 0 ? -6 : 1 - weekday;
   d.setUTCDate(d.getUTCDate() + diff);
   return d.toISOString().slice(0, 10);
+}
+
+function reviewStatusLabel(status: string, locale: 'ar' | 'en'): string {
+  const map: Record<string, { ar: string; en: string }> = {
+    WEEKLY_REVIEW_DUE: { ar: 'مستحق', en: 'Due' },
+    QUEUED_FOR_HUMAN: { ar: 'بانتظار المدرب', en: 'Pending coach' },
+    ASSIGNED: { ar: 'مُسند', en: 'Assigned' },
+    IN_REVIEW: { ar: 'قيد المراجعة', en: 'In review' },
+    FEEDBACK_SENT: { ar: 'تم إرسال الملاحظة', en: 'Feedback sent' },
+    COMPLETED: { ar: 'مكتمل', en: 'Completed' },
+    OVERDUE: { ar: 'متأخر', en: 'Delayed / overdue' },
+    ESCALATED: { ar: 'مُصعَّد', en: 'Escalated' },
+    REASSIGNED: { ar: 'أُعيد التعيين', en: 'Reassigned' },
+    FAILED: { ar: 'تعذّر الإكمال', en: 'Failed' },
+  };
+  return map[status]?.[locale] ?? status;
 }
 
 function ScoreRow({
@@ -60,7 +83,7 @@ function ScoreRow({
 }) {
   const theme = useTheme();
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 8 }} accessibilityRole="adjustable" accessibilityLabel={label}>
       <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>{label}</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {([1, 2, 3, 4, 5] as const).map((score) => {
@@ -69,10 +92,12 @@ function ScoreRow({
             <Pressable
               key={score}
               accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${label} ${score}`}
               onPress={() => onChange(score)}
               style={{
                 flex: 1,
-                height: 44,
+                minHeight: 44,
                 borderRadius: radius.md,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -105,6 +130,9 @@ export default function WeeklyCheckinScreen() {
   const [hunger, setHunger] = useState<Score>(3);
   const [difficulties, setDifficulties] = useState('');
   const [questionForCoach, setQuestionForCoach] = useState('');
+  const [planDiffById, setPlanDiffById] = useState<
+    Record<string, { changes: string[]; beforeSets?: number; afterSets?: number; toVersion?: number }>
+  >({});
   const isAr = locale === 'ar';
 
   const preview = useQuery({
@@ -148,6 +176,58 @@ export default function WeeklyCheckinScreen() {
         client.invalidateQueries({ queryKey: ['coach-messages'] }),
       ]);
       setStep(3);
+    },
+  });
+
+  const advanceRecommendation = useMutation({
+    mutationFn: (input: { id: string; status: 'APPROVED' | 'APPLIED' }) =>
+      apiRequest<{
+        applied?: boolean;
+        programVersion?: number;
+        diff?: {
+          changes: string[];
+          before: { sampleDayExercises: { sets: number }[] };
+          after: { sampleDayExercises: { sets: number }[]; programVersion: number };
+        };
+      }>(`/v1/member/recommendations/${input.id}/advance`, {
+        method: 'POST',
+        body: { status: input.status },
+      }),
+    onSuccess: async (result, variables) => {
+      if (result.diff) {
+        setPlanDiffById((prev) => ({
+          ...prev,
+          [variables.id]: {
+            changes: result.diff?.changes ?? [],
+            beforeSets: result.diff?.before.sampleDayExercises[0]?.sets,
+            afterSets: result.diff?.after.sampleDayExercises[0]?.sets,
+            toVersion: result.programVersion ?? result.diff?.after.programVersion,
+          },
+        }));
+      }
+      await client.invalidateQueries({ queryKey: ['member-recommendations'] });
+    },
+  });
+
+  const previewApply = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<{
+        diff: {
+          changes: string[];
+          before: { sampleDayExercises: { sets: number }[] };
+          after: { sampleDayExercises: { sets: number }[]; programVersion: number };
+        };
+      }>(`/v1/member/recommendations/${id}/preview-apply`),
+    onSuccess: (result, id) => {
+      setPlanDiffById((prev) => ({
+        ...prev,
+        [id]: {
+          changes: result.diff.changes,
+          beforeSets: result.diff.before.sampleDayExercises[0]?.sets,
+          afterSets: result.diff.after.sampleDayExercises[0]?.sets,
+          toVersion: result.diff.after.programVersion,
+        },
+      }));
     },
   });
 
@@ -241,9 +321,14 @@ export default function WeeklyCheckinScreen() {
               <EmptyState title={text(locale, 'weeklyNoCoachTitle')} body={status.data?.noCoachMessage ?? text(locale, 'weeklyNoCoachBody')} />
             ) : null}
             {status.data?.review !== null && status.data?.review !== undefined ? (
-              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium }}>
-                {text(locale, 'weeklyStatus')}: {status.data.review.status}
-              </Text>
+              <SurfaceCard tone={status.data.review.status === 'OVERDUE' ? 'raised' : 'muted'}>
+                <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>
+                  {text(locale, 'weeklyStatus')}: {reviewStatusLabel(status.data.review.status, locale)}
+                </Text>
+                <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 4 }}>
+                  {status.data.review.weekOf}
+                </Text>
+              </SurfaceCard>
             ) : null}
           </View>
         ) : null}
@@ -309,12 +394,123 @@ export default function WeeklyCheckinScreen() {
               </Text>
             </SurfaceCard>
             {(recommendations.data?.recommendations ?? [])
-              .filter((row) => row.status === 'APPROVED' || row.status === 'REVIEW_REQUIRED')
+              .filter(
+                (row) =>
+                  row.status === 'APPROVED' ||
+                  row.status === 'REVIEW_REQUIRED' ||
+                  row.status === 'MEMBER_CONFIRMATION_REQUIRED',
+              )
               .slice(0, 3)
               .map((row) => (
                 <SurfaceCard key={row.id}>
                   <Text style={{ color: theme.accent, fontFamily: fontFamily.medium, marginBottom: 4 }}>
-                    {row.status === 'APPROVED' ? text(locale, 'approvedRecommendation') : text(locale, 'pendingRecommendation')}
+                    {row.status === 'APPROVED'
+                      ? text(locale, 'approvedRecommendation')
+                      : row.status === 'MEMBER_CONFIRMATION_REQUIRED'
+                        ? text(locale, 'memberConfirmNeeded')
+                        : text(locale, 'pendingRecommendation')}
+                  </Text>
+                  <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{row.summary}</Text>
+                  <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 6, lineHeight: 20 }}>
+                    {row.rationale}
+                  </Text>
+                  {row.status !== 'APPLIED' ? (
+                    <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 6 }}>
+                      {text(locale, 'guidanceOnlyRec')}
+                    </Text>
+                  ) : null}
+                  {planDiffById[row.id] !== undefined ? (
+                    <View style={{ marginTop: 10, gap: 4 }}>
+                      <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold }}>
+                        {text(locale, 'planDiffTitle')}
+                        {planDiffById[row.id]?.toVersion !== undefined
+                          ? ` · v${planDiffById[row.id]?.toVersion}`
+                          : ''}
+                      </Text>
+                      <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 20 }}>
+                        {(planDiffById[row.id]?.changes ?? []).join(' · ')}
+                      </Text>
+                      {planDiffById[row.id]?.beforeSets !== undefined ? (
+                        <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular }}>
+                          sets {planDiffById[row.id]?.beforeSets} → {planDiffById[row.id]?.afterSets}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {row.category === 'training' ? (
+                    <View style={{ marginTop: 10 }}>
+                      <Button
+                        label={text(locale, 'previewPlan')}
+                        variant="secondary"
+                        onPress={() => previewApply.mutate(row.id)}
+                        disabled={previewApply.isPending}
+                      />
+                    </View>
+                  ) : null}
+                  {row.status === 'MEMBER_CONFIRMATION_REQUIRED' && row.category !== 'nutrition' ? (
+                    <View style={{ marginTop: 10 }}>
+                      <Button
+                        label={text(locale, 'confirmRecommendation')}
+                        onPress={() => advanceRecommendation.mutate({ id: row.id, status: 'APPROVED' })}
+                        disabled={advanceRecommendation.isPending}
+                      />
+                    </View>
+                  ) : null}
+                  {row.status === 'APPROVED' && row.category === 'training' ? (
+                    <View style={{ marginTop: 10 }}>
+                      <Button
+                        label={text(locale, 'applyRecommendation')}
+                        onPress={() => advanceRecommendation.mutate({ id: row.id, status: 'APPLIED' })}
+                        disabled={advanceRecommendation.isPending}
+                      />
+                    </View>
+                  ) : null}
+                  {row.status === 'APPROVED' &&
+                  row.category !== 'training' &&
+                  row.category !== 'nutrition' &&
+                  row.safetyClass !== 'blocked_policy' ? (
+                    <View style={{ marginTop: 10 }}>
+                      <Button
+                        label={text(locale, 'applyRecommendation')}
+                        onPress={() => advanceRecommendation.mutate({ id: row.id, status: 'APPLIED' })}
+                        disabled={advanceRecommendation.isPending}
+                      />
+                    </View>
+                  ) : null}
+                  {row.status === 'APPLIED' ? (
+                    <Text style={{ color: theme.accent, fontFamily: fontFamily.medium, marginTop: 8 }}>
+                      {text(locale, 'planApplied')}
+                    </Text>
+                  ) : null}
+                </SurfaceCard>
+              ))}
+          </View>
+        ) : null}
+
+        {step === 3 ? (
+          <View style={{ gap: spacing[3] }}>
+            <SurfaceCard tone="raised">
+              <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
+                {text(locale, 'weeklySubmitted')}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 22 }}>
+                {status.data?.hasAssignedCoach ? text(locale, 'weeklySubmittedBody') : text(locale, 'weeklyNoCoachBody')}
+              </Text>
+              {status.data?.review !== null && status.data?.review !== undefined ? (
+                <Text style={{ color: theme.accent, fontFamily: fontFamily.medium, marginTop: 10 }}>
+                  {reviewStatusLabel(status.data.review.status, locale)}
+                </Text>
+              ) : null}
+            </SurfaceCard>
+            {(recommendations.data?.recommendations ?? [])
+              .filter((row) => row.status === 'APPROVED' || row.status === 'APPLIED' || row.status === 'MONITORED')
+              .slice(0, 3)
+              .map((row) => (
+                <SurfaceCard key={row.id}>
+                  <Text style={{ color: theme.accent, fontFamily: fontFamily.medium, marginBottom: 4 }}>
+                    {row.status === 'APPLIED' || row.status === 'MONITORED'
+                      ? text(locale, 'approvedRecommendation')
+                      : text(locale, 'guidanceOnlyRec')}
                   </Text>
                   <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{row.summary}</Text>
                   <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 6, lineHeight: 20 }}>
@@ -323,17 +519,6 @@ export default function WeeklyCheckinScreen() {
                 </SurfaceCard>
               ))}
           </View>
-        ) : null}
-
-        {step === 3 ? (
-          <SurfaceCard tone="raised">
-            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
-              {text(locale, 'weeklySubmitted')}
-            </Text>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 22 }}>
-              {status.data?.hasAssignedCoach ? text(locale, 'weeklySubmittedBody') : text(locale, 'weeklyNoCoachBody')}
-            </Text>
-          </SurfaceCard>
         ) : null}
       </ScreenBody>
     </Screen>
