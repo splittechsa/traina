@@ -18,4 +18,6 @@ export * from './meal-plan.js';
 export * from './yazan-coach.js';
 export * from './member-state.js';
 export * from './recommendation.js';
+export * from './program-adaptation.js';
+export * from './entitlements.js';
 export * from './human-coach.js';

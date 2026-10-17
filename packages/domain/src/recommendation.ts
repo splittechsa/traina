@@ -20,11 +20,20 @@ export const RECOMMENDATION_STATUSES = [
   'SUPERSEDED',
   'REVERTED',
   'REJECTED',
+  'EXPIRED',
+  'CANCELED',
 ] as const;
 
 export type RecommendationStatus = (typeof RECOMMENDATION_STATUSES)[number];
 
 export type RecommendationCategory = 'daily_guidance' | 'training' | 'nutrition' | 'human_required';
+
+/** Deterministic safety class — AI cannot escalate a blocked item to auto-apply. */
+export type RecommendationSafetyClass =
+  | 'safe_guidance'
+  | 'member_confirm'
+  | 'human_review'
+  | 'blocked_policy';
 
 export type RecommendationEvidence = {
   fact: string;
@@ -48,24 +57,52 @@ export type CoachingRecommendation = {
   payload: Readonly<Record<string, unknown>>;
   requiresHumanReview: boolean;
   requiresMemberConfirmation: boolean;
+  safetyClass: RecommendationSafetyClass;
   createdAt: string;
   updatedAt: string;
   schemaVersion: 2;
   audit: readonly { at: string; action: string; actorId: string | null; note: string }[];
 };
 
+export type RecommendationApplyResult = {
+  applied: true;
+  kind: string;
+  /** What the deterministic engine recorded — never invents member outcomes. */
+  effect: Readonly<Record<string, unknown>>;
+  monitoredFrom: string;
+};
+
+const OPEN_STATUSES: readonly RecommendationStatus[] = [
+  'DRAFT',
+  'VALIDATED',
+  'REVIEW_REQUIRED',
+  'MEMBER_CONFIRMATION_REQUIRED',
+  'APPROVED',
+  'APPLIED',
+  'MONITORED',
+];
+
 const TRANSITIONS: Record<RecommendationStatus, readonly RecommendationStatus[]> = {
-  DRAFT: ['VALIDATED', 'REJECTED', 'SUPERSEDED'],
-  VALIDATED: ['REVIEW_REQUIRED', 'MEMBER_CONFIRMATION_REQUIRED', 'APPROVED', 'REJECTED', 'SUPERSEDED'],
-  REVIEW_REQUIRED: ['APPROVED', 'REJECTED', 'SUPERSEDED', 'MEMBER_CONFIRMATION_REQUIRED'],
-  MEMBER_CONFIRMATION_REQUIRED: ['APPROVED', 'REJECTED', 'SUPERSEDED'],
-  APPROVED: ['APPLIED', 'SUPERSEDED', 'REJECTED'],
+  DRAFT: ['VALIDATED', 'REJECTED', 'SUPERSEDED', 'CANCELED', 'EXPIRED'],
+  VALIDATED: ['REVIEW_REQUIRED', 'MEMBER_CONFIRMATION_REQUIRED', 'APPROVED', 'REJECTED', 'SUPERSEDED', 'CANCELED', 'EXPIRED'],
+  REVIEW_REQUIRED: ['APPROVED', 'REJECTED', 'SUPERSEDED', 'MEMBER_CONFIRMATION_REQUIRED', 'CANCELED', 'EXPIRED'],
+  MEMBER_CONFIRMATION_REQUIRED: ['APPROVED', 'REJECTED', 'SUPERSEDED', 'CANCELED', 'EXPIRED'],
+  APPROVED: ['APPLIED', 'SUPERSEDED', 'REJECTED', 'CANCELED', 'EXPIRED'],
   APPLIED: ['MONITORED', 'REVERTED', 'SUPERSEDED'],
   MONITORED: ['SUPERSEDED', 'REVERTED'],
   SUPERSEDED: [],
   REVERTED: ['SUPERSEDED'],
   REJECTED: [],
+  EXPIRED: [],
+  CANCELED: [],
 };
+
+const APPLYABLE_TRAINING_KINDS = new Set([
+  'recovery_preference',
+  'volume_deload',
+  'session_intensity_ease',
+  'progressive_overload_hint',
+]);
 
 export function assertRecommendationStatus(value: string): RecommendationStatus {
   if ((RECOMMENDATION_STATUSES as readonly string[]).includes(value)) {
@@ -88,6 +125,27 @@ function pushAudit(
   };
 }
 
+export function classifyRecommendationSafety(input: {
+  category: RecommendationCategory;
+  requiresHumanReview: boolean;
+  requiresMemberConfirmation: boolean;
+  payload?: Readonly<Record<string, unknown>>;
+}): RecommendationSafetyClass {
+  if (input.category === 'human_required') {
+    return 'blocked_policy';
+  }
+  if (input.category === 'nutrition') {
+    return ENERGY_POLICY.approvedForPaidCoaching ? 'human_review' : 'blocked_policy';
+  }
+  if (input.requiresHumanReview) return 'human_review';
+  if (input.requiresMemberConfirmation) return 'member_confirm';
+  const kind = typeof input.payload?.kind === 'string' ? input.payload.kind : '';
+  if (input.category === 'training' && !APPLYABLE_TRAINING_KINDS.has(kind) && kind.length > 0) {
+    return 'human_review';
+  }
+  return 'safe_guidance';
+}
+
 export function createRecommendationDraft(input: {
   id: string;
   memberId: string;
@@ -102,6 +160,7 @@ export function createRecommendationDraft(input: {
   expiresAt: string;
   requiresHumanReview?: boolean;
   requiresMemberConfirmation?: boolean;
+  safetyClass?: RecommendationSafetyClass;
   actorId?: string | null;
 }): CoachingRecommendation {
   if (input.id.trim().length < 1 || input.memberId.trim().length < 1) {
@@ -116,6 +175,15 @@ export function createRecommendationDraft(input: {
   const requiresHumanReview =
     input.requiresHumanReview ?? (input.category === 'human_required' || input.category === 'nutrition');
   const requiresMemberConfirmation = input.requiresMemberConfirmation ?? input.category !== 'daily_guidance';
+  const payload = input.payload ?? {};
+  const safetyClass =
+    input.safetyClass ??
+    classifyRecommendationSafety({
+      category: input.category,
+      requiresHumanReview,
+      requiresMemberConfirmation,
+      payload,
+    });
   const draft: CoachingRecommendation = {
     id: input.id,
     memberId: input.memberId,
@@ -128,9 +196,10 @@ export function createRecommendationDraft(input: {
     evidence: input.evidence ?? [],
     policyVersion: RECOMMENDATION_POLICY_VERSION,
     expiresAt: input.expiresAt,
-    payload: input.payload ?? {},
+    payload,
     requiresHumanReview,
     requiresMemberConfirmation,
+    safetyClass,
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
     schemaVersion: 2,
@@ -172,6 +241,176 @@ export function assertRecommendationMayApply(rec: CoachingRecommendation): void 
   if (rec.category === 'nutrition') {
     assertEnergyPolicyApprovedForPaidCoaching();
   }
+  if (rec.category === 'human_required' || rec.safetyClass === 'blocked_policy') {
+    throw new DomainError('POLICY_BLOCKED', 'Recommendation cannot be applied under current policy');
+  }
+  if (rec.category === 'training') {
+    const kind = typeof rec.payload.kind === 'string' ? rec.payload.kind : '';
+    if (!APPLYABLE_TRAINING_KINDS.has(kind)) {
+      throw new DomainError('TRAINING_APPLY_NOT_PERMITTED', 'This training adaptation requires a permitted payload kind');
+    }
+  }
+}
+
+export function memberConfirmRecommendation(
+  rec: CoachingRecommendation,
+  at: string,
+  memberId: string,
+): CoachingRecommendation {
+  if (rec.memberId !== memberId) {
+    throw new DomainError('FORBIDDEN', 'Recommendation does not belong to this member');
+  }
+  if (rec.status !== 'MEMBER_CONFIRMATION_REQUIRED' && rec.status !== 'APPROVED') {
+    throw new DomainError(
+      'INVALID_RECOMMENDATION_TRANSITION',
+      'Member confirmation is only valid from MEMBER_CONFIRMATION_REQUIRED or already APPROVED',
+    );
+  }
+  if (rec.status === 'APPROVED') return rec;
+  return transitionRecommendation(rec, 'APPROVED', at, { actorId: memberId, note: 'member_confirmed' });
+}
+
+export function cancelRecommendation(
+  rec: CoachingRecommendation,
+  at: string,
+  actorId: string | null,
+  note: string,
+): CoachingRecommendation {
+  return transitionRecommendation(rec, 'CANCELED', at, { actorId, note });
+}
+
+export function expireRecommendation(
+  rec: CoachingRecommendation,
+  at: string,
+): CoachingRecommendation {
+  if (!OPEN_STATUSES.includes(rec.status) || rec.status === 'APPLIED' || rec.status === 'MONITORED') {
+    return rec;
+  }
+  if (Date.parse(rec.expiresAt) > Date.parse(at)) {
+    return rec;
+  }
+  return transitionRecommendation(rec, 'EXPIRED', at, { actorId: 'system:recommendation_engine', note: 'past_expires_at' });
+}
+
+export function expireOpenRecommendations(
+  rows: readonly CoachingRecommendation[],
+  at: string,
+): CoachingRecommendation[] {
+  return rows.map((row) => expireRecommendation(row, at));
+}
+
+export function payloadKind(rec: CoachingRecommendation): string {
+  return typeof rec.payload.kind === 'string' ? rec.payload.kind : '';
+}
+
+/** Suppress duplicate open recommendations with the same category + payload.kind. */
+export function suppressDuplicateRecommendations(
+  existing: readonly CoachingRecommendation[],
+  incoming: readonly CoachingRecommendation[],
+): CoachingRecommendation[] {
+  const openKeys = new Set(
+    existing
+      .filter((row) => OPEN_STATUSES.includes(row.status))
+      .map((row) => `${row.category}:${payloadKind(row)}`),
+  );
+  const out: CoachingRecommendation[] = [];
+  for (const rec of incoming) {
+    const key = `${rec.category}:${payloadKind(rec)}`;
+    if (openKeys.has(key)) continue;
+    openKeys.add(key);
+    out.push(rec);
+  }
+  return out;
+}
+
+const PRIORITY_RANK: Record<RecommendationCategory, number> = {
+  human_required: 0,
+  nutrition: 1,
+  training: 2,
+  daily_guidance: 3,
+};
+
+const CONFIDENCE_RANK: Record<CoachingRecommendation['confidence'], number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+  insufficient: 3,
+};
+
+export function prioritizeRecommendations(
+  rows: readonly CoachingRecommendation[],
+): CoachingRecommendation[] {
+  return [...rows].sort((a, b) => {
+    const byCat = PRIORITY_RANK[a.category] - PRIORITY_RANK[b.category];
+    if (byCat !== 0) return byCat;
+    const byConf = CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence];
+    if (byConf !== 0) return byConf;
+    return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+  });
+}
+
+/**
+ * Apply an APPROVED recommendation through the deterministic gate.
+ * Records an apply effect in audit/payload — does not invent outcome metrics.
+ */
+export function applyPermittedRecommendation(
+  rec: CoachingRecommendation,
+  at: string,
+  actorId: string,
+): { recommendation: CoachingRecommendation; result: RecommendationApplyResult } {
+  assertRecommendationMayApply(rec);
+  const kind = payloadKind(rec) || rec.category;
+  const effect: Record<string, unknown> = {
+    kind,
+    category: rec.category,
+    policyVersion: rec.policyVersion,
+    punitiveForbidden: true,
+  };
+  if (rec.category === 'training') {
+    throw new DomainError(
+      'USE_PROGRAM_APPLY',
+      'Training recommendations must be applied through the program adaptation service after a real version bump',
+    );
+  }
+  if (rec.category === 'daily_guidance') {
+    effect.guidanceOnly = true;
+  }
+  const withPayload: CoachingRecommendation = {
+    ...rec,
+    payload: { ...rec.payload, lastApplyEffect: effect, lastAppliedAt: at },
+  };
+  const applied = transitionRecommendation(withPayload, 'APPLIED', at, {
+    actorId,
+    note: `applied_kind=${kind}`,
+  });
+  return {
+    recommendation: applied,
+    result: { applied: true, kind, effect, monitoredFrom: at },
+  };
+}
+
+export function beginMonitoringRecommendation(
+  rec: CoachingRecommendation,
+  at: string,
+  actorId: string | null,
+  note = 'monitoring_started',
+): CoachingRecommendation {
+  if (rec.status !== 'APPLIED') {
+    throw new DomainError('INVALID_RECOMMENDATION_TRANSITION', 'Only APPLIED recommendations enter MONITORED');
+  }
+  return transitionRecommendation(rec, 'MONITORED', at, { actorId, note });
+}
+
+export function revertAppliedRecommendation(
+  rec: CoachingRecommendation,
+  at: string,
+  actorId: string | null,
+  note: string,
+): CoachingRecommendation {
+  if (rec.status !== 'APPLIED' && rec.status !== 'MONITORED') {
+    throw new DomainError('INVALID_RECOMMENDATION_TRANSITION', 'Only APPLIED or MONITORED can revert');
+  }
+  return transitionRecommendation(rec, 'REVERTED', at, { actorId, note });
 }
 
 export function validateRecommendation(
@@ -377,7 +616,65 @@ export function generateRecommendationsFromMemberState(input: {
           { fact: 'activityDaysLogged', value: state.adherence.activityDaysLogged, source: 'member_state' },
           { fact: 'sessionsCompleted', value: state.adherence.sessionsCompleted, source: 'member_state' },
         ],
-        payload: { kind: 'recovery_preference', addCardioPunishment: false },
+        payload: { kind: 'recovery_preference', addCardioPunishment: false, intensityDelta: -1 },
+        createdAt: nowIso,
+        expiresAt,
+        requiresHumanReview: false,
+        requiresMemberConfirmation: true,
+        actorId: 'system:recommendation_engine',
+      }),
+    );
+  }
+
+  // Bounded progressive overload hint when sessions are logged and confidence is usable.
+  if (state.adherence.sessionsCompleted >= 3 && state.confidence !== 'insufficient') {
+    out.push(
+      createRecommendationDraft({
+        id: input.idFactory(),
+        memberId,
+        category: 'training',
+        summary: 'Consider a small load increase on primary lifts if technique felt solid.',
+        rationale: 'Multiple completed sessions with usable confidence support a bounded progressive-overload hint — not a free-form program rewrite.',
+        confidence: state.confidence === 'high' ? 'medium' : 'low',
+        missingData: missing,
+        evidence: [
+          { fact: 'sessionsCompleted', value: state.adherence.sessionsCompleted, source: 'member_state' },
+          { fact: 'confidence', value: state.confidence, source: 'member_state' },
+        ],
+        payload: {
+          kind: 'progressive_overload_hint',
+          loadIncrementPctMax: 5,
+          volumeIncreaseForbiddenWithoutReview: true,
+        },
+        createdAt: nowIso,
+        expiresAt,
+        requiresHumanReview: false,
+        requiresMemberConfirmation: true,
+        actorId: 'system:recommendation_engine',
+      }),
+    );
+  }
+
+  // Volume deload when completeness is high but weight trend unavailable / fatigue signals.
+  if (
+    state.dataCompletenessBps >= 5_000 &&
+    state.adherence.sessionsCompleted >= 4 &&
+    state.weightTrendGramsPerWeek === null
+  ) {
+    out.push(
+      createRecommendationDraft({
+        id: input.idFactory(),
+        memberId,
+        category: 'training',
+        summary: 'Optional light deload week while weight trend data is still incomplete.',
+        rationale: 'High session count without a weight trend favors recovery volume reduction over guessing nutrition.',
+        confidence: 'low',
+        missingData: missing,
+        evidence: [
+          { fact: 'sessionsCompleted', value: state.adherence.sessionsCompleted, source: 'member_state' },
+          { fact: 'weightTrendGramsPerWeek', value: null, source: 'member_state' },
+        ],
+        payload: { kind: 'volume_deload', volumeScaleBps: 7_000, addCardioPunishment: false },
         createdAt: nowIso,
         expiresAt,
         requiresHumanReview: false,

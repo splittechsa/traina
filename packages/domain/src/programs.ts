@@ -2,6 +2,16 @@ import { DomainError } from './errors.js';
 import { bmiHundredths } from './onboarding.js';
 import type { Discipline, PlannedExercise } from './training.js';
 
+/** Stored on program_versions.template.adaptation — bounded, auditable overlays. */
+export type TrainingAdaptationOverlay = {
+  kind: 'recovery_preference' | 'volume_deload' | 'session_intensity_ease' | 'progressive_overload_hint';
+  volumeScaleBps: number;
+  restSecondsDelta: number;
+  loadIncrementPctMax: number;
+  recommendationId: string;
+  appliedAt: string;
+};
+
 const id = (n: string) => `10000000-0000-4000-8000-0000000000${n}`;
 
 export type TemplateEnvironment = 'gym' | 'home' | 'outdoor';
@@ -46,18 +56,26 @@ export type TemplateRecommendation = {
   reason_en: string;
 };
 
-const strengthPlan = (exerciseIds: readonly string[]): PlannedExercise[] =>
-  exerciseIds.map((exerciseId) => ({
+const strengthPlan = (
+  exerciseIds: readonly string[],
+  adaptation: TrainingAdaptationOverlay | null = null,
+): PlannedExercise[] => {
+  const volumeScaleBps = adaptation?.volumeScaleBps ?? 10_000;
+  const restDelta = adaptation?.restSecondsDelta ?? 0;
+  const sets = Math.max(1, Math.round((3 * volumeScaleBps) / 10_000));
+  const restSeconds = Math.max(30, 90 + restDelta);
+  return exerciseIds.map((exerciseId) => ({
     exerciseId,
     prescription: {
       kind: 'strength',
-      sets: 3,
+      sets,
       reps: 8,
-      restSeconds: 90,
+      restSeconds,
       loadGrams: null,
       rpeTenths: null,
     },
   }));
+};
 
 const calisthenicsPlan = (exerciseIds: readonly string[]): PlannedExercise[] =>
   exerciseIds.map((exerciseId) => ({
@@ -268,6 +286,7 @@ export function templateById(templateId: string): TrainingTemplate | null {
 export function planTemplateDay(
   templateId: string,
   dayIndex: number,
+  adaptation: TrainingAdaptationOverlay | null = null,
 ): { name: string; name_ar: string; name_en: string; discipline: Discipline; exercises: PlannedExercise[] } {
   const template = templateById(templateId);
   if (template === null) {
@@ -282,11 +301,15 @@ export function planTemplateDay(
       ? crossfitPlan(day.exerciseIds)
       : template.discipline === 'calisthenics'
         ? calisthenicsPlan(day.exerciseIds)
-        : strengthPlan(day.exerciseIds);
+        : strengthPlan(day.exerciseIds, adaptation);
+  const loadHint =
+    adaptation !== null && adaptation.loadIncrementPctMax > 0
+      ? ` · +≤${adaptation.loadIncrementPctMax}% load hint`
+      : '';
   return {
     name: day.name_en,
     name_ar: `${template.name_ar} · ${day.name_ar}`,
-    name_en: `${template.name_en} · ${day.name_en}`,
+    name_en: `${template.name_en} · ${day.name_en}${loadHint}`,
     discipline: template.discipline,
     exercises,
   };
