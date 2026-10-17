@@ -1,6 +1,14 @@
 # Human coaching E2E evidence (synthetic)
 
-Generated from local verification of PR #41 follow-up hardening + P2-HUM-01.
+Generated from verification of PR #41 (merged) + P2-HUM-01 follow-up.
+
+## Disposition
+
+| Item | Value |
+| --- | --- |
+| PR | [#41](https://github.com/splittechsa/traina/pull/41) **MERGED** |
+| Merge commit | `ff2bb872f0cd7770fff151c6295a1268a84ec2e4` |
+| CI (final head `69f8383`) | api + mobile **SUCCESS** |
 
 ## Automated security / workflow evidence
 
@@ -8,10 +16,11 @@ Generated from local verification of PR #41 follow-up hardening + P2-HUM-01.
 | --- | --- |
 | Domain tests | 115 passed |
 | API tests | 52 passed (includes `coach-ops.integration.test.ts`) |
-| Typecheck domain/contracts/api | passed |
+| Typecheck domain/contracts/api + mobile | passed |
 | Coach portal production build | passed (`apps/coach-portal` vite build) |
 | Migrations through `0024_human_coach_identity` on disposable PGlite | passed (idempotent re-run) |
-| Prior CI on PR #41 head `b38acc3` | api + mobile **SUCCESS** (GitHub Actions) |
+| Live Neon schema | `coach_assignment_events`, `member_coach_share_consents`, `weekly_review_queue`, `coach_capacity` present |
+| Live runtime demo | `docs/architecture/human-coach-live-runtime.json` |
 
 ### Security scenarios covered in `coach-ops.integration.test.ts`
 
@@ -25,17 +34,29 @@ Generated from local verification of PR #41 follow-up hardening + P2-HUM-01.
 8. Revoke + reassign — previous coach denied, new coach allowed
 9. Full loop: consent → assign → activity → weekly brief → claim → feedback → member feedback inbox
 
-## Live app demo procedure (synthetic accounts only)
+## Live runtime demonstration (2026-10-17, synthetic Neon accounts)
 
-1. Start API (`npm run dev:api`) and Coach Workspace (`apps/coach-portal` → `npm run dev`).
-2. Admin grants `coach_reviewer` via DB `role_assignments` (no self-serve role API).
-3. Admin `POST /v1/coach/assignments`.
-4. Member grants `POST /v1/member/coach-share-consent` (or via mobile weekly check-in).
-5. Member logs water/food/sessions; opens **Weekly check-in** in mobile.
-6. Member submits survey; coach inbox shows review.
-7. Coach claims, rejects/approves proposals, sends feedback, optional escalate/follow-up.
-8. Member sees human feedback in weekly check-in + coach tab (`authorKind: human_coach`).
-9. Admin revokes assignment; coach reads return `403`.
+Executed via `scripts/live-coach-demo.mjs` against local API on port 3040 + Neon Postgres after merge `ff2bb87`.
+
+| Step | Result |
+| --- | --- |
+| Coach self-assign | `403 FORBIDDEN` |
+| Member consent | `granted` |
+| Admin assign | `persisted: true` |
+| Unassigned coach IDOR | `403`, no `state` |
+| Assigned coach read | `200`, confidence returned |
+| Weekly brief | `QUEUED_FOR_HUMAN` |
+| Coach inbox | 1 review |
+| Claim | `IN_REVIEW` |
+| Packet | `sleepLoggingAvailable: false`; member questions preserved |
+| Feedback | `authorKind: human_coach` |
+| Member received feedback | yes |
+| Workload metrics | assigned/capacity/SLA fields present |
+| Revoke | coach subsequent read `403`, no `state` |
+
+Coach Workspace UI verified at `http://127.0.0.1:5174/` (login composition captured in session).
+
+Mobile weekly check-in: `apps/mobile/app/weekly-checkin.tsx` (typecheck passed; Expo UI not screenshot in this run — API path covered live).
 
 ## Compliance blockers (unchanged)
 
