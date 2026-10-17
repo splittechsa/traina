@@ -18,6 +18,35 @@ describe('authorization', () => {
     expect(other.allowed).toBe(false);
   });
 
+  it('keeps MemberState readable only by the member (not support)', () => {
+    const self = authorize(
+      { userId: 'user-1', roles: ['member'], gymOrganizationIds: [] },
+      'member_state.read',
+      { kind: 'user', userId: 'user-1' },
+    );
+    expect(self.allowed).toBe(true);
+    expect(self.audit).toBe('required');
+    const other = authorize(
+      { userId: 'user-1', roles: ['member'], gymOrganizationIds: [] },
+      'member_state.read',
+      { kind: 'user', userId: 'user-2' },
+    );
+    expect(other.allowed).toBe(false);
+    const support = authorize(
+      { userId: 'agent-1', roles: ['support_agent'], gymOrganizationIds: [] },
+      'member_state.read',
+      { kind: 'user', userId: 'user-2' },
+    );
+    expect(support.allowed).toBe(false);
+    const coach = authorize(
+      { userId: 'coach-1', roles: ['coach_reviewer'], gymOrganizationIds: [] },
+      'member_state.read',
+      { kind: 'user', userId: 'user-2' },
+    );
+    expect(coach.allowed).toBe(false);
+    expect(coach.code).toBe('ASSIGNMENT_REQUIRED');
+  });
+
   it('limits support agents to non-health profile reads', () => {
     const decision = authorize(
       { userId: 'agent-1', roles: ['support_agent'], gymOrganizationIds: [] },

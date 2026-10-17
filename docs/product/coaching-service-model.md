@@ -24,6 +24,13 @@ Daily Yazan check-ins, personalized goals, adaptive recommendations within fair-
 
 Everything in Traina AI plus assigned coach/team, weekly professional review, personalized feedback, human escalation within a documented SLA.
 
+## Commercial channel (product)
+
+- **Primary purchase:** Traina landing page + external payment gateway (same Traina account).  
+- **Entitlements:** Server-authoritative; shared across web and mobile.  
+- **iOS:** Do not assume external checkout links from the app are allowed. Digital coaching unlocks generally need an Apple-compliant purchase strategy (IAP where required). Live person-to-person coaching exceptions are evaluated separately and **do not** automatically cover async human reviews + AI.  
+- Details: `docs/architecture/subscription-and-entitlements.md`.
+
 ## What we do **not** claim
 
 - 24/7 human availability.

@@ -29,6 +29,7 @@ export type Resource =
 export type Action =
   | 'profile.read'
   | 'profile.write'
+  | 'member_state.read'
   | 'gym.read'
   | 'gym.write'
   | 'commission.read'
@@ -83,6 +84,21 @@ export function authorize(actor: Actor, action: Action, resource: Resource): Aut
       }
       if (action === 'profile.read' && hasRole(actor, 'support_agent')) {
         return allow('non_health', 'required');
+      }
+      return deny('FORBIDDEN');
+    }
+    case 'member_state.read': {
+      // Health-adjacent coaching state — own member only until assignment tables exist.
+      // Support agents intentionally cannot read MemberState (non_health ≠ coaching facts).
+      if (resource.kind !== 'user') {
+        return deny('RESOURCE_MISMATCH');
+      }
+      if (resource.userId === actor.userId && (hasRole(actor, 'member') || hasRole(actor, 'admin'))) {
+        return allow('own', 'required');
+      }
+      // Assigned-coach access lands with human ops (P2-HUM); deny until assignment is enforced.
+      if (hasRole(actor, 'coach_reviewer')) {
+        return deny('ASSIGNMENT_REQUIRED');
       }
       return deny('FORBIDDEN');
     }

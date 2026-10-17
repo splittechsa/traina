@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commissionQuoteRequestSchema, onboardingRequestSchema } from './index.js';
+import { commissionQuoteRequestSchema, memberStateResponseSchema, onboardingRequestSchema } from './index.js';
 
 describe('wire contracts', () => {
   it('rejects a client-supplied commission amount', () => {
@@ -34,6 +34,7 @@ describe('wire contracts', () => {
       ageYears: 30,
       heightCm: '170',
       weightKg: '70',
+      sex: 'male',
       trainingExperience: 'beginner',
       goals: ['general_health'],
       discipline: 'general_fitness',
@@ -48,6 +49,34 @@ describe('wire contracts', () => {
       preferredWorkoutTimes: [],
       hasGymMembership: false,
       locale: 'ar',
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts a MemberState wire shape (schemaVersion 2)', () => {
+    const parsed = memberStateResponseSchema.safeParse({
+      authorized: true,
+      state: {
+        schemaVersion: 2,
+        asOfDay: '2026-06-14',
+        timeZone: 'Asia/Riyadh',
+        goals: ['fat_loss'],
+        currentProgramId: null,
+        nutritionPhase: 'cutting',
+        adherence: {
+          windowDays: 14,
+          mealDaysLogged: 1,
+          waterDaysLogged: 1,
+          sessionsCompleted: 0,
+          supplementDaysLogged: 0,
+          activityDaysLogged: 0,
+          confirmedNonAdherence: false,
+        },
+        confidence: 'insufficient',
+        dataCompletenessBps: 700,
+        policyNotes: ['nutrition_adaptations_propose_only'],
+        sleepLoggingAvailable: false,
+      },
     });
     expect(parsed.success).toBe(true);
   });
