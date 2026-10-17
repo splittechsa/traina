@@ -129,6 +129,11 @@ export type WeeklySurveyAnswers = {
   sleep: number;
   stress: number;
   hunger: number;
+  effort?: number;
+  recovery?: number;
+  satisfaction?: number;
+  difficulties?: string;
+  questionForCoach?: string;
   notes: string;
 };
 
@@ -181,6 +186,15 @@ export function buildWeeklyHumanCoachPacket(input: {
   if (notes.length > 500) {
     throw new DomainError('INVALID_SURVEY', 'Notes must be at most 500 characters');
   }
+  for (const optional of ['effort', 'recovery', 'satisfaction'] as const) {
+    const value = input.survey[optional];
+    if (value !== undefined) assertSurveyScore(value, optional);
+  }
+  const difficulties = (input.survey.difficulties ?? '').replace(/\s+/g, ' ').trim();
+  const questionForCoach = (input.survey.questionForCoach ?? '').replace(/\s+/g, ' ').trim();
+  if (difficulties.length > 500 || questionForCoach.length > 500) {
+    throw new DomainError('INVALID_SURVEY', 'Difficulties and coach questions must be at most 500 characters');
+  }
   assertNonNegInt(input.mealDaysLogged, 'INVALID_MEALS');
   assertNonNegInt(input.waterDaysLogged, 'INVALID_WATER');
   assertNonNegInt(input.sessionsCompleted, 'INVALID_SESSIONS');
@@ -190,7 +204,7 @@ export function buildWeeklyHumanCoachPacket(input: {
     input.weightStartGrams !== null && input.weightEndGrams !== null
       ? `${(input.weightStartGrams / 1000).toFixed(1)} → ${(input.weightEndGrams / 1000).toFixed(1)} كغ`
       : 'غير متوفر';
-  const survey = { ...input.survey, notes };
+  const survey = { ...input.survey, notes, difficulties, questionForCoach };
   const briefAr = [
     `ملف أسبوعي لمدرب بشري — أسبوع ${input.weekOf}`,
     `الأهداف: ${input.goals.join('، ') || 'غير محددة'}`,
@@ -199,9 +213,16 @@ export function buildWeeklyHumanCoachPacket(input: {
     `سعرات مسجّلة (مجموع الأسبوع): ${input.energyKcalTotal}`,
     `الوزن: ${weightLine}`,
     `استطلاع: طاقة ${survey.energy}/5 · نوم ${survey.sleep}/5 · ضغط ${survey.stress}/5 · جوع ${survey.hunger}/5`,
+    survey.effort !== undefined || survey.recovery !== undefined || survey.satisfaction !== undefined
+      ? `جهد ${survey.effort ?? '—'}/5 · تعافٍ ${survey.recovery ?? '—'}/5 · رضا ${survey.satisfaction ?? '—'}/5`
+      : null,
+    difficulties.length > 0 ? `صعوبات: ${difficulties}` : null,
+    questionForCoach.length > 0 ? `سؤال للمدرب: ${questionForCoach}` : null,
     notes.length > 0 ? `ملاحظات المتدرب: ${notes}` : 'بدون ملاحظات إضافية',
-    'مصدر: مدخلات ترينا فقط — لا سعرات محروقة مخترعة.',
-  ].join('\n');
+    'مصدر: مدخلات ترينا فقط — لا سعرات محروقة مخترعة. الغياب ≠ تأكيد عدم الالتزام.',
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n');
   const briefEn = [
     `Weekly human-coach file — week of ${input.weekOf}`,
     `Goals: ${input.goals.join(', ') || 'unset'}`,
@@ -214,9 +235,16 @@ export function buildWeeklyHumanCoachPacket(input: {
         : 'unavailable'
     }`,
     `Survey: energy ${survey.energy}/5 · sleep ${survey.sleep}/5 · stress ${survey.stress}/5 · hunger ${survey.hunger}/5`,
+    survey.effort !== undefined || survey.recovery !== undefined || survey.satisfaction !== undefined
+      ? `Effort ${survey.effort ?? '—'}/5 · recovery ${survey.recovery ?? '—'}/5 · satisfaction ${survey.satisfaction ?? '—'}/5`
+      : null,
+    difficulties.length > 0 ? `Difficulties: ${difficulties}` : null,
+    questionForCoach.length > 0 ? `Question for coach: ${questionForCoach}` : null,
     notes.length > 0 ? `Athlete notes: ${notes}` : 'No extra notes',
-    'Source: Traina logged inputs only — no invented burned calories.',
-  ].join('\n');
+    'Source: Traina logged inputs only — no invented burned calories. Missing logs ≠ confirmed non-adherence.',
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n');
 
   return {
     weekOf: input.weekOf,

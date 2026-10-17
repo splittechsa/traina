@@ -109,6 +109,11 @@ import {
   listCoachNotes,
   coachWorkloadMetrics,
   coachDecideRecommendation,
+  markOverdueWeeklyReviews,
+  memberWeeklyHumanReviewStatus,
+  previewWeeklySharePacket,
+  addCoachFollowUp,
+  listCoachFollowUps,
   nutritionDisciplineFor,
   ensureDailyYazanCheckin,
   latestWeeklyCoachBrief,
@@ -783,6 +788,46 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   app.get('/v1/coach/workspace/metrics', async (request) => (
     coachWorkloadMetrics(dbOf(options), actorOf(request.claims))
   ));
+
+  app.post('/v1/coach/workspace/mark-overdue', async (request) => {
+    const body = request.body as { olderThanHours?: number };
+    return markOverdueWeeklyReviews(
+      dbOf(options),
+      actorOf(request.claims),
+      typeof body?.olderThanHours === 'number' ? body.olderThanHours : 72,
+    );
+  });
+
+  app.get('/v1/coach/workspace/follow-ups', async (request) => (
+    listCoachFollowUps(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.post('/v1/coach/reviews/:id/follow-ups', async (request) => {
+    const body = request.body as { body?: string; dueOn?: string };
+    if (typeof body?.body !== 'string') {
+      throw new ApiError(400, 'INVALID_FOLLOW_UP', 'body is required');
+    }
+    const params = request.params as { id: string };
+    return addCoachFollowUp(
+      dbOf(options),
+      actorOf(request.claims),
+      params.id,
+      body.body,
+      typeof body.dueOn === 'string' ? body.dueOn : undefined,
+    );
+  });
+
+  app.get('/v1/member/weekly-review', async (request) => (
+    memberWeeklyHumanReviewStatus(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.get('/v1/member/weekly-share-preview', async (request) => {
+    const weekOf = (request.query as { weekOf?: string }).weekOf ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(weekOf)) {
+      throw new ApiError(400, 'INVALID_DATE', 'weekOf must be YYYY-MM-DD');
+    }
+    return previewWeeklySharePacket(dbOf(options), actorOf(request.claims), weekOf);
+  });
 
   app.post('/v1/coach/reviews/prepare', async (request) => {
     const body = request.body as { memberUserId?: string; weekOf?: string };

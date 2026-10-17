@@ -26,6 +26,7 @@ describe('migration apply / recovery (disposable PGlite)', () => {
     expect(first.applied.some((name) => name.includes('0021_coaching_recommendations'))).toBe(true);
     expect(first.applied.some((name) => name.includes('0022_human_coach_ops'))).toBe(true);
     expect(first.applied.some((name) => name.includes('0023_coach_ops_hardening'))).toBe(true);
+    expect(first.applied.some((name) => name.includes('0024_human_coach_identity'))).toBe(true);
     const table = await database.query<{ exists: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM information_schema.tables

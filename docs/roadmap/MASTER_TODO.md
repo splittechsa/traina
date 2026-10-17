@@ -114,7 +114,7 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 | ID | Title | State | Maps |
 | --- | --- | --- | --- |
 | P2-HUM-00 | Coach assignment + review queue + access audit (backend) | DONE | migrations 0022–0023; admin/supervisor assign only |
-| P2-HUM-01 | Weekly survey UX completeness | BACKLOG | #22 / week-report |
+| P2-HUM-01 | Weekly survey UX completeness | DONE | `apps/mobile/app/weekly-checkin.tsx` |
 | P2-HUM-02 | Structured weekly packet (dashboard object, not PDF-only) | DONE | `buildAuthorizedCoachPacket` + review packet API |
 | P2-HUM-03 | Coach dashboard + assignment queue | DONE | `apps/coach-portal` |
 | P2-HUM-04 | Approve/reject/edit + member feedback delivery | DONE | coach decide + feedback endpoints |

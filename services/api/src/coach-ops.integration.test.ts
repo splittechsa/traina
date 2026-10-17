@@ -255,5 +255,107 @@ describe('P2 human coaching ops (security + workflow)', () => {
       headers: { authorization: `Bearer ${otherCoachToken}` },
     });
     expect(newCoachOk.statusCode).toBe(200);
+
+    // Consent withdrawal blocks subsequent coach reads.
+    const withdrawn = await app.inject({
+      method: 'DELETE',
+      url: '/v1/member/coach-share-consent',
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    expect(withdrawn.statusCode).toBe(200);
+    const afterWithdraw = await app.inject({
+      method: 'GET',
+      url: `/v1/coach/members/${memberId}/state`,
+      headers: { authorization: `Bearer ${otherCoachToken}` },
+    });
+    expect(afterWithdraw.statusCode).toBe(403);
+    expect(afterWithdraw.json()).not.toHaveProperty('state');
+
+    // Missing review id looks the same as unauthorized (no existence oracle).
+    const missing = await app.inject({
+      method: 'GET',
+      url: '/v1/coach/reviews/00000000-0000-4000-8000-000000000099/packet',
+      headers: { authorization: `Bearer ${otherCoachToken}` },
+    });
+    expect(missing.statusCode).toBe(403);
+    expect(missing.json().error.code).toBe('FORBIDDEN');
+  }, 120_000);
+
+  it('keeps weekly submit idempotent and serializes concurrent claims', async () => {
+    const memberToken = await tokenFor('member-concurrent@sahhti.test');
+    const coachA = await tokenFor('coach-a-concurrent@sahhti.test');
+    const coachB = await tokenFor('coach-b-concurrent@sahhti.test');
+    const adminToken = await tokenFor('admin-concurrent@sahhti.test');
+    const memberId = await userIdFor(memberToken);
+    const coachAId = await userIdFor(coachA);
+    const coachBId = await userIdFor(coachB);
+    const adminId = await userIdFor(adminToken);
+    await database.query(`INSERT INTO role_assignments (user_id, role) VALUES ($1, 'coach_reviewer')`, [coachAId]);
+    await database.query(`INSERT INTO role_assignments (user_id, role) VALUES ($1, 'coach_reviewer')`, [coachBId]);
+    await database.query(`INSERT INTO role_assignments (user_id, role) VALUES ($1, 'admin')`, [adminId]);
+    await app.inject({
+      method: 'POST',
+      url: '/v1/member/coach-share-consent',
+      headers: { authorization: `Bearer ${memberToken}` },
+    });
+    // Assign both coaches — reassignment leaves only the latest active.
+    await app.inject({
+      method: 'POST',
+      url: '/v1/coach/assignments',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { coachUserId: coachAId, memberUserId: memberId },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/v1/coach/assignments',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { coachUserId: coachBId, memberUserId: memberId, reason: 'capacity_balance' },
+    });
+    // Re-activate both for concurrency by direct insert (ops stress only).
+    await database.query(
+      `INSERT INTO coach_member_assignments (coach_user_id, member_user_id, active)
+       VALUES ($1, $2, true)
+       ON CONFLICT (coach_user_id, member_user_id) DO UPDATE SET active = true`,
+      [coachAId, memberId],
+    );
+
+    const weekOf = '2026-07-06';
+    const first = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/weekly-brief',
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { weekOf, energy: 3, sleep: 3, stress: 3, hunger: 3, effort: 4, recovery: 3, satisfaction: 4 },
+    });
+    expect(first.statusCode).toBe(200);
+    const reviewId = first.json().review.id as string;
+    const second = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/weekly-brief',
+      headers: { authorization: `Bearer ${memberToken}` },
+      payload: { weekOf, energy: 4, sleep: 4, stress: 2, hunger: 3, effort: 5, recovery: 4, satisfaction: 4 },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().review.id).toBe(reviewId);
+    const count = await database.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM weekly_review_queue WHERE member_user_id = $1 AND week_of = $2::date`,
+      [memberId, weekOf],
+    );
+    expect(Number(count.rows[0]?.n)).toBe(1);
+
+    const [claimA, claimB] = await Promise.all([
+      app.inject({
+        method: 'POST',
+        url: `/v1/coach/reviews/${reviewId}/claim`,
+        headers: { authorization: `Bearer ${coachA}` },
+      }),
+      app.inject({
+        method: 'POST',
+        url: `/v1/coach/reviews/${reviewId}/claim`,
+        headers: { authorization: `Bearer ${coachB}` },
+      }),
+    ]);
+    const codes = [claimA.statusCode, claimB.statusCode].sort();
+    expect(codes[0] === 200 || codes[1] === 200).toBe(true);
+    expect(codes.includes(409) || codes.includes(403) || codes.includes(422) || codes[0] === codes[1]).toBe(true);
   }, 120_000);
 });

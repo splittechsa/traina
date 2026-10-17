@@ -388,6 +388,14 @@ export const weeklyCoachSurveySchema = z
     sleep: z.number().int().min(1).max(5),
     stress: z.number().int().min(1).max(5),
     hunger: z.number().int().min(1).max(5),
+    /** Perceived training effort this week. */
+    effort: z.number().int().min(1).max(5).optional(),
+    /** Recovery quality (distinct from nightly sleep score). */
+    recovery: z.number().int().min(1).max(5).optional(),
+    /** How satisfied the member is with the week. */
+    satisfaction: z.number().int().min(1).max(5).optional(),
+    difficulties: z.string().max(500).optional().default(''),
+    questionForCoach: z.string().max(500).optional().default(''),
     notes: z.string().max(500).optional().default(''),
   })
   .strict();

@@ -77,8 +77,14 @@ describe('human coach operations (P2-HUM)', () => {
     assertMemberEligibleForAssignment(['member'], 'active');
   });
 
-  it('denies coach MemberState without assignment or consent (no leakage codes)', () => {
+  it('denies coach MemberState without assignment or consent (fail-closed)', () => {
     const coach = { userId: 'coach-1', roles: ['coach_reviewer'] as const, gymOrganizationIds: [] as const };
+    const assignment = {
+      coachUserId: 'coach-1',
+      memberUserId: 'member-1',
+      active: true,
+      assignedAt: '2026-06-01T00:00:00.000Z',
+    };
     try {
       assertCanReadMemberStateFor(coach, 'member-1', null);
       throw new Error('expected deny');
@@ -86,30 +92,12 @@ describe('human coach operations (P2-HUM)', () => {
       expect((error as DomainError).code).toBe('FORBIDDEN');
       expect((error as DomainError).message).toBe('Access denied');
     }
+    // Omitting consent option must deny (fail-closed).
+    expect(() => assertCanReadMemberStateFor(coach, 'member-1', assignment)).toThrow(DomainError);
     expect(() =>
-      assertCanReadMemberStateFor(
-        coach,
-        'member-1',
-        {
-          coachUserId: 'coach-1',
-          memberUserId: 'member-1',
-          active: true,
-          assignedAt: '2026-06-01T00:00:00.000Z',
-        },
-        { coachShareConsentGranted: false },
-      ),
+      assertCanReadMemberStateFor(coach, 'member-1', assignment, { coachShareConsentGranted: false }),
     ).toThrow(DomainError);
-    assertCanReadMemberStateFor(
-      coach,
-      'member-1',
-      {
-        coachUserId: 'coach-1',
-        memberUserId: 'member-1',
-        active: true,
-        assignedAt: '2026-06-01T00:00:00.000Z',
-      },
-      { coachShareConsentGranted: true },
-    );
+    assertCanReadMemberStateFor(coach, 'member-1', assignment, { coachShareConsentGranted: true });
     expect(
       isCoachAssignedToMember(
         { coachUserId: 'coach-1', memberUserId: 'member-2', active: true, assignedAt: '2026-06-01T00:00:00.000Z' },

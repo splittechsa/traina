@@ -2,8 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   Session,
   addNote,
+  addFollowUp,
   claimReview,
   decideRecommendation,
+  escalateReview,
   listAssignments,
   listInbox,
   listNotes,
@@ -34,7 +36,20 @@ export function App() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [metrics, setMetrics] = useState({ assignedMembers: 0, openReviews: 0, completedLast14Days: 0 });
+  const [metrics, setMetrics] = useState({
+    assignedMembers: 0,
+    openReviews: 0,
+    completedLast14Days: 0,
+    overdueReviews: 0,
+    capacity: {
+      maxActiveMembers: 40,
+      availableSlots: 40,
+      responseHoursTarget: 72,
+      available: true,
+      atCapacity: false,
+    },
+  });
+  const [followUpDraft, setFollowUpDraft] = useState('');
   const [assignments, setAssignments] = useState<
     { coachUserId: string; memberUserId: string; active: boolean; assignedAt: string }[]
   >([]);
@@ -239,6 +254,17 @@ export function App() {
           <strong>{metrics.completedLast14Days}</strong>
           <span>Completed (14d)</span>
         </div>
+        <div className="metric">
+          <strong>{metrics.overdueReviews}</strong>
+          <span>Overdue · SLA {metrics.capacity.responseHoursTarget}h</span>
+        </div>
+        <div className="metric">
+          <strong>{metrics.capacity.availableSlots}</strong>
+          <span>
+            Slots left / {metrics.capacity.maxActiveMembers}
+            {metrics.capacity.atCapacity ? ' · at capacity' : ''}
+          </span>
+        </div>
       </div>
 
       {error ? <p className="error">{error}</p> : null}
@@ -290,6 +316,21 @@ export function App() {
               <div className="actions">
                 <button className="primary" type="button" disabled={busy} onClick={() => void onClaim()}>
                   Claim / start review
+                </button>
+                <button
+                  className="danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    if (session === null || selectedId === null) return;
+                    setBusy(true);
+                    void escalateReview(session.accessToken, selectedId, 'portal_escalate')
+                      .then(() => refreshWorkspace(session.accessToken))
+                      .catch((err: Error) => setError(err.message))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Escalate
                 </button>
               </div>
 
@@ -397,6 +438,26 @@ export function App() {
                 <textarea rows={3} value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} />
                 <button className="ghost" type="button" disabled={busy} onClick={() => void onAddNote()}>
                   Save note
+                </button>
+              </div>
+
+              <div className="stack">
+                <h3>Follow-up</h3>
+                <textarea rows={2} value={followUpDraft} onChange={(event) => setFollowUpDraft(event.target.value)} />
+                <button
+                  className="ghost"
+                  type="button"
+                  disabled={busy || followUpDraft.trim().length < 1}
+                  onClick={() => {
+                    if (session === null || selectedId === null) return;
+                    setBusy(true);
+                    void addFollowUp(session.accessToken, selectedId, followUpDraft.trim())
+                      .then(() => setFollowUpDraft(''))
+                      .catch((err: Error) => setError(err.message))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Save follow-up
                 </button>
               </div>
             </>

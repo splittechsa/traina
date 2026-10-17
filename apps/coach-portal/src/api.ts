@@ -55,10 +55,19 @@ export function listInbox(token: string) {
 }
 
 export function workload(token: string) {
-  return request<{ assignedMembers: number; openReviews: number; completedLast14Days: number }>(
-    '/v1/coach/workspace/metrics',
-    { token },
-  );
+  return request<{
+    assignedMembers: number;
+    openReviews: number;
+    completedLast14Days: number;
+    overdueReviews: number;
+    capacity: {
+      maxActiveMembers: number;
+      availableSlots: number;
+      responseHoursTarget: number;
+      available: boolean;
+      atCapacity: boolean;
+    };
+  }>('/v1/coach/workspace/metrics', { token });
 }
 
 export function readPacket(token: string, reviewId: string) {
@@ -91,6 +100,22 @@ export function claimReview(token: string, reviewId: string) {
   return request<{ review: { status: string } }>(`/v1/coach/reviews/${reviewId}/claim`, {
     method: 'POST',
     token,
+  });
+}
+
+export function escalateReview(token: string, reviewId: string, note: string) {
+  return request<{ review: { status: string } }>(`/v1/coach/reviews/${reviewId}/escalate`, {
+    method: 'POST',
+    token,
+    body: { note },
+  });
+}
+
+export function addFollowUp(token: string, reviewId: string, body: string, dueOn?: string) {
+  return request<{ persisted: boolean }>(`/v1/coach/reviews/${reviewId}/follow-ups`, {
+    method: 'POST',
+    token,
+    body: { body, dueOn },
   });
 }
 

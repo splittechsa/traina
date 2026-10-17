@@ -133,6 +133,7 @@ export function assertCanReadMemberStateFor(
     }
     return;
   }
+  // Admin health-data access is intentional for support break-glass; still requires audit at call site.
   if (actor.roles.includes('admin')) {
     return;
   }
@@ -142,7 +143,8 @@ export function assertCanReadMemberStateFor(
   if (!isCoachAssignedToMember(assignment, actor.userId, subjectUserId)) {
     throw new DomainError('FORBIDDEN', 'Access denied');
   }
-  if (options.coachShareConsentGranted === false) {
+  // Fail-closed: consent must be explicitly granted (undefined/false both deny).
+  if (options.coachShareConsentGranted !== true) {
     throw new DomainError('FORBIDDEN', 'Access denied');
   }
 }
