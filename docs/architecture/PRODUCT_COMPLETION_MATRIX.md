@@ -1,55 +1,121 @@
-# Traina — Product completion matrix (Phase 0)
+# Traina — Product completion matrix (release audit)
 
-**Audit date:** 2026-10-18  
-**Git HEAD (working):** `p1/real-training-adaptation` @ `0504712`  
-**PR #43:** https://github.com/splittechsa/traina/pull/43 — OPEN, CI green, **human review still required (do not merge without it)**  
-**PR #44:** https://github.com/splittechsa/traina/pull/44 — entitlements API + membership/help + landing draft (bases on #43 branch)  
+**Updated:** 2026-10-18  
+**Master:** includes merged PR #43 (`a2d7011`) — real training adaptation apply  
+**Open:** PR #44 retargeted to `master` (entitlements, membership/help, landing, home signals, weekly gate)  
 **Backup:** `backup/dirty-tree-2026-10-17` preserved  
 
-Legend: **V** verified · **I** implemented needs integration · **P** polish · **W** partial · **M** missing · **B** blocked · **U** unsafe for production claims
+Legend: **V** verified · **I** implemented · **P** polish · **W** partial · **M** missing · **B** blocked · **U** unsafe to claim production-ready
 
-| Area | Status | Notes |
+---
+
+## A. Mobile screens (Expo Router)
+
+| Screen / route | Status | Loading / empty / error | Nav | Notes |
+| --- | --- | --- | --- | --- |
+| `index` gate | **I** | — | redirects | Auth/onboarding gate |
+| `(auth)/login` | **I** | errors localized | stack | Device QA still **M** |
+| `(auth)/register` | **I** | validation | stack | |
+| `(auth)/verify` | **I** | | stack | |
+| `(auth)/recover` / `reset` | **I** | | stack | |
+| `(auth)/diagnostics` | **W** | | stack | Dev-oriented |
+| `(onboarding)/index` | **W** | | | Re-onboarding / safety screening incomplete |
+| `(tabs)/home` | **I** | skeleton / offline / error | tabs | Coaching signal cards (feedback, recs, notifications) |
+| `(tabs)/training` | **I** | loading / error | tabs | Adaptation overlay via program versions |
+| `(tabs)/nutrition` | **I** | | tabs | ENERGY_POLICY blocks paid adaptations (**B**) |
+| `(tabs)/coach` (Yazan) | **W** | empty / provider / timeout | tabs | Gemini live; tool eval suite **M** |
+| `(tabs)/progress` | **W** | | tabs | Trend explanations thin |
+| `(tabs)/community` | **W** | empty honest | tabs | |
+| `workout/[id]` | **I** | | back | Reflects adapted sets after apply |
+| `weekly-checkin` | **I** | | back | Honest Yazan-only vs human queue |
+| `food-log` | **I** | | back | |
+| `exercises` | **I** | | close | |
+| `macros` | **I** | | back | |
+| `weight` | **I** | empty / error | back | |
+| `activity` | **I** | | back | |
+| `progress` (stack) | **W** | | back | Duplicate of tab surface |
+| `notifications` | **I** | empty / error | back | In-app only; push **M** |
+| `membership` | **I** | loading / retry | back | Server entitlements; purchases off |
+| `help` | **I** | | back | FAQ + contact; no live desk |
+| `account` | **W** | | | Logout / delete present; export thin |
+| `settings` | **I** | | | Locale restart honesty |
+| `supplements` | **I** | loading / empty / error | back | Wired to `/v1/supplements` (personal list) |
+| `gyms` | **I** | inline notice | back | Referral code |
+| `scanner` | **W** | empty honest | back | Barcode/analysis not configured |
+| `scanner` meal photo | **W** | | | Same limitation |
+
+---
+
+## B. Backend / services
+
+| Service | Status | Notes |
 | --- | --- | --- |
-| Auth register/login/verify/recover/reset | **I** | API + mobile auth screens; needs device QA |
-| Session persistence | **I** | SessionProvider; expiry UX polish |
-| Onboarding | **W** | Present; re-onboarding / safety screening incomplete |
-| Home today coaching surface | **I** | Coaching signal cards for human feedback / pending recs / unread notes (PR #44) |
-| Training programs + workout execution | **I** | Catalog, start-day, sets; adaptation overlay wired in PR #43 |
-| Real training recommendation apply | **I** → awaiting **V** | Atomic apply + tests; **not VERIFIED until PR #43 merge + review** |
-| Exercise library / scanner | **I** | Needs licensed media audit |
-| Nutrition logging / meal plans | **I** | ENERGY_POLICY blocks paid adaptations (**B** for full adaptive nutrition) |
-| Progress / weight / measurements | **W** | Screens exist; trend explanations incomplete |
-| Daily check-in (Yazan) | **W** | API + coach tab; provider live via Gemini env smoke |
-| Weekly check-in + human feedback | **I** | Portal evidence yes; **physical iPhone evidence still M** |
-| Notifications (in-app) | **I** | 0026 + screen; push channel **M** |
-| Membership / entitlements UI | **I** | `GET /v1/member/entitlements` + membership screen; purchases still off |
-| Settings / account / logout | **W** | Help FAQ filled; purchase/support desk still limited |
-| Coach Workspace | **I** | Ops loop proven synthetically; supervisor tools thin |
-| Yazan production AI | **W** | Gemini configured; tool orchestration partial; eval suite **M** |
-| Website landing + checkout | **W** | `apps/www` Arabic/EN draft; checkout **M**; legal pages draft only |
-| Billing gateway / webhooks | **M** | Entitlement domain only |
-| Apple IAP / policy | **B** | P3-APPLE-POLICY |
-| Admin / support / gym portals | **M**/stub | Folders exist empty or legacy |
-| Workers / job queues | **M** | `services/workers` empty |
-| P0-PRIV PDPL | **B** | Counsel |
-| ENERGY_POLICY nutrition apply | **B** | Scientific review |
-| Design system / logo / brand | **W** | Tokens + IBM Plex Arabic; no formal logo pack |
-| Navigation regression tests | **M** | |
-| Physical device QA pack | **M** | PR #43 / P2 exit blocker for mobile claims |
-| Staging/prod release automation | **W** | CI api+mobile; full release checklist incomplete |
+| Auth sessions | **I** | Register/verify/login/refresh/logout/delete |
+| Member state + recommendations | **I** | Lifecycle + generate |
+| Training adaptation apply | **V** (API) | PR #43 merged; IDOR/self-approve fixed; device UX still open |
+| Nutrition program mutate | **B** | ENERGY_POLICY |
+| Yazan `/v1/coach/messages` | **W** | Timeouts + daily quota; tool quality eval **M** |
+| Weekly brief + human queue | **I** | Entitlement/assignment gate |
+| Coach ops APIs | **I** | Claim/feedback/notes/workload |
+| Entitlements `GET /v1/member/entitlements` | **I** | Free projection; purchases disabled |
+| Billing verify | **M**/501 | Store verifiers not configured |
+| Workers / queues | **M** | Empty package |
+| Admin / support / gym portals | **M**/stub | |
 
-## Hard rules for this program
+---
 
-1. Do **not** bypass PR #43 human review.  
-2. Do **not** claim paid nutrition adaptations or PDPL compliance.  
-3. Do **not** mark device journeys VERIFIED without physical screenshots.  
-4. Prefer focused PRs over one mega-PR.  
-5. Preserve backup branch and Neon migrations 0025–0027 forward-only.
+## C. Coach Workspace (web)
 
-## Immediate eligible implementation (post–Phase 0)
+| Surface | Status | Notes |
+| --- | --- | --- |
+| Login / role | **I** | |
+| Inbox / claim / review | **I** | Synthetic evidence in `docs/evidence/p2-coaching` |
+| Feedback → member notifications | **I** | |
+| Supervisor / reassignment | **W** | Thin |
+| Visual polish vs Traina brand | **P** | |
 
-1. Surface real entitlements on membership screen + `GET /v1/member/entitlements`.  
-2. Replace help/support empty shell with honest support content.  
-3. Navigation/back consistency on stack screens.  
-4. Landing page scaffold (Arabic-first) without fake social proof.  
-5. Continue Yazan tool context + failure handling without exposing secrets.  
+---
+
+## D. Public web (`apps/www`)
+
+| Page | Status | Notes |
+| --- | --- | --- |
+| Arabic landing | **W** | Draft; no fake social proof |
+| English landing | **W** | |
+| Privacy / terms | **W** | Explicit legal drafts — not counsel-approved |
+| Pricing checkout | **M** | Gateway **M**; Apple policy **B** |
+| SEO / OG full pack | **W** | Basic meta only |
+
+---
+
+## E. Brand / design system
+
+| Asset | Status | Notes |
+| --- | --- | --- |
+| Color + type tokens | **I** | `apps/mobile/src/theme/tokens.ts` |
+| Mark (SVG path) | **I** | `TrainaMark` + `apps/www/brand/traina-mark.svg` |
+| App icon / splash pack | **W** | New generated icon staged; Expo splash config incomplete |
+| Component library | **W** | kit exists; not fully systematized |
+| RTL / a11y | **W** | Partial; needs device audit |
+
+---
+
+## F. Release gates (non-bypass)
+
+| Gate | Status |
+| --- | --- |
+| P0-PRIV PDPL counsel | **B** |
+| ENERGY_POLICY SME | **B** |
+| P3-APPLE-POLICY | **B** |
+| Physical iPhone QA (P2-HUM-09) | **M** |
+| Billing sandbox + webhooks | **M** |
+| FINAL_PRODUCT_READINESS_REPORT | **M** (not until evidence exists) |
+
+---
+
+## Hard rules
+
+1. Do not claim launch-complete while billing, AI eval, device QA, or blocked gates remain open.  
+2. Do not unlock paid nutrition or claim PDPL compliance.  
+3. Prefer focused PRs; preserve Neon forward migrations and backup branch.  
+4. Screenshots and device claims require real capture — never fabricated.  
