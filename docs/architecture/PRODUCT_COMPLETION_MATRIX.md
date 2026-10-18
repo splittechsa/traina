@@ -2,7 +2,8 @@
 
 **Updated:** 2026-10-18  
 **Master:** includes merged PR #43 (`a2d7011`) — real training adaptation apply  
-**Open:** PR #44 retargeted to `master` (entitlements, membership/help, landing, home signals, weekly gate)  
+**Merged:** PR #43 (adaptation apply) + PR #44 (entitlements / membership / landing / supplements)  
+**Open follow-on:** Yazan tool resolver + www sections (`product/yazan-tools-and-www`)  
 **Backup:** `backup/dirty-tree-2026-10-17` preserved  
 
 Legend: **V** verified · **I** implemented · **P** polish · **W** partial · **M** missing · **B** blocked · **U** unsafe to claim production-ready
@@ -54,7 +55,7 @@ Legend: **V** verified · **I** implemented · **P** polish · **W** partial · 
 | Member state + recommendations | **I** | Lifecycle + generate |
 | Training adaptation apply | **V** (API) | PR #43 merged; IDOR/self-approve fixed; device UX still open |
 | Nutrition program mutate | **B** | ENERGY_POLICY |
-| Yazan `/v1/coach/messages` | **W** | Timeouts + daily quota; tool quality eval **M** |
+| Yazan `/v1/coach/messages` | **I**/**W** | Timeouts + daily quota + authorized tool resolver; eval suite still **M** |
 | Weekly brief + human queue | **I** | Entitlement/assignment gate |
 | Coach ops APIs | **I** | Claim/feedback/notes/workload |
 | Entitlements `GET /v1/member/entitlements` | **I** | Free projection; purchases disabled |
