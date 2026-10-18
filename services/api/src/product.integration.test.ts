@@ -682,7 +682,9 @@ describe('persisted product', () => {
       payload: { weekOf, energy: 3, sleep: 4, stress: 2, hunger: 4, notes: 'اختبار' },
     });
     expect(brief.statusCode).toBe(200);
-    expect(brief.json().escalateToHuman).toBe(true);
+    // Free plan + no coach assignment: summary is saved for Yazan, not the human inbox.
+    expect(brief.json().escalateToHuman).toBe(false);
+    expect(brief.json().status).toBe('saved_for_yazan');
     expect(brief.json().packet.briefAr).toContain('مدرب بشري');
     const latest = await app.inject({
       method: 'GET',
@@ -690,7 +692,7 @@ describe('persisted product', () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(latest.statusCode).toBe(200);
-    expect(latest.json().brief.status).toBe('queued_for_human');
+    expect(latest.json().brief.status).toBe('saved_for_yazan');
   });
 
   it('answers the coach from the signed-in member only and labels the mock', async () => {

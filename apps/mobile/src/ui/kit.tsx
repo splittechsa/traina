@@ -39,7 +39,7 @@ export function StackBackControl({ label }: { label?: string } = {}) {
         else router.replace('/(tabs)/home');
       }}
       hitSlop={12}
-      style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', justifyContent: 'center' }}
+      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
     >
       <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>
         {label ?? text(locale, 'back')}
