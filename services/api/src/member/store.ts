@@ -1100,176 +1100,220 @@ export async function previewTrainingRecommendationApply(db: Database, actor: Ac
   }
 }
 
+type AdaptationApplicationRow = {
+  id: string;
+  to_version: number;
+  to_version_id: string;
+  diff: unknown;
+};
+
+async function loadAdaptationApplication(
+  db: Database,
+  recommendationId: string,
+): Promise<AdaptationApplicationRow | null> {
+  const existing = await db
+    .query<AdaptationApplicationRow>(
+      `SELECT id::text AS id, to_version, to_version_id::text AS to_version_id, diff
+       FROM program_adaptation_applications WHERE recommendation_id = $1`,
+      [recommendationId],
+    )
+    .catch(() => ({ rows: [] as AdaptationApplicationRow[] }));
+  return existing.rows[0] ?? null;
+}
+
+async function idempotentAdaptationResponse(
+  db: Database,
+  actor: Actor,
+  recommendationId: string,
+  existing: AdaptationApplicationRow,
+) {
+  const rows = await db.query<RecommendationDbRow>(
+    `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`,
+    [recommendationId, actor.userId],
+  );
+  const rec = rows.rows[0] === undefined ? null : recommendationRowToDomain(rows.rows[0]);
+  return {
+    persisted: true,
+    idempotent: true,
+    recommendation: rec,
+    applied: rec?.status === 'APPLIED',
+    programVersion: Number(existing.to_version),
+    programVersionId: existing.to_version_id,
+    diff: existing.diff,
+  };
+}
+
 /**
  * Transactional training apply: bump program_versions, audit row, then mark recommendation APPLIED.
- * Idempotent on recommendation_id. Never marks APPLIED if mutation fails.
+ * Idempotent on recommendation_id (unique constraint + FOR UPDATE). Never marks APPLIED if mutation fails.
  */
 export async function applyTrainingRecommendationToProgram(
   db: Database,
   actor: Actor,
   recommendationId: string,
 ) {
-  const existingApply = await db.query<{
-    id: string;
-    to_version: number;
-    to_version_id: string;
-    diff: unknown;
-  }>(
-    `SELECT id::text AS id, to_version, to_version_id::text AS to_version_id, diff
-     FROM program_adaptation_applications WHERE recommendation_id = $1`,
-    [recommendationId],
-  ).catch(() => ({ rows: [] as { id: string; to_version: number; to_version_id: string; diff: unknown }[] }));
-  if (existingApply.rows[0] !== undefined) {
-    const rows = await db.query<RecommendationDbRow>(
-      `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`,
-      [recommendationId, actor.userId],
-    );
-    const rec = rows.rows[0] === undefined ? null : recommendationRowToDomain(rows.rows[0]);
-    return {
-      persisted: true,
-      idempotent: true,
-      recommendation: rec,
-      applied: rec?.status === 'APPLIED',
-      programVersion: Number(existingApply.rows[0].to_version),
-      programVersionId: existingApply.rows[0].to_version_id,
-      diff: existingApply.rows[0].diff,
-    };
+  const existingApply = await loadAdaptationApplication(db, recommendationId);
+  if (existingApply !== null) {
+    return idempotentAdaptationResponse(db, actor, recommendationId, existingApply);
   }
 
-  return db.transaction(async (tx) => {
-    const rows = await tx.query<RecommendationDbRow>(
-      `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2 FOR UPDATE`,
-      [recommendationId, actor.userId],
-    );
-    const row = rows.rows[0];
-    if (row === undefined) {
-      throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
-    }
-    let current = recommendationRowToDomain(row);
-    const at = new Date().toISOString();
-    if (current.status === 'MEMBER_CONFIRMATION_REQUIRED') {
-      current = memberConfirmRecommendation(current, at, actor.userId);
-    }
-    if (current.status !== 'APPROVED') {
-      throw new ApiError(422, 'NOT_APPROVED', 'Only APPROVED training recommendations may be applied');
-    }
-    if (current.category !== 'training') {
-      throw new ApiError(422, 'NOT_TRAINING_ADAPTATION', 'Use standard advance for non-training recommendations');
-    }
+  try {
+    return await db.transaction(async (tx) => {
+      const rows = await tx.query<RecommendationDbRow>(
+        `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        [recommendationId, actor.userId],
+      );
+      const row = rows.rows[0];
+      if (row === undefined) {
+        throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
+      }
 
-    const program = await tx.query<{ id: string; template_id: string | null }>(
-      `SELECT id, template_id FROM programs WHERE user_id = $1 AND active = true LIMIT 1 FOR UPDATE`,
-      [actor.userId],
-    );
-    const programRow = program.rows[0];
-    if (programRow === undefined) {
-      throw new ApiError(422, 'NO_ACTIVE_PROGRAM', 'Activate a training program before applying adaptations');
-    }
-    const version = await tx.query<{ id: string; version: number; template: unknown }>(
-      `SELECT id, version, template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`,
-      [programRow.id],
-    );
-    const ver = version.rows[0];
-    if (ver === undefined) {
-      throw new ApiError(422, 'NO_PROGRAM_VERSION', 'Program has no version to adapt');
-    }
+      // Re-check under row lock so concurrent / retry storms return idempotent success.
+      const lockedExisting = await loadAdaptationApplication(tx, recommendationId);
+      if (lockedExisting !== null) {
+        return idempotentAdaptationResponse(tx, actor, recommendationId, lockedExisting);
+      }
 
-    let plan;
-    try {
-      plan = buildProgramAdaptationPlan({
-        recommendation: current,
-        currentDocument: parseProgramVersionDocument(
-          ver.template ?? { templateId: programRow.template_id, days: [] },
-        ),
-        currentVersion: Number(ver.version),
+      let current = recommendationRowToDomain(row);
+      const at = new Date().toISOString();
+      if (current.status === 'APPLIED') {
+        throw new ApiError(422, 'ALREADY_APPLIED_WITHOUT_AUDIT', 'Recommendation is APPLIED but adaptation audit is missing');
+      }
+      if (current.status === 'MEMBER_CONFIRMATION_REQUIRED') {
+        current = memberConfirmRecommendation(current, at, actor.userId);
+      }
+      if (current.status !== 'APPROVED') {
+        throw new ApiError(422, 'NOT_APPROVED', 'Only APPROVED training recommendations may be applied');
+      }
+      if (current.category !== 'training') {
+        throw new ApiError(422, 'NOT_TRAINING_ADAPTATION', 'Use standard advance for non-training recommendations');
+      }
+
+      const program = await tx.query<{ id: string; template_id: string | null }>(
+        `SELECT id, template_id FROM programs WHERE user_id = $1 AND active = true LIMIT 1 FOR UPDATE`,
+        [actor.userId],
+      );
+      const programRow = program.rows[0];
+      if (programRow === undefined) {
+        throw new ApiError(422, 'NO_ACTIVE_PROGRAM', 'Activate a training program before applying adaptations');
+      }
+      const version = await tx.query<{ id: string; version: number; template: unknown }>(
+        `SELECT id, version, template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`,
+        [programRow.id],
+      );
+      const ver = version.rows[0];
+      if (ver === undefined) {
+        throw new ApiError(422, 'NO_PROGRAM_VERSION', 'Program has no version to adapt');
+      }
+
+      let plan;
+      try {
+        plan = buildProgramAdaptationPlan({
+          recommendation: current,
+          currentDocument: parseProgramVersionDocument(
+            ver.template ?? { templateId: programRow.template_id, days: [] },
+          ),
+          currentVersion: Number(ver.version),
+          at,
+        });
+      } catch (error) {
+        throw asApi(error);
+      }
+
+      const nextVersion = Number(ver.version) + 1;
+      const nextVersionId = randomUUID();
+      const applicationId = randomUUID();
+      await tx.query(
+        `INSERT INTO program_versions (id, program_id, version, source, template)
+         VALUES ($1, $2, $3, 'approved_rules', $4::jsonb)`,
+        [nextVersionId, programRow.id, nextVersion, JSON.stringify(plan.nextDocument)],
+      );
+      await tx.query(
+        `INSERT INTO program_adaptation_applications (
+           id, recommendation_id, program_id, from_version, to_version,
+           from_version_id, to_version_id, kind, diff, actor_user_id
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)`,
+        [
+          applicationId,
+          recommendationId,
+          programRow.id,
+          Number(ver.version),
+          nextVersion,
+          ver.id,
+          nextVersionId,
+          plan.overlay.kind,
+          JSON.stringify(plan.diff),
+          actor.userId,
+        ],
+      );
+
+      const applied = transitionRecommendation(
+        {
+          ...current,
+          payload: {
+            ...current.payload,
+            lastApplyEffect: {
+              kind: plan.overlay.kind,
+              programMutation: 'program_version_bumped',
+              fromVersion: Number(ver.version),
+              toVersion: nextVersion,
+              toVersionId: nextVersionId,
+              punitiveForbidden: true,
+            },
+            lastAppliedAt: at,
+          },
+        },
+        'APPLIED',
         at,
-      });
-    } catch (error) {
-      throw asApi(error);
-    }
+        { actorId: actor.userId, note: `program_version_${nextVersion}` },
+      );
+      await tx.query(
+        `UPDATE coaching_recommendations SET
+           status = $2, payload = $3::jsonb, audit = $4::jsonb, updated_at = $5::timestamptz
+         WHERE id = $1 AND user_id = $6`,
+        [
+          applied.id,
+          applied.status,
+          JSON.stringify(applied.payload),
+          JSON.stringify(applied.audit),
+          applied.updatedAt,
+          actor.userId,
+        ],
+      );
 
-    const nextVersion = Number(ver.version) + 1;
-    const nextVersionId = randomUUID();
-    const applicationId = randomUUID();
-    await tx.query(
-      `INSERT INTO program_versions (id, program_id, version, source, template)
-       VALUES ($1, $2, $3, 'approved_rules', $4::jsonb)`,
-      [nextVersionId, programRow.id, nextVersion, JSON.stringify(plan.nextDocument)],
-    );
-    await tx.query(
-      `INSERT INTO program_adaptation_applications (
-         id, recommendation_id, program_id, from_version, to_version,
-         from_version_id, to_version_id, kind, diff, actor_user_id
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)`,
-      [
-        applicationId,
-        recommendationId,
-        programRow.id,
-        Number(ver.version),
-        nextVersion,
-        ver.id,
-        nextVersionId,
-        plan.overlay.kind,
-        JSON.stringify(plan.diff),
-        actor.userId,
-      ],
-    );
-
-    const applied = transitionRecommendation(
-      {
-        ...current,
-        payload: {
-          ...current.payload,
-          lastApplyEffect: {
-            kind: plan.overlay.kind,
+      return {
+        persisted: true,
+        idempotent: false,
+        recommendation: applied,
+        applied: true,
+        programId: programRow.id,
+        programVersion: nextVersion,
+        programVersionId: nextVersionId,
+        diff: plan.diff,
+        applyResult: {
+          applied: true as const,
+          kind: plan.overlay.kind,
+          effect: {
             programMutation: 'program_version_bumped',
             fromVersion: Number(ver.version),
             toVersion: nextVersion,
-            toVersionId: nextVersionId,
-            punitiveForbidden: true,
           },
-          lastAppliedAt: at,
+          monitoredFrom: at,
         },
-      },
-      'APPLIED',
-      at,
-      { actorId: actor.userId, note: `program_version_${nextVersion}` },
-    );
-    await tx.query(
-      `UPDATE coaching_recommendations SET
-         status = $2, payload = $3::jsonb, audit = $4::jsonb, updated_at = $5::timestamptz
-       WHERE id = $1 AND user_id = $6`,
-      [
-        applied.id,
-        applied.status,
-        JSON.stringify(applied.payload),
-        JSON.stringify(applied.audit),
-        applied.updatedAt,
-        actor.userId,
-      ],
-    );
-
-    return {
-      persisted: true,
-      idempotent: false,
-      recommendation: applied,
-      applied: true,
-      programId: programRow.id,
-      programVersion: nextVersion,
-      programVersionId: nextVersionId,
-      diff: plan.diff,
-      applyResult: {
-        applied: true as const,
-        kind: plan.overlay.kind,
-        effect: {
-          programMutation: 'program_version_bumped',
-          fromVersion: Number(ver.version),
-          toVersion: nextVersion,
-        },
-        monitoredFrom: at,
-      },
-    };
-  });
+      };
+    });
+  } catch (error) {
+    // Unique recommendation_id race: peer committed first — return idempotent read.
+    const code =
+      error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : '';
+    if (code === '23505') {
+      const raced = await loadAdaptationApplication(db, recommendationId);
+      if (raced !== null) {
+        return idempotentAdaptationResponse(db, actor, recommendationId, raced);
+      }
+    }
+    throw error;
+  }
 }
 
 export async function advanceMemberRecommendation(

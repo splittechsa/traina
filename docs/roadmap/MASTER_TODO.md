@@ -103,7 +103,7 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 | P1-REC-01 | Recommendation state machine + versioned apply | REVIEW | Engine + generate/advance; nutrition apply blocked |
 | P1-REC-02 | Expire/dedupe/prioritize/apply/monitor/revert + safety class | REVIEW | Migration `0025`; not VERIFIED until merged |
 | P1-REC-03 | Training adaptation kinds (bounded) | REVIEW | recovery / deload / progressive_overload_hint |
-| P1-REC-04 | Real program version apply + before/after + idempotent audit | REVIEW | Migration `0027`; APPLIED only after version bump |
+| P1-REC-04 | Real program version apply + before/after + idempotent audit | REVIEW | Migration `0027`; concurrent/idempotent/workout evidence in PR #43 hardening — **not VERIFIED until merge** |
 | P1-AI-01 | Yazan tool gateway (typed tools, minimal context) | IN_PROGRESS | Missing-data, daily/weekly prep, draft, escalate, navigate |
 | P1-NUT-01 | Individualized energy policy (post SME) | BLOCKED | After P0-SAFE-01 + SME |
 | P1-TEST-01 | Safety suite S-01…S-09 executed | BACKLOG | `coaching-safety-tests.md` |
