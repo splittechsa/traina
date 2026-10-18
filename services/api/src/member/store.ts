@@ -2397,7 +2397,7 @@ export async function memberWeeklyHumanReviewStatus(db: Database, actor: Actor) 
     coachAvailable: assignment.rows[0] !== undefined,
     noCoachMessage:
       assignment.rows[0] === undefined
-        ? 'No human coach is assigned yet. Your weekly file stays queued until an authorized coach is assigned.'
+        ? 'No human coach is assigned yet. Without Traina Coach entitlement or an assignment, weekly summaries stay with Yazan only.'
         : null,
     review:
       row === undefined

@@ -45,6 +45,26 @@ export default function HomeScreen() {
     queryFn: () => apiRequest<Me>('/v1/me'),
   });
   const progress = useQuery({ queryKey: ['progress'], queryFn: () => apiRequest<Progress>('/v1/progress') });
+  const coachingSignals = useQuery({
+    queryKey: ['home-coaching-signals'],
+    enabled: tokens !== null,
+    queryFn: async () => {
+      const [notifications, weekly, recommendations] = await Promise.all([
+        apiRequest<{ notifications: { id: string; readAt: string | null; isHumanCoach: boolean; title: string }[] }>(
+          '/v1/member/notifications',
+        ),
+        apiRequest<{
+          hasAssignedCoach: boolean;
+          unreadHumanFeedback: { id: string }[];
+          review: { status: string } | null;
+        }>('/v1/member/weekly-review'),
+        apiRequest<{ recommendations: { id: string; status: string; summary: string }[] }>(
+          '/v1/member/recommendations',
+        ),
+      ]);
+      return { notifications, weekly, recommendations };
+    },
+  });
 
   if (home.isPending) {
     return (
@@ -175,6 +195,57 @@ export default function HomeScreen() {
             </Pressable>
           ))}
         </View>
+
+        {(() => {
+          const unreadHuman = coachingSignals.data?.weekly.unreadHumanFeedback?.length ?? 0;
+          const unreadNotes = (coachingSignals.data?.notifications.notifications ?? []).filter(
+            (row) => row.readAt === null,
+          ).length;
+          const pendingRecs = (coachingSignals.data?.recommendations.recommendations ?? []).filter(
+            (row) =>
+              row.status === 'APPROVED'
+              || row.status === 'MEMBER_CONFIRMATION_REQUIRED'
+              || row.status === 'REVIEW_REQUIRED',
+          );
+          if (unreadHuman === 0 && unreadNotes === 0 && pendingRecs.length === 0) return null;
+          return (
+            <View style={{ gap: spacing[2], marginBottom: spacing[4] }}>
+              {unreadHuman > 0 ? (
+                <Pressable accessibilityRole="button" onPress={() => router.push('/weekly-checkin')}>
+                  <SurfaceCard tone="raised">
+                    <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, marginBottom: 4 }}>
+                      {text(locale, 'humanCoachLabel')}
+                    </Text>
+                    <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>
+                      {text(locale, 'humanFeedbackReady')}
+                    </Text>
+                  </SurfaceCard>
+                </Pressable>
+              ) : null}
+              {pendingRecs[0] !== undefined ? (
+                <Pressable accessibilityRole="button" onPress={() => router.push('/weekly-checkin')}>
+                  <SurfaceCard>
+                    <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, marginBottom: 4 }}>
+                      {text(locale, 'pendingRecommendation')}
+                    </Text>
+                    <Text style={{ color: theme.text, fontFamily: fontFamily.regular, lineHeight: 22 }} numberOfLines={2}>
+                      {pendingRecs[0].summary}
+                    </Text>
+                  </SurfaceCard>
+                </Pressable>
+              ) : null}
+              {unreadNotes > 0 && unreadHuman === 0 ? (
+                <Pressable accessibilityRole="button" onPress={() => router.push('/notifications')}>
+                  <SurfaceCard tone="muted">
+                    <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>
+                      {text(locale, 'notifications')} · {unreadNotes}
+                    </Text>
+                  </SurfaceCard>
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })()}
 
         <StepsCard />
 
