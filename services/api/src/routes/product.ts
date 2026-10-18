@@ -9,6 +9,7 @@ import {
   customExerciseSchema,
   copyDiarySchema,
   customFoodSchema,
+  customMealSchema,
   foodLogSchema,
   foodPortionSchema,
   programNutritionSchema,
@@ -65,6 +66,9 @@ import {
   createCommunityPost,
   copyDiaryDay,
   createCustomFood,
+  createCustomMeal,
+  listCustomMeals,
+  updateCustomMeal,
   createDraftRule,
   createMemberExercise,
   decideRule,
@@ -108,6 +112,8 @@ import {
   listMemberCoachFeedback,
   listMemberNotifications,
   entitlementsFor,
+  exportMemberAccount,
+  registerPushDevice,
   markMemberNotificationRead,
   addCoachNote,
   listCoachNotes,
@@ -356,6 +362,22 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     return { deleted: true };
   });
 
+  app.get('/v1/account/export', async (request) => {
+    return exportMemberAccount(dbOf(options), actorOf(request.claims));
+  });
+
+  app.post('/v1/member/push-devices', async (request, reply) => {
+    const body = request.body as { expoPushToken?: string; platform?: string };
+    if (typeof body?.expoPushToken !== 'string' || body.expoPushToken.trim().length < 8) {
+      return reply.code(422).send({ error: { code: 'INVALID_PUSH_TOKEN', message: 'expoPushToken is required' } });
+    }
+    const platform = body.platform === 'android' || body.platform === 'ios' || body.platform === 'web' ? body.platform : 'unknown';
+    return registerPushDevice(dbOf(options), actorOf(request.claims).userId, {
+      expoPushToken: body.expoPushToken.trim().slice(0, 512),
+      platform,
+    });
+  });
+
   app.get('/v1/me', async (request) => {
     const actor = actorOf(request.claims);
     const profile = await readProfile(dbOf(options), actor.userId);
@@ -531,6 +553,19 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     return { persisted: true, session: await mutateSession(dbOf(options), actor.userId, params.id, { type: 'log_set', set: body }) };
   });
 
+  app.put('/v1/training/sessions/:id/sets/:setId', async (request, reply) => {
+    const body = parse(logSetSchema, request.body, reply);
+    if (body === undefined) return;
+    const params = request.params as { id: string; setId: string };
+    if (body.id !== params.setId) {
+      return reply.code(422).send({ error: { code: 'SET_ID_MISMATCH', message: 'Body id must match the path set id' } });
+    }
+    return {
+      persisted: true,
+      session: await mutateSession(dbOf(options), actorOf(request.claims).userId, params.id, { type: 'replace_set', set: body }),
+    };
+  });
+
   app.post('/v1/training/sessions/:id/pause', async (request, reply) => {
     const body = parse(sessionTimeSchema, request.body, reply);
     if (body === undefined) return;
@@ -562,6 +597,23 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     const body = parse(customFoodSchema, request.body, reply);
     if (body === undefined) return;
     return createCustomFood(dbOf(options), actorOf(request.claims).userId, body);
+  });
+
+  app.get('/v1/nutrition/custom-meals', async (request) => {
+    return listCustomMeals(dbOf(options), actorOf(request.claims).userId);
+  });
+
+  app.post('/v1/nutrition/custom-meals', async (request, reply) => {
+    const body = parse(customMealSchema, request.body, reply);
+    if (body === undefined) return;
+    return createCustomMeal(dbOf(options), actorOf(request.claims).userId, body);
+  });
+
+  app.put('/v1/nutrition/custom-meals/:id', async (request, reply) => {
+    const body = parse(customMealSchema, request.body, reply);
+    if (body === undefined) return;
+    const params = request.params as { id: string };
+    return updateCustomMeal(dbOf(options), actorOf(request.claims).userId, params.id, body);
   });
 
   app.get('/v1/nutrition/favorites', async (request) => {
@@ -1010,13 +1062,25 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   app.get('/v1/coach/messages', async (request) => {
     const actor = actorOf(request.claims);
     const runtime = coachOf(options);
+    const db = dbOf(options);
+    const entitlements = await entitlementsFor(db, actor);
+    const usedRows = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM ai_usage WHERE user_id = $1 AND created_at > date_trunc('day', now())`,
+      [actor.userId],
+    );
+    const used = Number(usedRows.rows[0]?.count ?? 0);
     return {
-      messages: await listCoachMessages(dbOf(options), actor.userId),
+      messages: await listCoachMessages(db, actor.userId),
       productionIntelligence: runtime.name === 'openai_compatible',
       providerConfigured: runtime.name !== 'unconfigured',
       provider: runtime.name,
       persona: 'yazan',
       requiredEnv: runtime.name === 'unconfigured' ? runtime.missing : [],
+      quota: {
+        used,
+        limit: entitlements.limits.yazanTurnsPerDay,
+        remaining: Math.max(0, entitlements.limits.yazanTurnsPerDay - used),
+      },
     };
   });
 

@@ -62,7 +62,13 @@ export function ScreenBody({
       <ScrollView
         ref={scrollRef}
         style={styles.fill}
-        contentContainerStyle={{ paddingBottom: (footer === undefined ? occupied : keyboard > 0 ? spacing[6] : spacing[2]) + spacing[3], flexGrow: 1 }}
+        contentContainerStyle={{
+          paddingBottom:
+            (footer === undefined ? occupied : keyboard > 0 ? spacing[6] : spacing[2]) +
+            spacing[3] +
+            (inTabs ? spacing[6] : 0),
+          flexGrow: 1,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         refreshControl={refreshControl}

@@ -45,6 +45,12 @@ export default function HomeScreen() {
     queryFn: () => apiRequest<Me>('/v1/me'),
   });
   const progress = useQuery({ queryKey: ['progress'], queryFn: () => apiRequest<Progress>('/v1/progress') });
+  const sessions = useQuery({
+    queryKey: ['sessions'],
+    enabled: tokens !== null,
+    queryFn: () =>
+      apiRequest<{ sessions: { id: string; name: string; status: string }[] }>('/v1/training/sessions'),
+  });
   const coachingSignals = useQuery({
     queryKey: ['home-coaching-signals'],
     enabled: tokens !== null,
@@ -117,6 +123,9 @@ export default function HomeScreen() {
   const latest = weights.length === 0 ? null : weights[weights.length - 1];
   const goal = dashboard.goal.status === 'ready' ? label(locale, 'goal', dashboard.goal.data) : null;
   const today = dashboard.todayWorkout.status === 'ready' ? dashboard.todayWorkout.data : null;
+  const resumeSession = (sessions.data?.sessions ?? []).find(
+    (row) => row.status === 'in_progress' || row.status === 'paused',
+  );
   const actions = [
     [text(locale, 'askCoach'), { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }, () => router.push('/(tabs)/coach')],
     [text(locale, 'weeklyCheckin'), { ios: 'clipboard.fill', android: 'assignment', web: 'assignment' }, () => router.push('/weekly-checkin')],
@@ -128,6 +137,10 @@ export default function HomeScreen() {
   const calories = logged && nutrition !== null ? nutrition.consumed.energyKcal : null;
   const protein = logged && nutrition !== null ? nutrition.consumed.proteinMg : null;
   const workoutAction = () => {
+    if (resumeSession !== undefined) {
+      router.push({ pathname: '/workout/[id]', params: { id: resumeSession.id } });
+      return;
+    }
     if (today === null) router.push('/(tabs)/training');
     else router.push({ pathname: '/workout/[id]', params: { id: today.id } });
   };
@@ -151,21 +164,35 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[4] }}>
             <View style={{ flex: 1 }}>
             <Text style={[styles.heroEyebrow, { color: theme.heroAccent, fontFamily: fontFamily.semibold }]}>
-              {isAr ? 'الخطوة التالية' : 'UP NEXT'}
+              {resumeSession !== undefined
+                ? (isAr ? 'جلسة جارية' : 'IN PROGRESS')
+                : isAr
+                  ? 'الخطوة التالية'
+                  : 'UP NEXT'}
             </Text>
             <Text style={[styles.heroTitle, { color: theme.heroText, fontFamily: fontFamily.bold }]} numberOfLines={2}>
-              {today === null ? (isAr ? 'جاهز تبدأ؟' : 'Ready to train?') : today.name}
+              {resumeSession !== undefined
+                ? resumeSession.name
+                : today === null
+                  ? (isAr ? 'جاهز تبدأ؟' : 'Ready to train?')
+                  : today.name}
             </Text>
             <Text style={[styles.heroCaption, { color: theme.heroText, fontFamily: fontFamily.regular }]} numberOfLines={2}>
-              {today === null
-                ? isAr
-                  ? 'ابدأ بخطة تناسب رياضتك ومستواك.'
-                  : 'Start a plan that fits your sport and level.'
-                : label(locale, 'discipline', today.discipline)}
+              {resumeSession !== undefined
+                ? text(locale, 'resumeWorkout')
+                : today === null
+                  ? isAr
+                    ? 'ابدأ بخطة تناسب رياضتك ومستواك.'
+                    : 'Start a plan that fits your sport and level.'
+                  : label(locale, 'discipline', today.discipline)}
             </Text>
             <View style={[styles.heroButton, { backgroundColor: theme.heroAccent }]}>
               <Text style={[styles.heroButtonText, { color: theme.goldInk, fontFamily: fontFamily.bold }]}>
-                {today === null ? text(locale, 'createPlan') : text(locale, 'start')}
+                {resumeSession !== undefined
+                  ? text(locale, 'resumeWorkout')
+                  : today === null
+                    ? text(locale, 'createPlan')
+                    : text(locale, 'start')}
               </Text>
             </View>
             </View>

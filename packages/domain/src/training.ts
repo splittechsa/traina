@@ -225,6 +225,29 @@ export function logSet(session: WorkoutSession, set: WorkoutSet): WorkoutSession
   return { ...session, sets: [...session.sets, set] };
 }
 
+/** Replace reps/load on an already-logged set. Keeps setIndex and exerciseId from the original row. */
+export function replaceSet(session: WorkoutSession, set: WorkoutSet): WorkoutSession {
+  if (session.status !== 'in_progress') {
+    throw new DomainError('INVALID_SESSION_STATE', 'Sets can be edited only while the workout is in progress');
+  }
+  assertSet(set);
+  const index = session.sets.findIndex((existing) => existing.id === set.id);
+  if (index < 0) {
+    throw new DomainError('SET_NOT_FOUND', 'That set is not on this session');
+  }
+  const current = session.sets[index]!;
+  if (current.exerciseId !== set.exerciseId) {
+    throw new DomainError('INVALID_SET', 'Cannot move a logged set to a different exercise');
+  }
+  const next = [...session.sets];
+  next[index] = {
+    ...set,
+    setIndex: current.setIndex,
+    exerciseId: current.exerciseId,
+  };
+  return { ...session, sets: next };
+}
+
 function pausedSeconds(session: Pick<WorkoutSession, 'pauses'>, endedAt: string): number {
   let paused = 0;
   for (const pause of session.pauses) {
@@ -326,7 +349,7 @@ function isBetterRecord(candidate: PersonalRecord, current: PersonalRecord): boo
 export type OfflineResolution =
   | { disposition: 'applied'; session: WorkoutSession }
   | { disposition: 'replay'; session: WorkoutSession }
-  | { disposition: 'conflict'; serverStatus: SessionStatus; command: 'log_set' };
+  | { disposition: 'conflict'; serverStatus: SessionStatus; command: 'log_set' | 'replace_set' };
 
 export function applyOfflineSet(server: WorkoutSession, set: WorkoutSet): OfflineResolution {
   if (server.status === 'completed' || server.status === 'abandoned') {
@@ -347,4 +370,26 @@ export function applyOfflineSet(server: WorkoutSession, set: WorkoutSet): Offlin
     return { disposition: 'conflict', serverStatus: server.status, command: 'log_set' };
   }
   return { disposition: 'applied', session: logSet(server, set) };
+}
+
+/** Offline edit of an already-logged set. Idempotent when payload matches server. */
+export function applyOfflineReplace(server: WorkoutSession, set: WorkoutSet): OfflineResolution {
+  if (server.status === 'completed' || server.status === 'abandoned') {
+    return { disposition: 'conflict', serverStatus: server.status, command: 'replace_set' };
+  }
+  if (server.status !== 'in_progress') {
+    return { disposition: 'conflict', serverStatus: server.status, command: 'replace_set' };
+  }
+  const existing = server.sets.find((item) => item.id === set.id);
+  if (existing === undefined) {
+    return { disposition: 'conflict', serverStatus: server.status, command: 'replace_set' };
+  }
+  const same =
+    existing.reps === set.reps &&
+    existing.loadGrams === set.loadGrams &&
+    existing.exerciseId === set.exerciseId;
+  if (same) {
+    return { disposition: 'replay', session: server };
+  }
+  return { disposition: 'applied', session: replaceSet(server, set) };
 }

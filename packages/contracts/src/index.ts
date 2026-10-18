@@ -223,6 +223,22 @@ export const customFoodSchema = z
   })
   .strict();
 
+export const customMealIngredientSchema = z
+  .object({
+    foodItemId: z.string().uuid(),
+    quantityGrams: z.number().int().min(1).max(2000),
+  })
+  .strict();
+
+export const customMealSchema = z
+  .object({
+    nameAr: z.string().trim().min(1).max(80),
+    nameEn: z.string().trim().min(1).max(80),
+    servings: z.number().int().min(1).max(20).default(1),
+    ingredients: z.array(customMealIngredientSchema).min(1).max(30),
+  })
+  .strict();
+
 export const foodPortionSchema = z
   .object({
     foodItemId: z.string().uuid(),
@@ -241,6 +257,8 @@ export const foodLogSchema = z
     fatMg: z.number().int().nonnegative(),
     source: z.enum(['manual', 'barcode', 'image_estimate', 'recipe']),
     mealSlot: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).optional(),
+    /** Member-visible name for ready meals / custom logs. */
+    label: z.string().trim().min(1).max(120).optional(),
   })
   .strict();
 

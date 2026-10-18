@@ -55,4 +55,37 @@ describe('offline set queue', () => {
     expect(changed.conflicts).toEqual([{ clientEventId: 'evt-2', reason: 'payload_conflict' }]);
     expect(changed.session.sets[0]?.reps).toBe(5);
   });
+
+  it('queues offline replaces, replays identical edits, and conflicts on terminal sessions', () => {
+    const server = session('in_progress', [set]);
+    const edited = planOfflineSync(server, [
+      { clientEventId: 'evt-edit', sessionId: 'session-1', kind: 'replace', set: { ...set, reps: 6, loadGrams: 105_000 } },
+    ]);
+    expect(edited.send).toHaveLength(1);
+    expect(edited.send[0]?.kind).toBe('replace');
+    expect(edited.session.sets[0]?.reps).toBe(6);
+
+    const replay = planOfflineSync(server, [
+      { clientEventId: 'evt-same', sessionId: 'session-1', kind: 'replace', set },
+    ]);
+    expect(replay.send).toHaveLength(0);
+    expect(replay.conflicts).toHaveLength(0);
+
+    const done = session('completed', [set]);
+    const blocked = planOfflineSync(done, [
+      { clientEventId: 'evt-late', sessionId: 'session-1', kind: 'replace', set: { ...set, reps: 7 } },
+    ]);
+    expect(blocked.send).toHaveLength(0);
+    expect(blocked.conflicts[0]?.reason).toBe('terminal_session');
+  });
+
+  it('applies log then replace in order without duplicating the set id', () => {
+    const plan = planOfflineSync(session('in_progress'), [
+      { clientEventId: 'evt-1', sessionId: 'session-1', kind: 'log', set },
+      { clientEventId: 'evt-2', sessionId: 'session-1', kind: 'replace', set: { ...set, reps: 8 } },
+    ]);
+    expect(plan.send).toHaveLength(2);
+    expect(plan.session.sets).toHaveLength(1);
+    expect(plan.session.sets[0]?.reps).toBe(8);
+  });
 });

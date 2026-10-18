@@ -9,6 +9,7 @@ import {
   evaluateCoachingRules,
   executeCoachTool,
   logSet,
+  replaceSet,
   parseScaledInteger,
   pauseWorkout,
   personalRecordsFromSessions,
@@ -2115,6 +2116,58 @@ export async function sendCoachFeedback(
  * Reads the latest subscriptions row when present; otherwise free defaults.
  * Never unlocks paid capabilities from client flags. Nutrition adaptations stay blocked.
  */
+/** Member data export for account portability — no secrets, tokens, or password hashes. */
+export async function exportMemberAccount(db: Database, actor: Actor) {
+  const profile = await readProfile(db, actor.userId);
+  const progress = await progressFor(db, actor.userId);
+  const sessions = await listSessions(db, actor.userId);
+  const diary = await diaryFor(db, actor.userId, new Date().toISOString().slice(0, 10));
+  const entitlements = await entitlementsFor(db, actor);
+  return {
+    exportedAt: new Date().toISOString(),
+    userId: actor.userId,
+    profile: profile.profile,
+    goals: profile.goals,
+    entitlements: {
+      planCode: entitlements.planCode,
+      capabilities: entitlements.capabilities,
+      limits: entitlements.limits,
+      purchasesEnabled: entitlements.purchasesEnabled,
+    },
+    progress: {
+      completedWorkouts: progress.completedWorkouts,
+      weightCount: progress.weights.length,
+    },
+    sessions: sessions.map((session) => ({
+      id: session.id,
+      name: session.name,
+      status: session.status,
+      scheduledFor: session.scheduled_for,
+      durationSeconds: session.duration_seconds,
+    })),
+    todayDiary: {
+      entryCount: diary.summary.entryCount,
+      consumed: diary.summary.consumed,
+    },
+    notice: 'Credentials and session tokens are omitted from this export.',
+  };
+}
+
+export async function registerPushDevice(
+  db: Database,
+  userId: string,
+  input: { expoPushToken: string; platform: string },
+) {
+  await db.query(
+    `INSERT INTO member_push_devices (user_id, expo_push_token, platform, updated_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id, expo_push_token)
+     DO UPDATE SET platform = EXCLUDED.platform, updated_at = now(), revoked_at = NULL`,
+    [userId, input.expoPushToken, input.platform],
+  );
+  return { registered: true, deliveryConfigured: false, notice: 'Token stored; push delivery provider is not enabled yet.' };
+}
+
 export async function entitlementsFor(
   db: Database,
   actor: Actor,
@@ -2397,7 +2450,7 @@ export async function memberWeeklyHumanReviewStatus(db: Database, actor: Actor) 
     coachAvailable: assignment.rows[0] !== undefined,
     noCoachMessage:
       assignment.rows[0] === undefined
-        ? 'No human coach is assigned yet. Without Traina Coach entitlement or an assignment, weekly summaries stay with Yazan only.'
+        ? 'No human coach is assigned yet. Weekly summaries stay with Yazan until an authorized coach is assigned.'
         : null,
     review:
       row === undefined
@@ -2788,7 +2841,10 @@ export async function mutateSession(
   db: Database,
   userId: string,
   sessionId: string,
-  command: { type: 'start' | 'pause' | 'resume' | 'complete'; at: string } | { type: 'log_set'; set: WorkoutSet },
+  command:
+    | { type: 'start' | 'pause' | 'resume' | 'complete'; at: string }
+    | { type: 'log_set'; set: WorkoutSet }
+    | { type: 'replace_set'; set: WorkoutSet },
 ): Promise<WorkoutSession> {
   const current = await sessionOwned(db, userId, sessionId);
   try {
@@ -2828,6 +2884,20 @@ export async function mutateSession(
         `INSERT INTO workout_sets (id, session_id, exercise_id, set_index, reps, load_grams, rpe_tenths, completed_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [added.id, sessionId, added.exerciseId, added.setIndex, added.reps, added.loadGrams, added.rpeTenths, added.completedAt],
+      );
+      return next;
+    }
+    if (command.type === 'replace_set') {
+      const next = replaceSet(current, command.set);
+      const updated = next.sets.find((set) => set.id === command.set.id);
+      if (updated === undefined) {
+        throw new ApiError(500, 'SET_MISSING', 'Set was not updated');
+      }
+      await db.query(
+        `UPDATE workout_sets
+         SET reps = $1, load_grams = $2, rpe_tenths = $3, completed_at = $4
+         WHERE id = $5 AND session_id = $6`,
+        [updated.reps, updated.loadGrams, updated.rpeTenths, updated.completedAt, updated.id, sessionId],
       );
       return next;
     }
@@ -2907,16 +2977,18 @@ export async function logFood(
     fatMg: number;
     source: FoodEntry['source'];
     mealSlot?: string;
+    label?: string;
   },
 ) {
   const mealSlot = entry.mealSlot === undefined ? null : isMealSlot(entry.mealSlot) ? entry.mealSlot : null;
   if (entry.mealSlot !== undefined && mealSlot === null) {
     throw new ApiError(422, 'UNKNOWN_MEAL_SLOT', 'That meal slot is not in the catalog');
   }
+  const label = typeof entry.label === 'string' && entry.label.trim().length > 0 ? entry.label.trim().slice(0, 120) : null;
   await db.query(
-    `INSERT INTO food_entries (user_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, meal_slot)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [userId, entry.loggedOn, entry.energyKcal, entry.proteinMg, entry.carbohydrateMg, entry.fatMg, entry.source, entry.source === 'image_estimate', mealSlot],
+    `INSERT INTO food_entries (user_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, meal_slot, label)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [userId, entry.loggedOn, entry.energyKcal, entry.proteinMg, entry.carbohydrateMg, entry.fatMg, entry.source, entry.source === 'image_estimate', mealSlot, label],
   );
   return diaryFor(db, userId, entry.loggedOn);
 }
@@ -4159,7 +4231,11 @@ export async function searchFoods(db: Database, userId: string, query: string) {
     [userId, `%${term}%`],
   );
   return {
-    foods: rows.rows.map((row) => ({ ...row, perQuantity: '100 g' })),
+    foods: rows.rows.map((row) => ({
+      ...row,
+      perQuantity: String(row.per_quantity ?? '100 g'),
+      per_quantity: String(row.per_quantity ?? '100 g'),
+    })),
     referenceDatabase: false,
   };
 }
@@ -4178,6 +4254,247 @@ export async function createCustomFood(
     [sourceId, userId, input.nameAr, input.nameEn, input.energyKcal, input.proteinMg, input.carbohydrateMg, input.fatMg],
   );
   return { id: String(inserted.rows[0]?.id), perQuantity: '100 g', referenceDatabase: false };
+}
+
+type CustomMealIngredientInput = { foodItemId: string; quantityGrams: number };
+
+async function sumIngredientMacros(
+  db: Database,
+  userId: string,
+  ingredients: readonly CustomMealIngredientInput[],
+) {
+  let energyKcal = 0;
+  let proteinMg = 0;
+  let carbohydrateMg = 0;
+  let fatMg = 0;
+  const resolved: { foodItemId: string; quantityGrams: number; nameAr: string; nameEn: string }[] = [];
+  for (const ingredient of ingredients) {
+    const rows = await db.query<{
+      id: string;
+      name_ar: string;
+      name_en: string;
+      energy_kcal: number;
+      protein_mg: number;
+      carbohydrate_mg: number;
+      fat_mg: number;
+      per_quantity: string;
+    }>(
+      `SELECT id, name_ar, name_en, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, per_quantity
+       FROM food_items
+       WHERE id = $1 AND (owner_user_id IS NULL OR owner_user_id = $2)`,
+      [ingredient.foodItemId, userId],
+    );
+    const food = rows.rows[0];
+    if (food === undefined) {
+      throw new ApiError(404, 'FOOD_NOT_FOUND', 'An ingredient food was not found');
+    }
+    if (food.per_quantity !== '100 g') {
+      throw new ApiError(422, 'UNSUPPORTED_PORTION', 'Custom meal ingredients must be foods stored per 100 g');
+    }
+    let scaled;
+    try {
+      scaled = scalePer100g(
+        {
+          energyKcal: Number(food.energy_kcal),
+          proteinMg: Number(food.protein_mg),
+          carbohydrateMg: Number(food.carbohydrate_mg),
+          fatMg: Number(food.fat_mg),
+        },
+        ingredient.quantityGrams,
+      );
+    } catch (error) {
+      throw asApi(error);
+    }
+    energyKcal += scaled.energyKcal;
+    proteinMg += scaled.proteinMg;
+    carbohydrateMg += scaled.carbohydrateMg;
+    fatMg += scaled.fatMg;
+    resolved.push({
+      foodItemId: food.id,
+      quantityGrams: ingredient.quantityGrams,
+      nameAr: food.name_ar,
+      nameEn: food.name_en,
+    });
+  }
+  return { energyKcal, proteinMg, carbohydrateMg, fatMg, resolved };
+}
+
+function perServingMacros(
+  totals: { energyKcal: number; proteinMg: number; carbohydrateMg: number; fatMg: number },
+  servings: number,
+) {
+  return {
+    energyKcal: Math.floor(totals.energyKcal / servings),
+    proteinMg: Math.floor(totals.proteinMg / servings),
+    carbohydrateMg: Math.floor(totals.carbohydrateMg / servings),
+    fatMg: Math.floor(totals.fatMg / servings),
+  };
+}
+
+export async function listCustomMeals(db: Database, userId: string) {
+  const meals = await db.query<{
+    id: string;
+    food_item_id: string;
+    name_ar: string;
+    name_en: string;
+    servings: number;
+    energy_kcal: number;
+    protein_mg: number;
+    carbohydrate_mg: number;
+    fat_mg: number;
+    updated_at: string;
+  }>(
+    `SELECT m.id, m.food_item_id, m.name_ar, m.name_en, m.servings,
+            f.energy_kcal, f.protein_mg, f.carbohydrate_mg, f.fat_mg, m.updated_at::text
+     FROM member_custom_meals m
+     JOIN food_items f ON f.id = m.food_item_id
+     WHERE m.user_id = $1
+     ORDER BY m.updated_at DESC
+     LIMIT 50`,
+    [userId],
+  );
+  const result = [];
+  for (const meal of meals.rows) {
+    const ingredients = await db.query<{
+      food_item_id: string;
+      quantity_grams: number;
+      name_ar: string;
+      name_en: string;
+      position: number;
+    }>(
+      `SELECT i.food_item_id, i.quantity_grams, i.position, f.name_ar, f.name_en
+       FROM member_custom_meal_ingredients i
+       JOIN food_items f ON f.id = i.food_item_id
+       WHERE i.meal_id = $1
+       ORDER BY i.position`,
+      [meal.id],
+    );
+    result.push({
+      id: meal.id,
+      foodItemId: meal.food_item_id,
+      nameAr: meal.name_ar,
+      nameEn: meal.name_en,
+      servings: Number(meal.servings),
+      energyKcal: Number(meal.energy_kcal),
+      proteinMg: Number(meal.protein_mg),
+      carbohydrateMg: Number(meal.carbohydrate_mg),
+      fatMg: Number(meal.fat_mg),
+      perQuantity: '1 serving',
+      updatedAt: meal.updated_at,
+      ingredients: ingredients.rows.map((row) => ({
+        foodItemId: row.food_item_id,
+        quantityGrams: Number(row.quantity_grams),
+        nameAr: row.name_ar,
+        nameEn: row.name_en,
+        position: Number(row.position),
+      })),
+    });
+  }
+  return { meals: result };
+}
+
+export async function createCustomMeal(
+  db: Database,
+  userId: string,
+  input: { nameAr: string; nameEn: string; servings: number; ingredients: CustomMealIngredientInput[] },
+) {
+  const totals = await sumIngredientMacros(db, userId, input.ingredients);
+  const perServing = perServingMacros(totals, input.servings);
+  const sourceId = await memberFoodSource(db);
+  return db.transaction(async (tx) => {
+    const food = await tx.query<{ id: string }>(
+      `INSERT INTO food_items (
+         source_id, owner_user_id, name_ar, name_en, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, per_quantity
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '1 serving')
+       RETURNING id`,
+      [sourceId, userId, input.nameAr, input.nameEn, perServing.energyKcal, perServing.proteinMg, perServing.carbohydrateMg, perServing.fatMg],
+    );
+    const foodItemId = String(food.rows[0]?.id);
+    const meal = await tx.query<{ id: string }>(
+      `INSERT INTO member_custom_meals (user_id, food_item_id, name_ar, name_en, servings)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [userId, foodItemId, input.nameAr, input.nameEn, input.servings],
+    );
+    const mealId = String(meal.rows[0]?.id);
+    for (const [index, ingredient] of totals.resolved.entries()) {
+      await tx.query(
+        `INSERT INTO member_custom_meal_ingredients (meal_id, position, food_item_id, quantity_grams)
+         VALUES ($1, $2, $3, $4)`,
+        [mealId, index, ingredient.foodItemId, ingredient.quantityGrams],
+      );
+    }
+    await tx.query(
+      `INSERT INTO food_favorites (user_id, food_item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [userId, foodItemId],
+    );
+    return {
+      id: mealId,
+      foodItemId,
+      nameAr: input.nameAr,
+      nameEn: input.nameEn,
+      servings: input.servings,
+      energyKcal: perServing.energyKcal,
+      proteinMg: perServing.proteinMg,
+      carbohydrateMg: perServing.carbohydrateMg,
+      fatMg: perServing.fatMg,
+      perQuantity: '1 serving',
+      ingredients: totals.resolved.map((row, position) => ({ ...row, position })),
+    };
+  });
+}
+
+export async function updateCustomMeal(
+  db: Database,
+  userId: string,
+  mealId: string,
+  input: { nameAr: string; nameEn: string; servings: number; ingredients: CustomMealIngredientInput[] },
+) {
+  const existing = await db.query<{ id: string; food_item_id: string }>(
+    `SELECT id, food_item_id FROM member_custom_meals WHERE id = $1 AND user_id = $2`,
+    [mealId, userId],
+  );
+  const row = existing.rows[0];
+  if (row === undefined) {
+    throw new ApiError(404, 'MEAL_NOT_FOUND', 'Custom meal was not found');
+  }
+  const totals = await sumIngredientMacros(db, userId, input.ingredients);
+  const perServing = perServingMacros(totals, input.servings);
+  return db.transaction(async (tx) => {
+    await tx.query(
+      `UPDATE food_items
+       SET name_ar = $1, name_en = $2, energy_kcal = $3, protein_mg = $4, carbohydrate_mg = $5, fat_mg = $6, per_quantity = '1 serving'
+       WHERE id = $7 AND owner_user_id = $8`,
+      [input.nameAr, input.nameEn, perServing.energyKcal, perServing.proteinMg, perServing.carbohydrateMg, perServing.fatMg, row.food_item_id, userId],
+    );
+    await tx.query(
+      `UPDATE member_custom_meals
+       SET name_ar = $1, name_en = $2, servings = $3, updated_at = now()
+       WHERE id = $4 AND user_id = $5`,
+      [input.nameAr, input.nameEn, input.servings, mealId, userId],
+    );
+    await tx.query(`DELETE FROM member_custom_meal_ingredients WHERE meal_id = $1`, [mealId]);
+    for (const [index, ingredient] of totals.resolved.entries()) {
+      await tx.query(
+        `INSERT INTO member_custom_meal_ingredients (meal_id, position, food_item_id, quantity_grams)
+         VALUES ($1, $2, $3, $4)`,
+        [mealId, index, ingredient.foodItemId, ingredient.quantityGrams],
+      );
+    }
+    return {
+      id: mealId,
+      foodItemId: row.food_item_id,
+      nameAr: input.nameAr,
+      nameEn: input.nameEn,
+      servings: input.servings,
+      energyKcal: perServing.energyKcal,
+      proteinMg: perServing.proteinMg,
+      carbohydrateMg: perServing.carbohydrateMg,
+      fatMg: perServing.fatMg,
+      perQuantity: '1 serving',
+      ingredients: totals.resolved.map((ing, position) => ({ ...ing, position })),
+    };
+  });
 }
 
 export async function logFoodPortion(
@@ -4203,28 +4520,47 @@ export async function logFoodPortion(
   if (food === undefined) {
     throw new ApiError(404, 'FOOD_NOT_FOUND', 'Food was not found');
   }
-  if (food.per_quantity !== '100 g') {
-    throw new ApiError(422, 'UNSUPPORTED_PORTION', 'This food is not stored per 100 g');
-  }
   const mealSlot = input.mealSlot === undefined ? null : isMealSlot(input.mealSlot) ? input.mealSlot : null;
   if (input.mealSlot !== undefined && mealSlot === null) {
     throw new ApiError(422, 'UNKNOWN_MEAL_SLOT', 'That meal slot is not in the catalog');
   }
   let scaled;
+  let label: string;
+  let source: 'manual' | 'recipe' = 'manual';
   try {
-    scaled = scalePer100g({
-      energyKcal: Number(food.energy_kcal),
-      proteinMg: Number(food.protein_mg),
-      carbohydrateMg: Number(food.carbohydrate_mg),
-      fatMg: Number(food.fat_mg),
-    }, input.quantityGrams);
+    if (food.per_quantity === '100 g') {
+      scaled = scalePer100g(
+        {
+          energyKcal: Number(food.energy_kcal),
+          proteinMg: Number(food.protein_mg),
+          carbohydrateMg: Number(food.carbohydrate_mg),
+          fatMg: Number(food.fat_mg),
+        },
+        input.quantityGrams,
+      );
+      label = `${food.name_ar} · ${input.quantityGrams} g`;
+    } else if (food.per_quantity === '1 serving') {
+      if (!Number.isSafeInteger(input.quantityGrams) || input.quantityGrams < 1 || input.quantityGrams > 20) {
+        throw new ApiError(422, 'INVALID_PORTION', 'Servings must be a whole number from 1 to 20');
+      }
+      scaled = {
+        energyKcal: Number(food.energy_kcal) * input.quantityGrams,
+        proteinMg: Number(food.protein_mg) * input.quantityGrams,
+        carbohydrateMg: Number(food.carbohydrate_mg) * input.quantityGrams,
+        fatMg: Number(food.fat_mg) * input.quantityGrams,
+      };
+      label = `${food.name_ar} · ${input.quantityGrams} serving`;
+      source = 'recipe';
+    } else {
+      throw new ApiError(422, 'UNSUPPORTED_PORTION', 'This food portion unit is not supported');
+    }
   } catch (error) {
     throw asApi(error);
   }
   await db.query(
     `INSERT INTO food_entries (
        user_id, food_item_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, label, meal_slot
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', false, $8, $9)`,
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, $10)`,
     [
       userId,
       input.foodItemId,
@@ -4233,7 +4569,8 @@ export async function logFoodPortion(
       scaled.proteinMg,
       scaled.carbohydrateMg,
       scaled.fatMg,
-      `${food.name_ar} · ${input.quantityGrams} g`,
+      source,
+      label,
       mealSlot,
     ],
   );
@@ -4276,7 +4613,7 @@ export async function copyDiaryDay(db: Database, userId: string, from: string, t
 export async function listFavoriteFoods(db: Database, userId: string) {
   const rows = await db.query(
     `SELECT food_items.id, food_items.name_ar, food_items.name_en, food_items.energy_kcal,
-            food_items.protein_mg, food_items.carbohydrate_mg, food_items.fat_mg
+            food_items.protein_mg, food_items.carbohydrate_mg, food_items.fat_mg, food_items.per_quantity
      FROM food_favorites
      JOIN food_items ON food_items.id = food_favorites.food_item_id
      WHERE food_favorites.user_id = $1
@@ -4286,7 +4623,11 @@ export async function listFavoriteFoods(db: Database, userId: string) {
     [userId],
   );
   return {
-    foods: rows.rows.map((row) => ({ ...row, perQuantity: '100 g' })),
+    foods: rows.rows.map((row) => ({
+      ...row,
+      perQuantity: String(row.per_quantity ?? '100 g'),
+      per_quantity: String(row.per_quantity ?? '100 g'),
+    })),
     referenceDatabase: false,
   };
 }

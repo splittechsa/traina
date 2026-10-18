@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -9,17 +9,28 @@ import { messageFor } from '../../src/api/errors';
 import { formatCount, formatRiyadhWeekday, riyadhToday } from '../../src/format';
 import { label } from '../../src/i18n/labels';
 import { useLocale } from '../../src/i18n/LocaleProvider';
-import { text } from '../../src/i18n/copy';
+import { text, type CopyKey } from '../../src/i18n/copy';
 import { fontFamily, radius, spacing, typeScale } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { Body, Button, Field, Screen, ScreenBody } from '../../src/ui/Screen';
-import { AppHeader, BottomSheet, DateSelector, ErrorState, ListRow, LoadingSkeleton, SectionLabel } from '../../src/ui/kit';
+import { AppHeader, BottomSheet, DateSelector, ErrorState, LoadingSkeleton, SectionLabel, SurfaceCard } from '../../src/ui/kit';
 import { GlowCard, GradientRing, MacroBar } from '../../src/ui/visual';
 import { LOCAL_KEYS, useLocalValue } from '../../src/storage/local';
 import type { MacroTargets } from '../../src/nutrition/targets';
+import { logReadyMeal } from '../../src/nutrition/logFood';
 import { stableRecordKey } from '../../src/lists/keys';
 
-type Entry = { id: string; energyKcal: number; proteinMg: number; carbohydrateMg: number; fatMg: number; source: string; label?: string | null };
+type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+type Entry = {
+  id: string;
+  energyKcal: number;
+  proteinMg: number;
+  carbohydrateMg: number;
+  fatMg: number;
+  source: string;
+  label?: string | null;
+  mealSlot?: string | null;
+};
 type Diary = {
   target: null;
   entries?: Entry[];
@@ -28,16 +39,29 @@ type Diary = {
     entryCount: number;
   };
 };
-type DiaryRange = {
-  days: {
-    loggedOn: string;
-    energyKcal: number;
-    proteinMg: number;
-    carbohydrateMg: number;
-    fatMg: number;
-    entryCount: number;
-  }[];
+type ReadyMeal = {
+  id: string;
+  slot: MealSlot;
+  nameAr: string;
+  nameEn: string;
+  energyKcal: number;
+  proteinMg: number;
+  carbohydrateMg: number;
+  fatMg: number;
+  provenance: string;
+  ingredients?: { nameAr: string; nameEn: string; quantityAr: string; quantityEn: string }[];
+  prepAr?: string;
+  prepEn?: string;
+  servings?: number;
+  tags?: string[];
 };
+
+const SLOTS: { id: MealSlot; copy: CopyKey }[] = [
+  { id: 'breakfast', copy: 'mealBreakfast' },
+  { id: 'lunch', copy: 'mealLunch' },
+  { id: 'dinner', copy: 'mealDinner' },
+  { id: 'snack', copy: 'mealSnacks' },
+];
 
 function recentDays(): string[] {
   const today = riyadhToday();
@@ -58,6 +82,9 @@ export default function NutritionScreen() {
   const [day, setDay] = useState(days[6] ?? riyadhToday());
   const [manualOpen, setManualOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
+  const [librarySlot, setLibrarySlot] = useState<MealSlot | null>(null);
+  const [selectedMeal, setSelectedMeal] = useState<ReadyMeal | null>(null);
+  const [logging, setLogging] = useState(false);
   const [energy, setEnergy] = useState('');
   const [protein, setProtein] = useState('');
   const [carbs, setCarbs] = useState('');
@@ -65,26 +92,42 @@ export default function NutritionScreen() {
   const [error, setError] = useState('');
   const [nameAr, setNameAr] = useState('');
   const [nameEn, setNameEn] = useState('');
+  const [manualSlot, setManualSlot] = useState<MealSlot>('lunch');
   const targets = useLocalValue<MacroTargets | null>(LOCAL_KEYS.macroTargets, null);
   const diary = useQuery({
     queryKey: ['diary', day],
     queryFn: () => apiRequest<Diary>(`/v1/nutrition/diary?on=${day}`),
   });
-  const rangeStart = days[0] ?? day;
-  const rangeEnd = days[days.length - 1] ?? day;
-  const week = useQuery({
-    queryKey: ['diary-range', rangeStart, rangeEnd],
-    queryFn: () => apiRequest<DiaryRange>(`/v1/nutrition/diary-range?from=${rangeStart}&to=${rangeEnd}`),
+  const ready = useQuery({
+    queryKey: ['ready-meals'],
+    queryFn: () => apiRequest<{ meals: ReadyMeal[]; inventedDishes: boolean }>('/v1/nutrition/ready-meals'),
   });
 
-  function openFoodLog() {
-    router.push({ pathname: '/food-log', params: { day } });
+  const ar = locale === 'ar';
+  const entries = diary.data?.entries ?? [];
+  const bySlot = useMemo(() => {
+    const map: Record<MealSlot | 'other', Entry[]> = {
+      breakfast: [],
+      lunch: [],
+      dinner: [],
+      snack: [],
+      other: [],
+    };
+    for (const entry of entries) {
+      const slot = entry.mealSlot;
+      if (slot === 'breakfast' || slot === 'lunch' || slot === 'dinner' || slot === 'snack') map[slot].push(entry);
+      else map.other.push(entry);
+    }
+    return map;
+  }, [entries]);
+
+  function openFoodLog(slot: MealSlot) {
+    router.push({ pathname: '/food-log', params: { day, mealSlot: slot } });
   }
 
   async function removeEntry(entryId: string) {
     await apiRequest(`/v1/nutrition/entries/${entryId}`, { method: 'DELETE' });
     await client.invalidateQueries({ queryKey: ['diary', day] });
-    await client.invalidateQueries({ queryKey: ['diary-range'] });
     await client.invalidateQueries({ queryKey: ['home'] });
   }
 
@@ -105,20 +148,20 @@ export default function NutritionScreen() {
       setCustomOpen(false);
       setNameAr('');
       setNameEn('');
-      // The new food is now in "Your foods" — open search so it can be logged right away.
-      openFoodLog();
+      openFoodLog(manualSlot);
     } catch (caught) {
       setError(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
     }
   }
 
-  async function save() {
+  async function saveManual() {
     setError('');
     try {
       await apiRequest('/v1/nutrition/entries', {
         method: 'POST',
         body: {
           loggedOn: day,
+          mealSlot: manualSlot,
           energyKcal: Number(energy),
           proteinMg: parseScaledInteger(protein.trim().length === 0 ? '0' : protein, 1000),
           carbohydrateMg: parseScaledInteger(carbs.trim().length === 0 ? '0' : carbs, 1000),
@@ -127,7 +170,6 @@ export default function NutritionScreen() {
         },
       });
       await client.invalidateQueries({ queryKey: ['diary', day] });
-      await client.invalidateQueries({ queryKey: ['diary-range'] });
       await client.invalidateQueries({ queryKey: ['home'] });
       setManualOpen(false);
       setEnergy('');
@@ -136,6 +178,29 @@ export default function NutritionScreen() {
       setFat('');
     } catch (caught) {
       setError(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
+    }
+  }
+
+  async function addReadyMeal(meal: ReadyMeal) {
+    setLogging(true);
+    try {
+      await logReadyMeal({
+        loggedOn: day,
+        mealSlot: meal.slot,
+        label: ar ? meal.nameAr : meal.nameEn,
+        energyKcal: meal.energyKcal,
+        proteinMg: meal.proteinMg,
+        carbohydrateMg: meal.carbohydrateMg,
+        fatMg: meal.fatMg,
+      });
+      await client.invalidateQueries({ queryKey: ['diary', day] });
+      await client.invalidateQueries({ queryKey: ['home'] });
+      setSelectedMeal(null);
+      setLibrarySlot(null);
+    } catch (caught) {
+      setError(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
+    } finally {
+      setLogging(false);
     }
   }
 
@@ -154,146 +219,237 @@ export default function NutritionScreen() {
       </Screen>
     );
   }
+
   const consumed = diary.data.summary.consumed;
-  const entries = diary.data.entries ?? [];
-  const totals = days.map((value) => week.data?.days.find((item) => item.loggedOn === value)?.energyKcal ?? 0);
-  const peak = Math.max(0, ...totals);
-  const ar = locale === 'ar';
   const target = targets.value;
   const g = ar ? 'غ' : 'g';
   const remainingKcal = target === null ? null : target.energyKcal - consumed.energyKcal;
+  const libraryMeals = (ready.data?.meals ?? []).filter((meal) => librarySlot === null || meal.slot === librarySlot);
+
   return (
     <Screen>
       <ScreenBody>
-        <AppHeader title={text(locale, 'nutrition')} subtitle={ar ? 'وقود أدائك، يومًا بيوم' : 'Fuel your performance, one day at a time'} />
+        <AppHeader
+          title={text(locale, 'nutrition')}
+          subtitle={ar ? 'ماذا آكل؟ ماذا سجلت؟ ماذا بقي؟' : 'What to eat · what I logged · what remains'}
+        />
         <DateSelector days={days} selected={day} onSelect={setDay} labelFor={(value) => formatRiyadhWeekday(value, locale)} />
         <View style={{ height: spacing[2] }} />
         <GlowCard glow={theme.ember}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[4] }}>
             <GradientRing
-              size={136}
-              stroke={13}
+              size={120}
+              stroke={12}
               progress={target === null ? (consumed.energyKcal > 0 ? 1 : 0) : consumed.energyKcal / Math.max(1, target.energyKcal)}
               from={theme.heroAccent}
               to={theme.ember}
               track="rgba(255,255,255,0.08)"
               accessibilityLabel={`${consumed.energyKcal} ${text(locale, 'kcal')}`}
             >
-              <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 28, lineHeight: 34, fontVariant: ['tabular-nums'] }}>{formatCount(consumed.energyKcal, locale)}</Text>
+              <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 24, lineHeight: 30, fontVariant: ['tabular-nums'] }}>
+                {formatCount(consumed.energyKcal, locale)}
+              </Text>
               <Text style={{ color: 'rgba(243,246,244,0.62)', fontFamily: fontFamily.medium, fontSize: typeScale.micro }}>{text(locale, 'kcal')}</Text>
             </GradientRing>
             <View style={{ flex: 1, gap: spacing[1] }}>
+              <Text style={{ color: 'rgba(243,246,244,0.7)', fontFamily: fontFamily.medium, fontSize: typeScale.label }}>
+                {text(locale, 'mealWhatLeft')}
+              </Text>
               {target !== null && remainingKcal !== null ? (
-                <>
-                  <Text style={{ color: 'rgba(243,246,244,0.62)', fontFamily: fontFamily.medium, fontSize: typeScale.label }}>
-                    {remainingKcal >= 0 ? (ar ? 'متبقٍ اليوم' : 'Left today') : ar ? 'فوق هدفك' : 'Over target'}
-                  </Text>
-                  <Text style={{ color: remainingKcal >= 0 ? theme.heroText : theme.warning, fontFamily: fontFamily.bold, fontSize: typeScale.display, fontVariant: ['tabular-nums'] }}>
-                    {formatCount(Math.abs(remainingKcal), locale)}
-                  </Text>
-                  <Text style={{ color: 'rgba(243,246,244,0.62)', fontFamily: fontFamily.regular, fontSize: typeScale.micro }}>
-                    {ar ? `من ${formatCount(target.energyKcal, locale)} · تقديرك الشخصي` : `of ${formatCount(target.energyKcal, locale)} · your estimate`}
-                  </Text>
-                </>
+                <Text style={{ color: remainingKcal >= 0 ? theme.heroText : theme.warning, fontFamily: fontFamily.bold, fontSize: typeScale.headline, fontVariant: ['tabular-nums'] }}>
+                  {formatCount(Math.abs(remainingKcal), locale)} {text(locale, 'kcal')}
+                </Text>
               ) : (
-                <>
-                  <Text style={{ color: theme.heroText, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>{ar ? 'ما عندك هدف يومي بعد' : 'No daily target yet'}</Text>
-                  <Pressable accessibilityRole="button" onPress={() => router.push('/macros')} hitSlop={6}>
-                    <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.bold, fontSize: typeScale.body }}>{ar ? 'احسب سعراتك وماكروزك ←' : 'Calculate calories & macros →'}</Text>
-                  </Pressable>
-                </>
+                <Pressable accessibilityRole="button" onPress={() => router.push('/macros')}>
+                  <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.bold }}>{ar ? 'اضبط هدفك اليومي' : 'Set a daily target'}</Text>
+                </Pressable>
               )}
+              <MacroBar inverse label={text(locale, 'protein')} value={consumed.proteinMg / 1000} target={target?.proteinG ?? null} unit={g} color={theme.heroAccent} />
             </View>
           </View>
-          <View style={{ gap: spacing[3], marginTop: spacing[4] }}>
-            <MacroBar inverse label={text(locale, 'protein')} value={consumed.proteinMg / 1000} target={target?.proteinG ?? null} unit={g} color={theme.heroAccent} />
-            <MacroBar inverse label={text(locale, 'carbs')} value={consumed.carbohydrateMg / 1000} target={target?.carbsG ?? null} unit={g} color={theme.ember} />
-            <MacroBar inverse label={text(locale, 'fat')} value={consumed.fatMg / 1000} target={target?.fatG ?? null} unit={g} color={theme.violet} />
-          </View>
-          {target !== null ? (
-            <Pressable accessibilityRole="button" onPress={() => router.push('/macros')} style={{ marginTop: spacing[3] }}>
-              <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: typeScale.label }}>{ar ? 'تعديل الهدف' : 'Adjust target'}</Text>
-            </Pressable>
-          ) : null}
         </GlowCard>
-        <View style={{ flexDirection: 'row', gap: spacing[2], marginTop: spacing[3] }}>
+
+        <SectionLabel>{text(locale, 'mealWhatEaten')}</SectionLabel>
+        {SLOTS.map((slot) => {
+          const slotEntries = bySlot[slot.id];
+          const slotKcal = slotEntries.reduce((sum, row) => sum + row.energyKcal, 0);
+          return (
+            <SurfaceCard key={slot.id} style={{ marginBottom: spacing[3] }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[2] }}>
+                <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card }}>{text(locale, slot.copy)}</Text>
+                <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontVariant: ['tabular-nums'] }}>
+                  {formatCount(slotKcal, locale)} {text(locale, 'kcal')}
+                </Text>
+              </View>
+              {slotEntries.length === 0 ? (
+                <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginBottom: spacing[2] }}>{text(locale, 'mealEmptySlot')}</Text>
+              ) : (
+                slotEntries.map((entry) => (
+                  <Pressable
+                    key={stableRecordKey(entry.id)}
+                    accessibilityRole="button"
+                    onPress={() => void removeEntry(entry.id)}
+                    style={{ paddingVertical: 10, borderTopWidth: 1, borderTopColor: theme.border }}
+                  >
+                    <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>
+                      {entry.label ?? label(locale, 'foodSource', entry.source)}
+                    </Text>
+                    <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 2 }}>
+                      {formatCount(entry.energyKcal, locale)} {text(locale, 'kcal')} · {text(locale, 'deleteEntry')}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: spacing[2] }}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => openFoodLog(slot.id)}
+                  style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold }}>{text(locale, 'mealAddToSlot')}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => { setLibrarySlot(slot.id); setSelectedMeal(null); setError(''); }}
+                  style={{ minHeight: 44, paddingHorizontal: 14, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{text(locale, 'mealLibrary')}</Text>
+                </Pressable>
+              </View>
+            </SurfaceCard>
+          );
+        })}
+
+        {bySlot.other.length > 0 ? (
+          <SurfaceCard style={{ marginBottom: spacing[3] }}>
+            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, marginBottom: 8 }}>{ar ? 'بدون وجبة محددة' : 'Unspecified meal'}</Text>
+            {bySlot.other.map((entry) => (
+              <Text key={entry.id} style={{ color: theme.textMuted, marginBottom: 6 }}>
+                {entry.label ?? label(locale, 'foodSource', entry.source)} · {formatCount(entry.energyKcal, locale)} {text(locale, 'kcal')}
+              </Text>
+            ))}
+          </SurfaceCard>
+        ) : null}
+
+        <View style={{ flexDirection: 'row', gap: spacing[2], marginBottom: spacing[3] }}>
           <Pressable
             accessibilityRole="button"
-            onPress={openFoodLog}
-            style={({ pressed }) => ({ flex: 1, flexDirection: 'row', gap: spacing[2], backgroundColor: theme.accent, opacity: pressed ? 0.85 : 1, height: 54, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' })}
+            onPress={() => router.push({ pathname: '/meal-builder', params: { day, mealSlot: manualSlot } })}
+            style={{ flex: 1, minHeight: 48, borderRadius: radius.md, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 }}
           >
-            <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} size={17} tintColor={theme.emphasisText} />
-            <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold, fontSize: typeScale.body }}>{ar ? 'أضف طعاماً' : 'Add food'}</Text>
+            <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold }}>{text(locale, 'customMealBuilder')}</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={ar ? 'مسح الباركود' : 'Scan barcode'}
+            onPress={() => { setManualSlot('lunch'); setError(''); setManualOpen(true); }}
+            style={{ flex: 1, minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{text(locale, 'manualEntry')}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
             onPress={() => router.push({ pathname: '/scanner', params: { day } })}
-            style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
           >
-            <SymbolView name={{ ios: 'barcode.viewfinder', android: 'qr_code_scanner', web: 'qr_code_scanner' }} size={22} tintColor={theme.text} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={text(locale, 'manualEntry')}
-            onPress={() => { setError(''); setManualOpen(true); }}
-            style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <SymbolView name={{ ios: 'square.and.pencil', android: 'edit', web: 'edit' }} size={20} tintColor={theme.text} />
+            <SymbolView name={{ ios: 'barcode.viewfinder', android: 'qr_code_scanner', web: 'qr_code_scanner' }} size={20} tintColor={theme.text} />
           </Pressable>
         </View>
-        {peak > 0 ? (
-          <View style={{ backgroundColor: theme.surface, borderRadius: 22, padding: 18, marginTop: 20, gap: 12 }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 16 }}>{ar ? 'آخر ٧ أيام' : 'Last 7 days'}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: 8 }}>
-              {days.map((value, index) => (
-                <View key={value} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: '70%', height: Math.max(8, ((totals[index] ?? 0) / peak) * 92), backgroundColor: value === day ? theme.emphasis : theme.surfaceMuted, borderRadius: 10 }} />
-                  <Text style={{ color: value === day ? theme.accent : theme.textMuted, fontSize: 11, fontFamily: fontFamily.medium }}>{formatRiyadhWeekday(value, locale).slice(0, 2)}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-        {consumed.imageEstimateEnergyKcal > 0 ? <Body>{text(locale, 'imageEstimate')}</Body> : null}
-        <SectionLabel>{locale === 'ar' ? 'سجل الوجبات' : 'Food diary'}</SectionLabel>
-        {entries.length === 0 ? (
-          <View style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 22, padding: 24, alignItems: 'center', gap: 10 }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, fontSize: 17 }}>{locale === 'ar' ? 'ابدأ بأول وجبة' : 'Start with your first meal'}</Text>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: 13, textAlign: 'center', lineHeight: 22 }}>{locale === 'ar' ? 'سجل ما أكلته لتشوف استهلاكك الحقيقي وتتابع تغذيتك.' : 'Log what you eat to see your actual intake.'}</Text>
-          </View>
-        ) : entries.map((entry) => (
-          <ListRow
-            key={stableRecordKey(entry.id)}
-            title={entry.label ?? label(locale, 'foodSource', entry.source)}
-            meta={`${formatCount(entry.energyKcal, locale)} ${text(locale, 'kcal')}${entry.source === 'image_estimate' ? ` · ${text(locale, 'imageEstimate')}` : ''}`}
-            trailing={text(locale, 'deleteEntry')}
-            onPress={() => void removeEntry(entry.id)}
-          />
-        ))}
       </ScreenBody>
+
+      <BottomSheet visible={librarySlot !== null} onClose={() => { setLibrarySlot(null); setSelectedMeal(null); }}>
+        <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 24 }}>
+          <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.headline, marginBottom: 6 }}>
+            {text(locale, 'mealLibrary')}
+            {librarySlot ? ` · ${text(locale, SLOTS.find((s) => s.id === librarySlot)?.copy ?? 'mealLibrary')}` : ''}
+          </Text>
+          <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginBottom: 14, lineHeight: 20 }}>
+            {text(locale, 'mealLibraryHint')}
+          </Text>
+          {selectedMeal === null ? (
+            libraryMeals.map((meal) => (
+              <Pressable
+                key={meal.id}
+                accessibilityRole="button"
+                onPress={() => setSelectedMeal(meal)}
+                style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.border }}
+              >
+                <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{ar ? meal.nameAr : meal.nameEn}</Text>
+                <Text style={{ color: theme.textMuted, marginTop: 4 }}>
+                  {formatCount(meal.energyKcal, locale)} {text(locale, 'kcal')} · {meal.provenance}
+                </Text>
+              </Pressable>
+            ))
+          ) : (
+            <View style={{ gap: 10 }}>
+              <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card }}>
+                {ar ? selectedMeal.nameAr : selectedMeal.nameEn}
+              </Text>
+              <Text style={{ color: theme.textMuted }}>
+                {formatCount(selectedMeal.energyKcal, locale)} {text(locale, 'kcal')} · P {formatCount(selectedMeal.proteinMg / 1000, locale)}{g} · C {formatCount(selectedMeal.carbohydrateMg / 1000, locale)}{g} · F {formatCount(selectedMeal.fatMg / 1000, locale)}{g}
+              </Text>
+              {(selectedMeal.ingredients?.length ?? 0) > 0 ? (
+                <>
+                  <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{text(locale, 'mealIngredients')}</Text>
+                  {selectedMeal.ingredients?.map((ing) => (
+                    <Text key={`${ing.nameEn}-${ing.quantityEn}`} style={{ color: theme.textMuted }}>
+                      · {ar ? ing.nameAr : ing.nameEn} — {ar ? ing.quantityAr : ing.quantityEn}
+                    </Text>
+                  ))}
+                </>
+              ) : null}
+              {(ar ? selectedMeal.prepAr : selectedMeal.prepEn) ? (
+                <>
+                  <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{text(locale, 'mealPrep')}</Text>
+                  <Text style={{ color: theme.textMuted, lineHeight: 22 }}>{ar ? selectedMeal.prepAr : selectedMeal.prepEn}</Text>
+                </>
+              ) : null}
+              {error.length > 0 ? <Body>{error}</Body> : null}
+              <Button label={logging ? text(locale, 'loading') : text(locale, 'mealLogReady')} onPress={() => void addReadyMeal(selectedMeal)} />
+              <Button label={text(locale, 'back')} variant="secondary" onPress={() => setSelectedMeal(null)} />
+            </View>
+          )}
+        </ScrollView>
+      </BottomSheet>
+
       <BottomSheet visible={manualOpen} onClose={() => setManualOpen(false)}>
         <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 12 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            {SLOTS.map((slot) => (
+              <Pressable
+                key={slot.id}
+                onPress={() => setManualSlot(slot.id)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: radius.pill,
+                  backgroundColor: manualSlot === slot.id ? theme.accent : theme.surfaceMuted,
+                }}
+              >
+                <Text style={{ color: manualSlot === slot.id ? theme.emphasisText : theme.text, fontFamily: fontFamily.semibold }}>
+                  {text(locale, slot.copy)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
           <Field label={text(locale, 'kcal')} value={energy} onChangeText={setEnergy} keyboardType="number-pad" />
           <Field label={`${text(locale, 'protein')} (${text(locale, 'grams')})`} value={protein} onChangeText={setProtein} keyboardType="decimal-pad" />
           <Field label={`${text(locale, 'carbs')} (${text(locale, 'grams')})`} value={carbs} onChangeText={setCarbs} keyboardType="decimal-pad" />
           <Field label={`${text(locale, 'fat')} (${text(locale, 'grams')})`} value={fat} onChangeText={setFat} keyboardType="decimal-pad" />
-          <Body>{text(locale, 'saudiHint')}</Body>
           {error.length > 0 ? <Body>{error}</Body> : null}
-          <Button label={text(locale, 'save')} onPress={() => void save()} />
+          <Button label={text(locale, 'save')} onPress={() => void saveManual()} />
           <View style={{ height: spacing[2] }} />
           <Button label={text(locale, 'customFood')} variant="secondary" onPress={() => { setManualOpen(false); setCustomOpen(true); }} />
         </ScrollView>
       </BottomSheet>
+
       <BottomSheet visible={customOpen} onClose={() => setCustomOpen(false)}>
         <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }} contentContainerStyle={{ paddingBottom: 12 }}>
           <Field label={text(locale, 'displayName')} value={nameAr} onChangeText={setNameAr} />
-          <Field label="English" value={nameEn} onChangeText={setNameEn} />
+          <Field label={ar ? 'الاسم بالإنجليزية' : 'English name'} value={nameEn} onChangeText={setNameEn} />
           <Field label={`${text(locale, 'kcal')} / 100 g`} value={energy} onChangeText={setEnergy} keyboardType="number-pad" />
           <Field label={`${text(locale, 'protein')} (${text(locale, 'grams')})`} value={protein} onChangeText={setProtein} keyboardType="decimal-pad" />
           <Field label={`${text(locale, 'carbs')} (${text(locale, 'grams')})`} value={carbs} onChangeText={setCarbs} keyboardType="decimal-pad" />
           <Field label={`${text(locale, 'fat')} (${text(locale, 'grams')})`} value={fat} onChangeText={setFat} keyboardType="decimal-pad" />
-          <Body>{text(locale, 'saudiHint')}</Body>
           {error.length > 0 ? <Body>{error}</Body> : null}
           <Button label={text(locale, 'save')} onPress={() => void saveCustom()} />
         </ScrollView>
