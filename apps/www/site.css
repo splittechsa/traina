@@ -9,14 +9,18 @@
   --hero: #17382d;
 }
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
   font-family: "IBM Plex Sans Arabic", sans-serif;
   background:
-    radial-gradient(1200px 600px at 0% -10%, rgba(214, 165, 74, 0.16), transparent 55%),
+    radial-gradient(1200px 600px at 100% -10%, rgba(214, 165, 74, 0.18), transparent 55%),
     linear-gradient(180deg, #efe7db 0%, var(--paper) 38%, #ebe3d6 100%);
   color: var(--ink);
   line-height: 1.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }
 a { color: inherit; }
 .wrap { width: min(1080px, calc(100% - 2.5rem)); margin-inline: auto; }
