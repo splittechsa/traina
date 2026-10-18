@@ -3,6 +3,7 @@
 **Audit date:** 2026-10-18  
 **Git HEAD (working):** `p1/real-training-adaptation` @ `0504712`  
 **PR #43:** https://github.com/splittechsa/traina/pull/43 — OPEN, CI green, **human review still required (do not merge without it)**  
+**PR #44:** https://github.com/splittechsa/traina/pull/44 — entitlements API + membership/help + landing draft (bases on #43 branch)  
 **Backup:** `backup/dirty-tree-2026-10-17` preserved  
 
 Legend: **V** verified · **I** implemented needs integration · **P** polish · **W** partial · **M** missing · **B** blocked · **U** unsafe for production claims
