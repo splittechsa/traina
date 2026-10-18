@@ -14,6 +14,7 @@ const READ_TOOLS = [
   'getUserProfile',
   'getActiveGoals',
   'getMemberState',
+  'getCurrentTrainingProgram',
   'getTodaysWorkout',
   'getWorkoutHistory',
   'getFoodDiary',

@@ -7,7 +7,7 @@ export default function SupplementsScreen() {
   const { locale } = useLocale();
   return (
     <Screen>
-      <AppHeader title={text(locale, 'supplements')} subtitle={text(locale, 'unavailable')} />
+      <AppHeader title={text(locale, 'supplements')} subtitle={text(locale, 'unavailable')} showBack />
       <EmptyState title={text(locale, 'supplements')} body={text(locale, 'supplementsMissing')} />
     </Screen>
   );

@@ -90,7 +90,7 @@ export default function ProgressScreen() {
     return (
       <Screen>
         <ScreenBody footer={<Button label={text(locale, 'createPlan')} onPress={() => router.push('/(tabs)/training')} />}>
-          <AppHeader title={text(locale, 'progress')} />
+          <AppHeader title={text(locale, 'progress')} showBack />
           <View style={{ backgroundColor: theme.surface, borderRadius: 24, padding: 24, marginTop: 18, marginBottom: 18 }}>
             <Text style={{ fontSize: 42, color: theme.accent, marginBottom: 12 }}>↗</Text>
             <Text style={{ fontSize: 24, lineHeight: 36, fontFamily: fontFamily.bold, color: theme.text }}>
@@ -174,7 +174,7 @@ export default function ProgressScreen() {
     <Screen>
       <ScreenBody>
         <View style={{ paddingHorizontal: 18 }}>
-          <AppHeader title={text(locale, 'progress')} subtitle={isAr ? 'ما أُنجز فعلياً' : 'What you have actually completed'} />
+          <AppHeader title={text(locale, 'progress')} subtitle={isAr ? 'ما أُنجز فعلياً' : 'What you have actually completed'} showBack />
 
           <View style={{ flexDirection: 'row', marginTop: 6, marginBottom: 18 }}>
             <View style={{ flex: 1 }}>

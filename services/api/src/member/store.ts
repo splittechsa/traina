@@ -3647,13 +3647,21 @@ async function conversationFor(db: Database, userId: string): Promise<string> {
   return id;
 }
 
-async function assertCoachQuota(db: Database, userId: string): Promise<void> {
-  const used = await db.query<{ count: string }>(
+async function assertCoachQuota(db: Database, actor: Actor): Promise<void> {
+  const hourly = await db.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM ai_usage WHERE user_id = $1 AND created_at > now() - interval '1 hour'`,
-    [userId],
+    [actor.userId],
   );
-  if (Number(used.rows[0]?.count ?? 0) >= 20) {
+  if (Number(hourly.rows[0]?.count ?? 0) >= 20) {
     throw new ApiError(429, 'RATE_LIMITED', 'Coach rate limit reached for this hour');
+  }
+  const entitlements = await entitlementsFor(db, actor);
+  const daily = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM ai_usage WHERE user_id = $1 AND created_at > date_trunc('day', now())`,
+    [actor.userId],
+  );
+  if (Number(daily.rows[0]?.count ?? 0) >= entitlements.limits.yazanTurnsPerDay) {
+    throw new ApiError(429, 'DAILY_QUOTA', 'Yazan daily turn limit reached for this plan');
   }
 }
 
@@ -3667,7 +3675,7 @@ export async function answerCoach(
   if (runtime.name === 'unconfigured') {
     throw new ApiError(503, 'MODEL_PROVIDER_NOT_CONFIGURED', 'Set SAHHTI_COACH_PROVIDER, SAHHTI_COACH_API_KEY, SAHHTI_COACH_BASE_URL, and SAHHTI_COACH_MODEL');
   }
-  await assertCoachQuota(db, actor.userId);
+  await assertCoachQuota(db, actor);
   const snapshot = await coachSnapshot(db, actor);
   const memberState = snapshot.memberState;
   const localeHint = /[\u0600-\u06FF]/.test(message) ? 'ar' as const : 'en' as const;

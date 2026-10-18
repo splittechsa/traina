@@ -216,7 +216,7 @@ export default function WorkoutScreen() {
         </View>
       )}>
         <View style={{ paddingHorizontal: 18, paddingTop: 10 }}>
-          <AppHeader title={current.name} subtitle={label(locale, 'session', current.status)} />
+          <AppHeader title={current.name} subtitle={label(locale, 'session', current.status)} showBack />
           <View style={{ backgroundColor: theme.hero, borderRadius: 26, padding: 22, marginTop: 10, marginBottom: 16 }}>
             <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 12, letterSpacing: 1 }}>TRAINA  /  SESSION</Text>
             <Text style={{ color: theme.heroText, fontFamily: fontFamily.bold, fontSize: 27, lineHeight: 39, marginTop: 8 }}>{isDone ? (isAr ? 'إنجاز يُحسب لك' : 'Session complete') : isRunning ? (isAr ? 'كل مجموعة تقرّبك' : 'One set at a time') : (isAr ? 'جاهز تبدأ؟' : 'Ready to train?')}</Text>

@@ -276,7 +276,7 @@ export default function WeeklyCheckinScreen() {
           )
         }
       >
-        <AppHeader title={text(locale, 'weeklyCheckin')} subtitle={weekOf} />
+        <AppHeader title={text(locale, 'weeklyCheckin')} subtitle={weekOf} showBack />
 
         {preview.isPending || status.isPending ? <LoadingSkeleton /> : null}
         {preview.isError ? <EmptyState title={text(locale, 'error')} body={text(locale, 'error')} /> : null}
