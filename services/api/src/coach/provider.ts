@@ -13,11 +13,20 @@ export type CoachRuntime =
 const READ_TOOLS = [
   'getUserProfile',
   'getActiveGoals',
+  'getMemberState',
   'getTodaysWorkout',
   'getWorkoutHistory',
   'getFoodDiary',
   'getNutritionTargets',
   'getProgressTrends',
+  'getHumanCoachFeedback',
+  'getRecommendationStatus',
+  'requestMissingData',
+  'prepareDailyCoachingGuidance',
+  'prepareWeeklyReviewSummary',
+  'draftRecommendationProposal',
+  'escalateToHumanCoach',
+  'navigateToScreen',
 ] as const;
 
 const WRITE_TOOLS = new Set([
@@ -78,6 +87,10 @@ function systemPrompt(localeHint: 'ar' | 'en', context: string): string {
     'When adherence is weak, say the plan may change and ask them to confirm — never silent-edit programs or targets.',
     'Write actions are not executed here. If they want a log or plan changed, tell them to confirm in the app.',
     'Weekly: they can submit a survey that becomes a file for a human coach — you prepare facts, humans review.',
+    'Human coaching: use getHumanCoachFeedback for real staff notes (authorKind=human_coach). Never invent coach comments.',
+    'Recommendations: use getRecommendationStatus. Pending/approved ≠ applied. Do not contradict a human coach. Nutrition apply stays blocked by ENERGY_POLICY.',
+    'Program changes: use getCurrentTrainingProgram.activeProgram. Never claim a program was updated unless adaptationKind/sourceRecommendationId is present on that version.',
+    'Avoid repeating the same instruction in consecutive replies when nothing new changed.',
     `Athlete context (trusted server snapshot): ${context}`,
   ].join('\n');
 }

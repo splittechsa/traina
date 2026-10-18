@@ -10,6 +10,7 @@ const snapshot = (overrides: Partial<MemberSnapshot> = {}): MemberSnapshot => ({
   profile: null,
   goals: ['strength'],
   programName: null,
+  activeProgram: null,
   todayWorkout: null,
   upcomingWorkoutNames: [],
   recentCompletedSessionIds: [],
@@ -17,6 +18,8 @@ const snapshot = (overrides: Partial<MemberSnapshot> = {}): MemberSnapshot => ({
   activitySteps: null,
   supplementNames: [],
   memberState: null,
+  humanFeedback: [],
+  recommendations: [],
   ...overrides,
 });
 
@@ -117,6 +120,90 @@ describe('coach tool authorization', () => {
     expect(result.persisted).toBe(false);
     expect(result.body.note).toBe('authorized_projection_only');
     expect((result.body.state as { confidence: string }).confidence).toBe('insufficient');
+  });
+
+  it('returns only persisted human feedback and never invents comments', () => {
+    const empty = executeCoachTool({
+      actor,
+      tool: 'getHumanCoachFeedback',
+      modelArguments: {},
+      trusted: snapshot(),
+      quota,
+      atMs: 1_000,
+    });
+    expect(empty.body.inventsComments).toBe(false);
+    expect(empty.body.feedback).toEqual([]);
+    const withFeedback = executeCoachTool({
+      actor,
+      tool: 'getHumanCoachFeedback',
+      modelArguments: {},
+      trusted: snapshot({
+        humanFeedback: [
+          {
+            id: 'f1',
+            body: 'Keep protein steady.',
+            createdAt: '2026-06-14T00:00:00.000Z',
+            authorKind: 'human_coach',
+          },
+        ],
+      }),
+      quota: { ...quota, used: 1 },
+      atMs: 1_000,
+    });
+    expect(withFeedback.body.authorKind).toBe('human_coach');
+    expect((withFeedback.body.feedback as { body: string }[])[0]?.body).toBe('Keep protein steady.');
+  });
+
+  it('requests missing data without inventing values', () => {
+    const result = executeCoachTool({
+      actor,
+      tool: 'requestMissingData',
+      modelArguments: {},
+      trusted: snapshot(),
+      quota,
+      atMs: 1_000,
+    });
+    expect(result.body.inventsData).toBe(false);
+    expect(result.body.missing).toEqual(['member_state']);
+  });
+
+  it('draftRecommendationProposal never auto-applies nutrition', () => {
+    const result = executeCoachTool({
+      actor,
+      tool: 'draftRecommendationProposal',
+      modelArguments: { category: 'nutrition', summary: 'cut 200' },
+      trusted: snapshot(),
+      quota,
+      atMs: 1_000,
+    });
+    expect(result.body.mayAutoApply).toBe(false);
+    expect(result.body.blockedByEnergyPolicy).toBe(true);
+  });
+
+  it('marks pending recommendations as guidance-only, not applied', () => {
+    const result = executeCoachTool({
+      actor,
+      tool: 'getRecommendationStatus',
+      modelArguments: {},
+      trusted: snapshot({
+        recommendations: [
+          {
+            id: 'r1',
+            category: 'nutrition',
+            status: 'REVIEW_REQUIRED',
+            summary: 'Propose protein floor',
+            requiresHumanReview: true,
+          },
+        ],
+      }),
+      quota,
+      atMs: 1_000,
+    });
+    expect(result.body.pendingIsNotApplied).toBe(true);
+    expect(result.body.nutritionApplyBlockedUntilEnergyPolicy).toBe(true);
+    const rows = result.body.recommendations as { status: string; applied: boolean; treatAsGuidanceOnly: boolean }[];
+    expect(rows[0]?.applied).toBe(false);
+    expect(rows[0]?.treatAsGuidanceOnly).toBe(true);
   });
 
   it('enforces the tool quota', () => {

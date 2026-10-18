@@ -236,6 +236,13 @@ const dictionary = {
     humanCoachLabel: 'مدرب بشري — ليس يزن',
     approvedRecommendation: 'توصية معتمدة',
     pendingRecommendation: 'بانتظار مراجعة بشرية',
+    confirmRecommendation: 'تأكيد التوصية',
+    applyRecommendation: 'تطبيق على برنامجي',
+    memberConfirmNeeded: 'بانتظار تأكيدك',
+    guidanceOnlyRec: 'إرشاد فقط — لم تُطبَّق بعد',
+    planDiffTitle: 'قبل / بعد على البرنامج',
+    planApplied: 'تم تحديث نسخة البرنامج',
+    previewPlan: 'معاينة التغيير',
   },
   en: {
     brand: 'traina',
@@ -472,6 +479,13 @@ const dictionary = {
     humanCoachLabel: 'Human coach — not Yazan',
     approvedRecommendation: 'Approved recommendation',
     pendingRecommendation: 'Awaiting human review',
+    confirmRecommendation: 'Confirm recommendation',
+    applyRecommendation: 'Apply to my program',
+    memberConfirmNeeded: 'Needs your confirmation',
+    guidanceOnlyRec: 'Guidance only — not applied yet',
+    planDiffTitle: 'Program before / after',
+    planApplied: 'Program version updated',
+    previewPlan: 'Preview change',
   },
 } as const;
 

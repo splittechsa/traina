@@ -20,6 +20,14 @@ export const MEMBER_COACH_TOOLS = [
   'getActivitySummary',
   'getSupplementProfile',
   'getProgressTrends',
+  'getHumanCoachFeedback',
+  'getRecommendationStatus',
+  'requestMissingData',
+  'prepareDailyCoachingGuidance',
+  'prepareWeeklyReviewSummary',
+  'draftRecommendationProposal',
+  'escalateToHumanCoach',
+  'navigateToScreen',
   'proposeProgramAdjustment',
   'proposeNutritionAdjustment',
   'logWorkoutSet',
@@ -36,6 +44,14 @@ export type MemberSnapshot = {
   profile: NormalizedOnboarding | null;
   goals: readonly string[];
   programName: string | null;
+  /** Latest active program version facts — never invent applied adaptations. */
+  activeProgram: {
+    programId: string;
+    version: number;
+    templateId: string | null;
+    adaptationKind: string | null;
+    sourceRecommendationId: string | null;
+  } | null;
   todayWorkout: WorkoutSession | null;
   upcomingWorkoutNames: readonly string[];
   recentCompletedSessionIds: readonly string[];
@@ -44,6 +60,21 @@ export type MemberSnapshot = {
   supplementNames: readonly string[];
   /** Authorized MemberState projection — never raw DB dumps. */
   memberState: MemberState | null;
+  /** Persisted human feedback only — never invented. */
+  humanFeedback: readonly {
+    id: string;
+    body: string;
+    createdAt: string;
+    authorKind: 'human_coach';
+  }[];
+  /** Recommendation lifecycle facts — pending ≠ applied. */
+  recommendations: readonly {
+    id: string;
+    category: string;
+    status: string;
+    summary: string;
+    requiresHumanReview: boolean;
+  }[];
 };
 
 export type ToolQuota = {
@@ -128,7 +159,15 @@ function toolBody(
         note: trusted.memberState === null ? 'member_state_unavailable' : 'authorized_projection_only',
       };
     case 'getCurrentTrainingProgram':
-      return { programName: trusted.programName };
+      return {
+        programName: trusted.programName,
+        activeProgram: trusted.activeProgram,
+        inventsAdaptations: false,
+        note:
+          trusted.activeProgram === null
+            ? 'no_active_program'
+            : 'Only report adaptationKind when present on the stored program version. Never claim APPLIED without this.',
+      };
     case 'getTodaysWorkout':
       return { workout: trusted.todayWorkout };
     case 'getUpcomingWorkouts':
@@ -146,7 +185,125 @@ function toolBody(
     case 'getSupplementProfile':
       return { supplements: trusted.supplementNames };
     case 'getProgressTrends':
-      return { status: 'unavailable', reason: 'trend_store_not_configured' };
+      return {
+        fromMemberState: trusted.memberState !== null,
+        weightTrendGramsPerWeek: trusted.memberState?.weightTrendGramsPerWeek ?? null,
+        confidence: trusted.memberState?.confidence ?? 'insufficient',
+        dataCompletenessBps: trusted.memberState?.dataCompletenessBps ?? 0,
+        adherence: trusted.memberState?.adherence ?? null,
+        inventsTrends: false,
+        note:
+          trusted.memberState === null
+            ? 'member_state_unavailable'
+            : 'Trends come only from authorized MemberState — never invent weight or adherence.',
+      };
+    case 'getHumanCoachFeedback':
+      return {
+        authorKind: 'human_coach' as const,
+        inventsComments: false,
+        feedback: trusted.humanFeedback,
+        note:
+          trusted.humanFeedback.length === 0
+            ? 'no_human_feedback_on_file'
+            : 'Only persisted human_coach feedback is listed. Do not invent coach comments.',
+      };
+    case 'getRecommendationStatus':
+      return {
+        inventsApprovals: false,
+        pendingIsNotApplied: true,
+        nutritionApplyBlockedUntilEnergyPolicy: true,
+        recommendations: trusted.recommendations.map((row) => ({
+          ...row,
+          applied: row.status === 'APPLIED',
+          treatAsGuidanceOnly: row.status !== 'APPLIED',
+        })),
+        note: 'Never treat REVIEW_REQUIRED, APPROVED, or DRAFT as APPLIED. Nutrition stays propose-only while ENERGY_POLICY is unapproved.',
+      };
+    case 'requestMissingData': {
+      const missing =
+        trusted.memberState === null
+          ? ['member_state']
+          : [
+              ...(trusted.memberState.adherence.mealDaysLogged < 3 ? (['meal_logs'] as const) : []),
+              ...(trusted.memberState.adherence.waterDaysLogged < 3 ? (['water_logs'] as const) : []),
+              ...(trusted.memberState.weightTrendGramsPerWeek === null ? (['weight_trend'] as const) : []),
+              ...(!trusted.memberState.sleepLoggingAvailable ? (['daily_sleep_hours'] as const) : []),
+            ];
+      return {
+        missing,
+        inventsData: false,
+        promptHint: 'Ask the member only for these missing signals. Do not invent values.',
+      };
+    }
+    case 'prepareDailyCoachingGuidance':
+      return {
+        persisted: false,
+        inventsFacts: false,
+        focus: {
+          programName: trusted.programName,
+          todayWorkout: trusted.todayWorkout !== null,
+          mealsLoggedToday: trusted.nutrition !== null,
+          openRecommendations: trusted.recommendations.filter((row) => row.status !== 'APPLIED' && row.status !== 'REJECTED')
+            .length,
+          humanFeedbackCount: trusted.humanFeedback.length,
+          confidence: trusted.memberState?.confidence ?? 'insufficient',
+        },
+        note: 'Compose guidance from these facts only. Separate AI voice from human_coach feedback.',
+      };
+    case 'prepareWeeklyReviewSummary':
+      return {
+        persisted: false,
+        inventsFacts: false,
+        packetHints: {
+          adherence: trusted.memberState?.adherence ?? null,
+          weightTrendGramsPerWeek: trusted.memberState?.weightTrendGramsPerWeek ?? null,
+          humanFeedback: trusted.humanFeedback,
+          recommendations: trusted.recommendations,
+        },
+        note: 'Summary is for the member/coach UI — never mark pending recommendations as applied.',
+      };
+    case 'draftRecommendationProposal': {
+      const category = typeof args.category === 'string' ? args.category : 'daily_guidance';
+      if (category === 'nutrition') {
+        return {
+          status: 'draft_only',
+          mayAutoApply: false,
+          blockedByEnergyPolicy: true,
+          note: 'Nutrition drafts require human review and ENERGY_POLICY approval before apply.',
+        };
+      }
+      return {
+        status: 'draft_only',
+        mayAutoApply: false,
+        category,
+        summary: typeof args.summary === 'string' ? args.summary.slice(0, 500) : null,
+        note: 'Tool drafts only. Persist via recommendation engine generate/advance — AI cannot apply.',
+      };
+    }
+    case 'escalateToHumanCoach':
+      return {
+        status: 'escalation_hint',
+        persisted: false,
+        reason: typeof args.reason === 'string' ? args.reason.slice(0, 500) : 'member_requested',
+        navigateTo: '/weekly-checkin',
+        note: 'Does not invent a coach reply. Member should use weekly check-in / assigned human coach.',
+      };
+    case 'navigateToScreen': {
+      const allowed = new Set([
+        '/(tabs)/home',
+        '/(tabs)/training',
+        '/(tabs)/nutrition',
+        '/weekly-checkin',
+        '/yazan',
+        '/progress',
+      ]);
+      const screen = typeof args.screen === 'string' ? args.screen : '';
+      return {
+        allowed: allowed.has(screen),
+        screen: allowed.has(screen) ? screen : null,
+        note: allowed.has(screen) ? 'UI may navigate' : 'Unknown or disallowed screen',
+      };
+    }
     case 'proposeProgramAdjustment':
     case 'proposeNutritionAdjustment':
       return { status: 'not_applied', reason: 'requires_user_confirmation_and_approved_rule' };

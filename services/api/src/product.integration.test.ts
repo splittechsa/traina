@@ -1272,13 +1272,16 @@ describe('persisted product', () => {
     const nutrition = recommendations.find((row) => row.category === 'nutrition');
     if (nutrition !== undefined) {
       expect(nutrition.status).toBe('REVIEW_REQUIRED');
-      const apply = await app.inject({
+      const memberApprove = await app.inject({
         method: 'POST',
         url: `/v1/member/recommendations/${nutrition.id}/advance`,
         headers: { authorization: `Bearer ${token}` },
         payload: { status: 'APPROVED' },
       });
-      expect(apply.statusCode).toBe(200);
+      expect(memberApprove.statusCode).toBe(403);
+      expect(memberApprove.json().error.code).toBe('HUMAN_REVIEW_REQUIRED');
+      // Coach-approved nutrition still cannot APPLY until ENERGY_POLICY clears.
+      await database.query(`UPDATE coaching_recommendations SET status = 'APPROVED' WHERE id = $1`, [nutrition.id]);
       const forced = await app.inject({
         method: 'POST',
         url: `/v1/member/recommendations/${nutrition.id}/advance`,

@@ -20,12 +20,12 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 | Fixed cut deficits 400/650/1100 | **Quarantined** | `ENERGY_POLICY.approvedForPaidCoaching=false`; paid apply + mobile `training` style blocked |
 | Yazan persona + chat | **Partial** | Provider persona; needs live model (#7) |
 | Daily check-in | **Partial** | `POST /v1/coach/daily-checkin`; domain `yazan-coach.ts` |
-| Weekly brief queued_for_human | **Partial** | Table + API; **no coach dashboard** |
+| Weekly brief queued_for_human | **Existing** | Queue + Coach Workspace inbox |
 | Evidence / policy registry | **Missing** | — |
-| Recommendation state machine + versioned apply | **Missing** | Propose-only paths |
-| Human coach ops UI | **Missing** | — |
-| Consent ledger | **Missing** | Privacy docs only |
-| MemberState engine | **Partial** | Domain `member-state.ts` on `p0/safety-gap-and-baseline`; API wire pending |
+| Recommendation state machine + versioned apply | **Partial** | Domain SM + generate/advance/apply/monitor/expire/dedupe (0025); nutrition APPLIED blocked |
+| Human coach ops UI | **Existing** | `apps/coach-portal` — iPhone member evidence still open |
+| Consent ledger | **Partial** | Coach-share consent shipped; full PDPL ledger **P0-PRIV BLOCKED** |
+| MemberState engine | **Existing** | Domain + `GET /v1/member/state` + Yazan tool |
 | Store / web entitlements | **Partial** | Domain subscription helpers; no gateway, no entitlement service, no StoreKit |
 | Landing page checkout | **Missing** | Website-first sales decision — see P3-WEB-* |
 | Job workers / queue | **Missing** | — |
@@ -100,9 +100,12 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 | P1-STATE-01 | MemberState engine from validated observations | REVIEW | Clean PR slice (no mobile redesign); GET /v1/member/state + Yazan |
 | P1-EVT-01 | Consistent MemberEvent model / idempotent writes | REVIEW | RawMemberEvent normalize over existing tables |
 | P1-POL-01 | Versioned evidence/policy registry | BACKLOG | Replaces ad-hoc constants |
-| P1-REC-01 | Recommendation state machine + versioned apply | REVIEW | Engine + matrix tests + API generate/advance; nutrition apply blocked |
-| P1-AI-01 | Yazan tool gateway (typed tools, minimal context) | BACKLOG | Maps #7 |
-| P1-NUT-01 | Individualized energy policy (post SME) | BACKLOG | After P0-SAFE-01 |
+| P1-REC-01 | Recommendation state machine + versioned apply | REVIEW | Engine + generate/advance; nutrition apply blocked |
+| P1-REC-02 | Expire/dedupe/prioritize/apply/monitor/revert + safety class | REVIEW | Migration `0025`; not VERIFIED until merged |
+| P1-REC-03 | Training adaptation kinds (bounded) | REVIEW | recovery / deload / progressive_overload_hint |
+| P1-REC-04 | Real program version apply + before/after + idempotent audit | REVIEW | Migration `0027`; concurrent/idempotent/workout evidence in PR #43 hardening — **not VERIFIED until merge** |
+| P1-AI-01 | Yazan tool gateway (typed tools, minimal context) | IN_PROGRESS | Missing-data, daily/weekly prep, draft, escalate, navigate |
+| P1-NUT-01 | Individualized energy policy (post SME) | BLOCKED | After P0-SAFE-01 + SME |
 | P1-TEST-01 | Safety suite S-01…S-09 executed | BACKLOG | `coaching-safety-tests.md` |
 
 **Exit:** Explainable constrained recommendations without free-form invent.
@@ -114,14 +117,21 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 | ID | Title | State | Maps |
 | --- | --- | --- | --- |
 | P2-HUM-00 | Coach assignment + review queue + access audit (backend) | DONE | migrations 0022–0023; admin/supervisor assign only |
-| P2-HUM-01 | Weekly survey UX completeness | DONE | `apps/mobile/app/weekly-checkin.tsx` |
+| P2-HUM-01 | Weekly survey UX completeness | DONE | `apps/mobile/app/weekly-checkin.tsx` (status labels, a11y, AR/EN) |
 | P2-HUM-02 | Structured weekly packet (dashboard object, not PDF-only) | DONE | `buildAuthorizedCoachPacket` + review packet API |
-| P2-HUM-03 | Coach dashboard + assignment queue | DONE | `apps/coach-portal` |
+| P2-HUM-03 | Coach dashboard + assignment queue | DONE | `apps/coach-portal` + 20s refresh |
 | P2-HUM-04 | Approve/reject/edit + member feedback delivery | DONE | coach decide + feedback endpoints |
-| P2-HUM-05 | Access audit + overdue/escalate | DONE | audit events + `POST /v1/coach/reviews/:id/escalate` |
-| P2-HUM-06 | Workload metrics for pilots | DONE | `/v1/coach/workspace/metrics` |
+| P2-HUM-05 | Access audit + overdue/escalate | DONE | audit events + escalate + mark-overdue |
+| P2-HUM-06 | Workload metrics for pilots | DONE | `/v1/coach/workspace/metrics` + measured claim→feedback ms |
+| P2-HUM-07 | Yazan reads human feedback + recommendation state | DONE | `getHumanCoachFeedback` / `getRecommendationStatus` |
+| P2-HUM-08 | Cohort ops validation (multi member/coach) | DONE | `human-coach-cohort-runtime.json` — 3×2 cohort; mean claim→feedback 5763ms (API only) |
+| P2-HUM-09 | Physical iPhone Expo walkthrough screenshots | IN_PROGRESS | Expo `:8081` up; **device screenshots still required** |
+| P2-HUM-10 | Coach Workspace UI evidence pack | DONE | `docs/evidence/p2-coaching/01–04` login→inbox→desk→completed |
+| P2-HUM-11 | Member confirm/apply permitted recommendations in weekly UI | IN_PROGRESS | `weekly-checkin.tsx` confirm + apply; nutrition blocked |
 
-**Exit:** Real coach completes loop without DB access.
+**Exit:** Synthetic member weekly check-in on iPhone + coach portal feedback + member sees human identity — UI evidence required (not API-only). **Portal half proven; iPhone half still open.**
+
+**Baseline:** PR #41 merge `ff2bb87`; PR #42 evidence merge `deb009d`; dirty-tree backup `backup/dirty-tree-2026-10-17` retained. Readiness branch: `p2/coaching-experience-readiness`.
 
 ---
 
@@ -135,7 +145,7 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 | ID | Title | State | Acceptance |
 | --- | --- | --- | --- |
-| P3-ENT-01 | Server entitlement service (plans → capabilities) | BACKLOG | Mobile/web cannot unlock paid coaching without server check |
+| P3-ENT-01 | Server entitlement service (plans → capabilities) | IN_PROGRESS | Domain `projectEntitlements` + capability gate; API wire next |
 | P3-ENT-02 | Schema: plans, prices, customers, checkout sessions, payments, subscriptions, entitlements, usage limits, webhook events, refunds | BACKLOG | Migrations + Zod contracts; idempotent keys |
 | P3-ENT-03 | Usage limits (AI fair-use, review quotas) | BACKLOG | Enforced server-side; over-limit fails closed |
 | P3-ENT-04 | Billing audit log + reconciliation reports | BACKLOG | Every grant/revoke attributable; daily reconcile job sketch |
@@ -177,8 +187,8 @@ Maps: epic **#35**; schema **#36**; web checkout **#37**; Apple policy **#38**. 
 | --- | --- | --- | --- |
 | P3-BILL-01 | *(superseded)* Entitlement + StoreKit — see **P3-ENT-*** / **P3-APPLE-*** / **P3-WEB-*** | SUPERSEDED | #24, #34 |
 | P3-UX-01 | Home = coaching actions, not dashboard clutter | BACKLOG | |
-| P3-UX-02 | Coach feedback inbox (human vs AI labeled) | BACKLOG | |
-| P3-UX-03 | Notifications for review due / feedback | BACKLOG | |
+| P3-UX-02 | Coach feedback inbox (human vs AI labeled) | IN_PROGRESS | weekly-checkin + notifications authorKind |
+| P3-UX-03 | Notifications for review due / feedback | IN_PROGRESS | migration 0026 + `/v1/member/notifications` |
 | P3-PART-01 | InBody / Ideal Weight perk | BACKLOG | #23 |
 | P3-OPS-01 | Export/delete account experiences | BACKLOG | |
 
@@ -199,12 +209,13 @@ Maps: epic **#35**; schema **#36**; web checkout **#37**; Apple policy **#38**. 
 ## Highest-risk next implementation order
 
 1. Keep **backup/dirty-tree-2026-10-17** recoverable; slice-merge carefully  
-2. **P0-SAFE-01** SME review + **P0-PRIV-01** counsel (billing must not skip these gates)  
-3. **P1-STATE-01** wire MemberState → validated daily events  
-4. **P1-REC-01** recommendation lifecycle  
-5. **P2-HUM-*** human coach review infrastructure  
-6. **P3-ENT-*** / **P3-WEB-*** website billing (parallel after P0 privacy design exists for payment PII)  
+2. **P0-SAFE-01** SME + **P0-PRIV-01** counsel (**BLOCKED** externally)  
+3. Finish **P1-REC-02/03** + program-service apply for training payloads  
+4. **P2-HUM-09** physical iPhone evidence; **P3-UX-03** push channel later  
+5. **P1-AI-01** live provider + streaming (still mocked locally)  
+6. **P3-ENT-*** / **P3-WEB-*** website billing after privacy design for payment PII  
 7. **P3-APPLE-POLICY-01** before any iOS purchase UX  
+8. Admin ops platform + workers / staging (Wave 5)
 
 Do not rewrite working auth, diary, or session logging without verified regression.  
 Do not mark paid coaching ready until safety, privacy, operational, and App Store gates are evidence-backed.

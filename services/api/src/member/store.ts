@@ -38,7 +38,15 @@ import {
   calendarDayInTimeZone,
   COACH_SHARE_POLICY_VERSION,
   createCoachFeedback,
+  applyPermittedRecommendation,
+  beginMonitoringRecommendation,
+  buildProgramAdaptationPlan,
+  expireOpenRecommendations,
   generateRecommendationsFromMemberState,
+  memberConfirmRecommendation,
+  parseProgramVersionDocument,
+  prioritizeRecommendations,
+  suppressDuplicateRecommendations,
   transitionRecommendation,
   transitionWeeklyReview,
   validateRecommendation,
@@ -853,7 +861,7 @@ export async function memberStateFor(
   return { state, authorized: true };
 }
 
-function recommendationRowToDomain(row: {
+type RecommendationDbRow = {
   id: string;
   user_id: string;
   category: string;
@@ -868,14 +876,28 @@ function recommendationRowToDomain(row: {
   payload: unknown;
   requires_human_review: boolean;
   requires_member_confirmation: boolean;
+  safety_class?: string | null;
   audit: unknown;
   created_at: string;
   updated_at: string;
-}): CoachingRecommendation {
+};
+
+function recommendationRowToDomain(row: RecommendationDbRow): CoachingRecommendation {
+  const requiresHumanReview = row.requires_human_review === true;
+  const requiresMemberConfirmation = row.requires_member_confirmation === true;
+  const category = row.category as CoachingRecommendation['category'];
+  const fallbackSafety =
+    category === 'human_required' || category === 'nutrition'
+      ? 'blocked_policy'
+      : requiresHumanReview
+        ? 'human_review'
+        : requiresMemberConfirmation
+          ? 'member_confirm'
+          : 'safe_guidance';
   return {
     id: String(row.id),
     memberId: String(row.user_id),
-    category: row.category as CoachingRecommendation['category'],
+    category,
     status: row.status as CoachingRecommendation['status'],
     summary: row.summary,
     rationale: row.rationale,
@@ -885,8 +907,9 @@ function recommendationRowToDomain(row: {
     policyVersion: row.policy_version,
     expiresAt: iso(row.expires_at) ?? row.expires_at,
     payload: asJson<Record<string, unknown>>(row.payload),
-    requiresHumanReview: row.requires_human_review === true,
-    requiresMemberConfirmation: row.requires_member_confirmation === true,
+    requiresHumanReview,
+    requiresMemberConfirmation,
+    safetyClass: (row.safety_class as CoachingRecommendation['safetyClass'] | null | undefined) ?? fallbackSafety,
     createdAt: iso(row.created_at) ?? row.created_at,
     updatedAt: iso(row.updated_at) ?? row.updated_at,
     schemaVersion: 2,
@@ -899,9 +922,9 @@ async function persistRecommendation(db: Database, rec: CoachingRecommendation):
     `INSERT INTO coaching_recommendations (
        id, user_id, category, status, summary, rationale, confidence, missing_data, evidence,
        policy_version, expires_at, payload, requires_human_review, requires_member_confirmation,
-       audit, schema_version, created_at, updated_at
+       safety_class, audit, schema_version, created_at, updated_at
      ) VALUES (
-       $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12::jsonb,$13,$14,$15::jsonb,2,$16,$17
+       $1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12::jsonb,$13,$14,$15,$16::jsonb,2,$17,$18
      )
      ON CONFLICT (id) DO UPDATE SET
        status = EXCLUDED.status,
@@ -913,6 +936,7 @@ async function persistRecommendation(db: Database, rec: CoachingRecommendation):
        payload = EXCLUDED.payload,
        requires_human_review = EXCLUDED.requires_human_review,
        requires_member_confirmation = EXCLUDED.requires_member_confirmation,
+       safety_class = EXCLUDED.safety_class,
        audit = EXCLUDED.audit,
        updated_at = EXCLUDED.updated_at`,
     [
@@ -930,6 +954,7 @@ async function persistRecommendation(db: Database, rec: CoachingRecommendation):
       JSON.stringify(rec.payload),
       rec.requiresHumanReview,
       rec.requiresMemberConfirmation,
+      rec.safetyClass,
       JSON.stringify(rec.audit),
       rec.createdAt,
       rec.updatedAt,
@@ -937,18 +962,79 @@ async function persistRecommendation(db: Database, rec: CoachingRecommendation):
   );
 }
 
+async function loadMemberRecommendationRows(db: Database, userId: string): Promise<CoachingRecommendation[]> {
+  const rows = await db.query<RecommendationDbRow>(
+    `SELECT * FROM coaching_recommendations WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 50`,
+    [userId],
+  );
+  return rows.rows.map(recommendationRowToDomain);
+}
+
+async function loadActiveProgramVersion(
+  db: Database,
+  userId: string,
+): Promise<{
+  programId: string;
+  version: number;
+  versionId: string;
+  template: unknown;
+  templateId: string | null;
+} | null> {
+  const program = await db.query<{ id: string; template_id: string | null }>(
+    `SELECT id, template_id FROM programs WHERE user_id = $1 AND active = true LIMIT 1`,
+    [userId],
+  );
+  const row = program.rows[0];
+  if (row === undefined) return null;
+  const version = await db.query<{ id: string; version: number; template: unknown }>(
+    `SELECT id, version, template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
+    [row.id],
+  );
+  const ver = version.rows[0];
+  if (ver === undefined) return null;
+  return {
+    programId: row.id,
+    version: Number(ver.version),
+    versionId: ver.id,
+    template: ver.template,
+    templateId: row.template_id,
+  };
+}
+
 /** Generate deterministic recommendations from MemberState; nutrition stays non-applied. */
 export async function generateMemberRecommendations(db: Database, actor: Actor) {
   const { state } = await memberStateFor(db, actor, { timeZone: 'Asia/Riyadh' });
   const nowIso = new Date().toISOString();
+  const existing = await loadMemberRecommendationRows(db, actor.userId);
+  for (const expired of expireOpenRecommendations(existing, nowIso)) {
+    if (expired.status === 'EXPIRED' && existing.find((row) => row.id === expired.id)?.status !== 'EXPIRED') {
+      await persistRecommendation(db, expired);
+    }
+  }
+  const refreshed = await loadMemberRecommendationRows(db, actor.userId);
+  const activeProgram = await loadActiveProgramVersion(db, actor.userId);
   let drafts: CoachingRecommendation[];
   try {
-    drafts = generateRecommendationsFromMemberState({
+    const validated = generateRecommendationsFromMemberState({
       memberId: actor.userId,
       state,
       nowIso,
       idFactory: () => randomUUID(),
-    }).map((draft) => validateRecommendation(draft, nowIso, 'system:recommendation_engine'));
+    }).map((draft) => {
+      const withProgram =
+        draft.category === 'training' && activeProgram !== null
+          ? {
+              ...draft,
+              payload: {
+                ...draft.payload,
+                expectedProgramVersion: activeProgram.version,
+                programId: activeProgram.programId,
+              },
+            }
+          : draft;
+      return validateRecommendation(withProgram, nowIso, 'system:recommendation_engine');
+    });
+    drafts = prioritizeRecommendations(suppressDuplicateRecommendations(refreshed, validated));
   } catch (error) {
     throw asApi(error);
   }
@@ -959,75 +1045,342 @@ export async function generateMemberRecommendations(db: Database, actor: Actor) 
     persisted: true,
     count: drafts.length,
     recommendations: drafts,
+    suppressedDuplicates: true,
     note: 'Nutrition adaptations remain propose/review-only until ENERGY_POLICY approval. AI cannot apply.',
   };
 }
 
 export async function listMemberRecommendations(db: Database, actor: Actor) {
   await memberStateFor(db, actor, { timeZone: 'Asia/Riyadh' });
-  const rows = await db.query<{
-    id: string;
-    user_id: string;
-    category: string;
-    status: string;
-    summary: string;
-    rationale: string;
-    confidence: string;
-    missing_data: unknown;
-    evidence: unknown;
-    policy_version: string;
-    expires_at: string;
-    payload: unknown;
-    requires_human_review: boolean;
-    requires_member_confirmation: boolean;
-    audit: unknown;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `SELECT * FROM coaching_recommendations WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 50`,
-    [actor.userId],
+  const nowIso = new Date().toISOString();
+  const rows = await loadMemberRecommendationRows(db, actor.userId);
+  const expired = expireOpenRecommendations(rows, nowIso);
+  for (const rec of expired) {
+    const prior = rows.find((row) => row.id === rec.id);
+    if (prior !== undefined && prior.status !== rec.status) {
+      await persistRecommendation(db, rec);
+    }
+  }
+  return { recommendations: prioritizeRecommendations(await loadMemberRecommendationRows(db, actor.userId)) };
+}
+
+export async function previewTrainingRecommendationApply(db: Database, actor: Actor, recommendationId: string) {
+  const rows = await db.query<RecommendationDbRow>(
+    `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`,
+    [recommendationId, actor.userId],
   );
-  return { recommendations: rows.rows.map(recommendationRowToDomain) };
+  const row = rows.rows[0];
+  if (row === undefined) {
+    throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
+  }
+  const rec = recommendationRowToDomain(row);
+  const active = await loadActiveProgramVersion(db, actor.userId);
+  if (active === null) {
+    throw new ApiError(422, 'NO_ACTIVE_PROGRAM', 'Activate a training program before applying adaptations');
+  }
+  try {
+    const plan = buildProgramAdaptationPlan({
+      recommendation: rec,
+      currentDocument: parseProgramVersionDocument(
+        active.template ?? { templateId: active.templateId, days: [] },
+      ),
+      currentVersion: active.version,
+      at: new Date().toISOString(),
+      preview: true,
+    });
+    return {
+      previewOnly: true,
+      programId: active.programId,
+      currentVersion: active.version,
+      diff: plan.diff,
+      note: 'No program mutation performed. Confirm then POST advance with status=APPLIED.',
+    };
+  } catch (error) {
+    throw asApi(error);
+  }
+}
+
+type AdaptationApplicationRow = {
+  id: string;
+  to_version: number;
+  to_version_id: string;
+  diff: unknown;
+};
+
+async function loadAdaptationApplication(
+  db: Database,
+  recommendationId: string,
+  ownerUserId: string,
+): Promise<AdaptationApplicationRow | null> {
+  // Owner-scoped: never surface adaptation audit/diff for another member's recommendation.
+  const existing = await db.query<AdaptationApplicationRow>(
+    `SELECT a.id::text AS id, a.to_version, a.to_version_id::text AS to_version_id, a.diff
+     FROM program_adaptation_applications a
+     INNER JOIN coaching_recommendations r ON r.id = a.recommendation_id
+     WHERE a.recommendation_id = $1 AND r.user_id = $2`,
+    [recommendationId, ownerUserId],
+  );
+  return existing.rows[0] ?? null;
+}
+
+async function idempotentAdaptationResponse(
+  db: Database,
+  actor: Actor,
+  recommendationId: string,
+  existing: AdaptationApplicationRow,
+) {
+  const rows = await db.query<RecommendationDbRow>(
+    `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`,
+    [recommendationId, actor.userId],
+  );
+  const row = rows.rows[0];
+  if (row === undefined) {
+    throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
+  }
+  const rec = recommendationRowToDomain(row);
+  return {
+    persisted: true,
+    idempotent: true,
+    recommendation: rec,
+    applied: rec.status === 'APPLIED',
+    programVersion: Number(existing.to_version),
+    programVersionId: existing.to_version_id,
+    diff: existing.diff,
+  };
+}
+
+/**
+ * Transactional training apply: bump program_versions, audit row, then mark recommendation APPLIED.
+ * Idempotent on recommendation_id (unique constraint + FOR UPDATE). Never marks APPLIED if mutation fails.
+ */
+export async function applyTrainingRecommendationToProgram(
+  db: Database,
+  actor: Actor,
+  recommendationId: string,
+) {
+  const existingApply = await loadAdaptationApplication(db, recommendationId, actor.userId);
+  if (existingApply !== null) {
+    return idempotentAdaptationResponse(db, actor, recommendationId, existingApply);
+  }
+
+  try {
+    return await db.transaction(async (tx) => {
+      const rows = await tx.query<RecommendationDbRow>(
+        `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        [recommendationId, actor.userId],
+      );
+      const row = rows.rows[0];
+      if (row === undefined) {
+        throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
+      }
+
+      // Re-check under row lock so concurrent / retry storms return idempotent success.
+      const lockedExisting = await loadAdaptationApplication(tx, recommendationId, actor.userId);
+      if (lockedExisting !== null) {
+        return idempotentAdaptationResponse(tx, actor, recommendationId, lockedExisting);
+      }
+
+      let current = recommendationRowToDomain(row);
+      const at = new Date().toISOString();
+      if (current.status === 'APPLIED') {
+        throw new ApiError(422, 'ALREADY_APPLIED_WITHOUT_AUDIT', 'Recommendation is APPLIED but adaptation audit is missing');
+      }
+      if (current.status === 'MEMBER_CONFIRMATION_REQUIRED') {
+        current = memberConfirmRecommendation(current, at, actor.userId);
+      }
+      if (current.status !== 'APPROVED') {
+        throw new ApiError(422, 'NOT_APPROVED', 'Only APPROVED training recommendations may be applied');
+      }
+      if (current.category !== 'training') {
+        throw new ApiError(422, 'NOT_TRAINING_ADAPTATION', 'Use standard advance for non-training recommendations');
+      }
+
+      const program = await tx.query<{ id: string; template_id: string | null }>(
+        `SELECT id, template_id FROM programs WHERE user_id = $1 AND active = true LIMIT 1 FOR UPDATE`,
+        [actor.userId],
+      );
+      const programRow = program.rows[0];
+      if (programRow === undefined) {
+        throw new ApiError(422, 'NO_ACTIVE_PROGRAM', 'Activate a training program before applying adaptations');
+      }
+      const version = await tx.query<{ id: string; version: number; template: unknown }>(
+        `SELECT id, version, template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1 FOR UPDATE`,
+        [programRow.id],
+      );
+      const ver = version.rows[0];
+      if (ver === undefined) {
+        throw new ApiError(422, 'NO_PROGRAM_VERSION', 'Program has no version to adapt');
+      }
+
+      let plan;
+      try {
+        plan = buildProgramAdaptationPlan({
+          recommendation: current,
+          currentDocument: parseProgramVersionDocument(
+            ver.template ?? { templateId: programRow.template_id, days: [] },
+          ),
+          currentVersion: Number(ver.version),
+          at,
+        });
+      } catch (error) {
+        throw asApi(error);
+      }
+
+      const nextVersion = Number(ver.version) + 1;
+      const nextVersionId = randomUUID();
+      const applicationId = randomUUID();
+      await tx.query(
+        `INSERT INTO program_versions (id, program_id, version, source, template)
+         VALUES ($1, $2, $3, 'approved_rules', $4::jsonb)`,
+        [nextVersionId, programRow.id, nextVersion, JSON.stringify(plan.nextDocument)],
+      );
+      await tx.query(
+        `INSERT INTO program_adaptation_applications (
+           id, recommendation_id, program_id, from_version, to_version,
+           from_version_id, to_version_id, kind, diff, actor_user_id
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)`,
+        [
+          applicationId,
+          recommendationId,
+          programRow.id,
+          Number(ver.version),
+          nextVersion,
+          ver.id,
+          nextVersionId,
+          plan.overlay.kind,
+          JSON.stringify(plan.diff),
+          actor.userId,
+        ],
+      );
+
+      const applied = transitionRecommendation(
+        {
+          ...current,
+          payload: {
+            ...current.payload,
+            lastApplyEffect: {
+              kind: plan.overlay.kind,
+              programMutation: 'program_version_bumped',
+              fromVersion: Number(ver.version),
+              toVersion: nextVersion,
+              toVersionId: nextVersionId,
+              punitiveForbidden: true,
+            },
+            lastAppliedAt: at,
+          },
+        },
+        'APPLIED',
+        at,
+        { actorId: actor.userId, note: `program_version_${nextVersion}` },
+      );
+      await tx.query(
+        `UPDATE coaching_recommendations SET
+           status = $2, payload = $3::jsonb, audit = $4::jsonb, updated_at = $5::timestamptz
+         WHERE id = $1 AND user_id = $6`,
+        [
+          applied.id,
+          applied.status,
+          JSON.stringify(applied.payload),
+          JSON.stringify(applied.audit),
+          applied.updatedAt,
+          actor.userId,
+        ],
+      );
+
+      return {
+        persisted: true,
+        idempotent: false,
+        recommendation: applied,
+        applied: true,
+        programId: programRow.id,
+        programVersion: nextVersion,
+        programVersionId: nextVersionId,
+        diff: plan.diff,
+        applyResult: {
+          applied: true as const,
+          kind: plan.overlay.kind,
+          effect: {
+            programMutation: 'program_version_bumped',
+            fromVersion: Number(ver.version),
+            toVersion: nextVersion,
+          },
+          monitoredFrom: at,
+        },
+      };
+    });
+  } catch (error) {
+    // Unique recommendation_id race: peer committed first — return idempotent read.
+    const code =
+      error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : '';
+    if (code === '23505') {
+      const raced = await loadAdaptationApplication(db, recommendationId, actor.userId);
+      if (raced !== null) {
+        return idempotentAdaptationResponse(db, actor, recommendationId, raced);
+      }
+    }
+    throw error;
+  }
 }
 
 export async function advanceMemberRecommendation(
   db: Database,
   actor: Actor,
   recommendationId: string,
-  nextStatus: 'APPROVED' | 'REJECTED' | 'APPLIED' | 'MEMBER_CONFIRMATION_REQUIRED',
+  nextStatus: 'APPROVED' | 'REJECTED' | 'APPLIED' | 'MEMBER_CONFIRMATION_REQUIRED' | 'MONITORED' | 'CANCELED' | 'REVERTED',
 ) {
-  const rows = await db.query<{
-    id: string;
-    user_id: string;
-    category: string;
-    status: string;
-    summary: string;
-    rationale: string;
-    confidence: string;
-    missing_data: unknown;
-    evidence: unknown;
-    policy_version: string;
-    expires_at: string;
-    payload: unknown;
-    requires_human_review: boolean;
-    requires_member_confirmation: boolean;
-    audit: unknown;
-    created_at: string;
-    updated_at: string;
-  }>(`SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`, [recommendationId, actor.userId]);
+  const rows = await db.query<RecommendationDbRow>(
+    `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`,
+    [recommendationId, actor.userId],
+  );
   const row = rows.rows[0];
   if (row === undefined) {
     throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
   }
   let current = recommendationRowToDomain(row);
   const at = new Date().toISOString();
+  let applyResult: ReturnType<typeof applyPermittedRecommendation>['result'] | null = null;
+  let programDiff: unknown = null;
   try {
-    current = transitionRecommendation(current, nextStatus, at, { actorId: actor.userId, note: 'member_or_system_advance' });
+    if (nextStatus === 'APPROVED') {
+      // Members may only confirm their own MEMBER_CONFIRMATION_REQUIRED items.
+      // REVIEW_REQUIRED → APPROVED is coachDecideRecommendation only.
+      if (current.status === 'REVIEW_REQUIRED') {
+        throw new ApiError(
+          403,
+          'HUMAN_REVIEW_REQUIRED',
+          'A human coach must approve recommendations that require human review',
+        );
+      }
+      if (current.status !== 'MEMBER_CONFIRMATION_REQUIRED' && current.status !== 'APPROVED') {
+        throw new ApiError(422, 'INVALID_TRANSITION', 'Member cannot approve from this status');
+      }
+      current = memberConfirmRecommendation(current, at, actor.userId);
+    } else if (nextStatus === 'APPLIED') {
+      if (current.category === 'training') {
+        return applyTrainingRecommendationToProgram(db, actor, recommendationId);
+      }
+      const applied = applyPermittedRecommendation(current, at, actor.userId);
+      current = applied.recommendation;
+      applyResult = applied.result;
+    } else if (nextStatus === 'MONITORED') {
+      current = beginMonitoringRecommendation(current, at, actor.userId);
+    } else {
+      current = transitionRecommendation(current, nextStatus, at, {
+        actorId: actor.userId,
+        note: 'member_or_system_advance',
+      });
+    }
   } catch (error) {
     throw asApi(error);
   }
   await persistRecommendation(db, current);
-  return { persisted: true, recommendation: current, applied: current.status === 'APPLIED' };
+  return {
+    persisted: true,
+    recommendation: current,
+    applied: current.status === 'APPLIED',
+    applyResult,
+    diff: programDiff,
+  };
 }
 
 const KNOWN_ROLES: readonly Role[] = [
@@ -1726,7 +2079,78 @@ export async function sendCoachFeedback(
     conversationId,
     feedback.body,
   ]);
+  await db.query(
+    `INSERT INTO member_in_app_notifications (
+       user_id, kind, title, body, href, related_id, author_kind
+     ) VALUES ($1, 'human_coach_feedback', $2, $3, '/weekly-checkin', $4::uuid, 'human_coach')`,
+    [
+      current.memberUserId,
+      'Human coach feedback',
+      feedback.body.slice(0, 1000),
+      feedback.id,
+    ],
+  ).catch(() => undefined);
   return { persisted: true, feedback };
+}
+
+export async function listMemberNotifications(db: Database, actor: Actor) {
+  const rows = await db.query<{
+    id: string;
+    kind: string;
+    title: string;
+    body: string;
+    href: string | null;
+    related_id: string | null;
+    author_kind: string;
+    read_at: string | null;
+    created_at: string;
+  }>(
+    `SELECT id::text AS id, kind, title, body, href, related_id::text AS related_id, author_kind,
+            read_at::text AS read_at, created_at::text AS created_at
+     FROM member_in_app_notifications
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT 50`,
+    [actor.userId],
+  ).catch(() => ({ rows: [] as {
+    id: string;
+    kind: string;
+    title: string;
+    body: string;
+    href: string | null;
+    related_id: string | null;
+    author_kind: string;
+    read_at: string | null;
+    created_at: string;
+  }[] }));
+  return {
+    notifications: rows.rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      title: row.title,
+      body: row.body,
+      href: row.href,
+      relatedId: row.related_id,
+      authorKind: row.author_kind,
+      readAt: row.read_at === null ? null : iso(row.read_at) ?? row.read_at,
+      createdAt: iso(row.created_at) ?? row.created_at,
+      isHumanCoach: row.author_kind === 'human_coach',
+    })),
+  };
+}
+
+export async function markMemberNotificationRead(db: Database, actor: Actor, notificationId: string) {
+  const result = await db.query(
+    `UPDATE member_in_app_notifications
+     SET read_at = now()
+     WHERE id = $1 AND user_id = $2 AND read_at IS NULL
+     RETURNING id::text AS id`,
+    [notificationId, actor.userId],
+  );
+  if (result.rows[0] === undefined) {
+    throw new ApiError(404, 'NOTIFICATION_NOT_FOUND', 'Notification not found');
+  }
+  return { persisted: true, id: String((result.rows[0] as { id: string }).id) };
 }
 
 export async function listMemberCoachFeedback(db: Database, actor: Actor) {
@@ -2242,9 +2666,22 @@ export async function startProgramDay(
     `SELECT id FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
     [programId],
   );
+  const latestDoc = await db.query<{ template: unknown }>(
+    `SELECT template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
+    [programId],
+  );
+  let adaptation = null;
+  try {
+    const parsed = parseProgramVersionDocument(
+      latestDoc.rows[0]?.template ?? { templateId: program.template_id, days: [] },
+    );
+    adaptation = parsed.adaptation ?? null;
+  } catch {
+    adaptation = null;
+  }
   let planned: ReturnType<typeof planTemplateDay>;
   try {
-    planned = planTemplateDay(program.template_id, input.dayIndex);
+    planned = planTemplateDay(program.template_id, input.dayIndex, adaptation);
   } catch (error) {
     throw asApi(error);
   }
@@ -3059,6 +3496,15 @@ async function coachSnapshot(db: Database, actor: Actor) {
   } catch {
     memberState = null;
   }
+  const humanFeedback = (await listMemberCoachFeedback(db, actor)).feedback.slice(0, 5);
+  const recommendationRows = await listMemberRecommendations(db, actor);
+  const recommendations = recommendationRows.recommendations.slice(0, 20).map((row) => ({
+    id: row.id,
+    category: row.category,
+    status: row.status,
+    summary: row.summary,
+    requiresHumanReview: row.requiresHumanReview,
+  }));
   return {
     profile,
     todayWorkout,
@@ -3066,6 +3512,8 @@ async function coachSnapshot(db: Database, actor: Actor) {
     water,
     discipline,
     memberState,
+    humanFeedback,
+    recommendations,
     context: {
       coachPersona: 'yazan',
       product: 'Traina — AI coach reads daily logs as infrastructure',
@@ -3091,6 +3539,21 @@ async function coachSnapshot(db: Database, actor: Actor) {
             weekly: memberState.weekly,
             pendingRecommendations: memberState.pendingRecommendations,
           },
+      humanCoachFeedback: humanFeedback.map((row) => ({
+        authorKind: 'human_coach' as const,
+        body: row.body,
+        createdAt: row.createdAt,
+      })),
+      recommendations: recommendations.map((row) => ({
+        id: row.id,
+        category: row.category,
+        status: row.status,
+        summary: row.summary,
+        applied: row.status === 'APPLIED',
+        guidanceOnly: row.status !== 'APPLIED',
+      })),
+      humanVsAi:
+        'human_coach feedback is real staff writing. Yazan must not invent coach comments or treat pending recommendations as applied. Nutrition apply remains blocked by ENERGY_POLICY.',
       recentSessions: sessions.slice(0, 5),
       recentWeights: progress.weights.slice(-5),
       personalRecords: progress.personalRecords,
@@ -3142,15 +3605,30 @@ export async function answerCoach(
   let tool: string | null = null;
   let tokens = 0;
   if (runtime.name === 'development_mock') {
+    const lower = message.toLowerCase();
+    const wantsFeedback =
+      lower.includes('human feedback') ||
+      lower.includes('coach feedback') ||
+      message.includes('ملاحظة المدرب') ||
+      message.includes('رد المدرب');
+    const wantsRecs =
+      lower.includes('recommendation') ||
+      lower.includes('approval') ||
+      message.includes('توصية') ||
+      message.includes('اعتماد');
     const wantsState =
-      message.toLowerCase().includes('state') ||
+      lower.includes('state') ||
       message.includes('حالتي') ||
       message.includes('وضع');
-    tool = wantsState
-      ? 'getMemberState'
-      : message.toLowerCase().includes('food') || message.includes('غداء')
-        ? 'getFoodDiary'
-        : 'getTodaysWorkout';
+    tool = wantsFeedback
+      ? 'getHumanCoachFeedback'
+      : wantsRecs
+        ? 'getRecommendationStatus'
+        : wantsState
+          ? 'getMemberState'
+          : lower.includes('food') || message.includes('غداء')
+            ? 'getFoodDiary'
+            : 'getTodaysWorkout';
     const execution = executeCoachTool({
       actor,
       tool,
@@ -3159,7 +3637,31 @@ export async function answerCoach(
         userId: actor.userId,
         profile: null,
         goals: snapshot.profile.goals,
-        programName: null,
+        programName: (await listMemberPrograms(db, actor.userId)).active?.name ?? null,
+        activeProgram: await (async () => {
+          const active = await loadActiveProgramVersion(db, actor.userId);
+          if (active === null) return null;
+          try {
+            const doc = parseProgramVersionDocument(
+              active.template ?? { templateId: active.templateId, days: [] },
+            );
+            return {
+              programId: active.programId,
+              version: active.version,
+              templateId: active.templateId,
+              adaptationKind: doc.adaptation?.kind ?? null,
+              sourceRecommendationId: doc.sourceRecommendationId ?? null,
+            };
+          } catch {
+            return {
+              programId: active.programId,
+              version: active.version,
+              templateId: active.templateId,
+              adaptationKind: null,
+              sourceRecommendationId: null,
+            };
+          }
+        })(),
         todayWorkout: snapshot.todayWorkout,
         upcomingWorkoutNames: [],
         recentCompletedSessionIds: [],
@@ -3167,17 +3669,29 @@ export async function answerCoach(
         activitySteps: null,
         supplementNames: (await listSupplements(db, actor.userId, new Date().toISOString().slice(0, 10))).items.map((item) => item.name),
         memberState,
+        humanFeedback: snapshot.humanFeedback,
+        recommendations: snapshot.recommendations,
       },
       quota: { limit: 30, used: 0, windowStartMs: Date.now(), windowMs: 60_000 },
       atMs: Date.now(),
     });
     tool = execution.tool;
-    text =
-      tool === 'getMemberState'
-        ? `Development mock. MemberState confidence=${memberState?.confidence ?? 'none'}; meals=${memberState?.adherence.mealDaysLogged ?? 0}/${memberState?.adherence.windowDays ?? 0}. This is not a production coach.`
-        : tool === 'getFoodDiary'
-          ? `Development mock. Consumed ${snapshot.diary.summary.consumed.energyKcal} kcal. This is not a production coach.`
-          : `Development mock. Workout: ${snapshot.todayWorkout?.name ?? 'none scheduled'}. This is not a production coach.`;
+    if (tool === 'getHumanCoachFeedback') {
+      const rows = snapshot.humanFeedback;
+      text =
+        rows.length === 0
+          ? 'Development mock. No human coach feedback is on file. I will not invent coach comments. This is not a production coach.'
+          : `Development mock. Latest human coach feedback (authorKind=human_coach): ${rows[0]?.body ?? ''}. This is not a production coach.`;
+    } else if (tool === 'getRecommendationStatus') {
+      const pending = snapshot.recommendations.filter((row) => row.status !== 'APPLIED');
+      text = `Development mock. ${pending.length} recommendation(s) are guidance-only (not applied). Nutrition remains blocked by ENERGY_POLICY until scientific approval. This is not a production coach.`;
+    } else if (tool === 'getMemberState') {
+      text = `Development mock. MemberState confidence=${memberState?.confidence ?? 'none'}; meals=${memberState?.adherence.mealDaysLogged ?? 0}/${memberState?.adherence.windowDays ?? 0}. This is not a production coach.`;
+    } else if (tool === 'getFoodDiary') {
+      text = `Development mock. Consumed ${snapshot.diary.summary.consumed.energyKcal} kcal. This is not a production coach.`;
+    } else {
+      text = `Development mock. Workout: ${snapshot.todayWorkout?.name ?? 'none scheduled'}. This is not a production coach.`;
+    }
     tokens = text.length;
   } else if (options.stream === true) {
     const streamed = await streamModelReply({

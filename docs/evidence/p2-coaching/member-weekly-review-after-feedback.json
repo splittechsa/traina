@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-10-17T21:21:56.591Z",
+  "note": "Sanitized synthetic member response after Coach Workspace feedback. No tokens.",
+  "hasAssignedCoach": true,
+  "coachAvailable": true,
+  "review": {
+    "weekOf": "2026-10-13",
+    "status": "COMPLETED"
+  },
+  "unreadHumanFeedback": [
+    {
+      "authorKind": "human_coach",
+      "body": "Steady water logging this week. Keep meal days consistent and we will review energy next cycle."
+    }
+  ]
+}

@@ -19,10 +19,22 @@ Mobile → HTTPS /v1 → Fastify → PostgreSQL
 | Capability | Status |
 | --- | --- |
 | Purpose-tagged consent ledger | Partial — `member_coach_share_consents` for human coaching; full ledger + legal bases still **P0-PRIV blocked** |
-| Role-based coach access (assigned members only) | Missing |
+| Role-based coach access (assigned members only) | Shipped — assignment + consent fail-closed (P2-HUM) |
 | Retention jobs + deletion workflow | Partial / undocumented ops |
 | Cross-border transfer assessment | Docs stub (`0009`, `0015`) |
 | Minimal AI context packing | Partial |
+
+### Human coaching runtime privacy (engineering controls)
+
+| Topic | Current behavior | Gap / blocker |
+| --- | --- | --- |
+| Consent grant | `POST /v1/member/coach-share-consent` records `coach_share_v1` + disclosure text | Legal basis text TBD (P0-PRIV) |
+| Consent withdrawal | `DELETE` sets `withdrawn`; coach reads/lists for that member fail closed | Historical `coach_feedback` rows remain for the member; counsel must decide erase vs retain |
+| Cached access | No separate coach packet cache; portal refreshes ~20s from API | Confirm no CDN/cache of health packets in production deploy |
+| Exports / reports | No coach export endpoint shipped | Do not add PDF/CSV export before privacy review |
+| Logging | `coach_access_audit` stores action metadata only (no MemberState payload) | Retention schedule TBD |
+| Deletion | Account delete path exists; coach share rows should cascade with user delete review | Verify FK cascades in delete Account for 0023–0024 tables |
+| Pilot data | Synthetic accounts only | **No real member health data** until P0-PRIV + ops gates clear |
 
 ## Principles
 

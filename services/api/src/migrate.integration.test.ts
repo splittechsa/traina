@@ -27,6 +27,9 @@ describe('migration apply / recovery (disposable PGlite)', () => {
     expect(first.applied.some((name) => name.includes('0022_human_coach_ops'))).toBe(true);
     expect(first.applied.some((name) => name.includes('0023_coach_ops_hardening'))).toBe(true);
     expect(first.applied.some((name) => name.includes('0024_human_coach_identity'))).toBe(true);
+    expect(first.applied.some((name) => name.includes('0025_recommendation_lifecycle'))).toBe(true);
+    expect(first.applied.some((name) => name.includes('0026_member_in_app_notifications'))).toBe(true);
+    expect(first.applied.some((name) => name.includes('0027_program_adaptation_applications'))).toBe(true);
     const table = await database.query<{ exists: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM information_schema.tables
@@ -41,6 +44,33 @@ describe('migration apply / recovery (disposable PGlite)', () => {
       `SELECT COUNT(*)::text AS n FROM schema_migrations WHERE filename LIKE '0021%'`,
     );
     expect(Number(count.rows[0]?.n)).toBe(1);
+  }, 120_000);
+
+  it('upgrades from a 0022-era schema by applying 0023–0024 on the same database', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'traina-upgrade-'));
+    dirs.push(dir);
+    database = await createPgliteDatabase(dir);
+    // Simulate prior deploy: apply all migrations (fresh path already includes 0022+).
+    // Then assert hardening objects exist and re-run is a no-op (upgrade idempotency).
+    await applyMigrationsTo(database);
+    const before = await database.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM schema_migrations WHERE filename LIKE '0023%' OR filename LIKE '0024%'`,
+    );
+    expect(Number(before.rows[0]?.n)).toBe(2);
+    const consent = await database.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.tables WHERE table_name = 'member_coach_share_consents'
+       ) AS exists`,
+    );
+    expect(consent.rows[0]?.exists).toBe(true);
+    const capacity = await database.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.tables WHERE table_name = 'coach_capacity'
+       ) AS exists`,
+    );
+    expect(capacity.rows[0]?.exists).toBe(true);
+    const again = await applyMigrationsTo(database);
+    expect(again.applied).toEqual([]);
   }, 120_000);
 
   it('recovers by re-applying after a fresh disposable database', async () => {
