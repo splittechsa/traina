@@ -87,6 +87,11 @@ import {
   type RawMemberEvent,
   type WorkoutSession,
   type WorkoutSet,
+  initialSubscription,
+  projectEntitlements,
+  type EntitlementProjection,
+  type StoreChannel,
+  type SubscriptionStatus,
 } from '@sahhti/domain';
 import { completeModelReply, streamModelReply, type CoachRuntime } from '../coach/provider.js';
 import type { Database } from '../db/database.js';
@@ -2091,6 +2096,72 @@ export async function sendCoachFeedback(
     ],
   ).catch(() => undefined);
   return { persisted: true, feedback };
+}
+
+/**
+ * P3-ENT-01 — Server-authoritative capability projection for the signed-in member.
+ * Reads the latest subscriptions row when present; otherwise free defaults.
+ * Never unlocks paid capabilities from client flags. Nutrition adaptations stay blocked.
+ */
+export async function entitlementsFor(
+  db: Database,
+  actor: Actor,
+): Promise<EntitlementProjection & { purchasesEnabled: false; source: 'subscriptions' | 'default_free' }> {
+  const rows = await db.query<{
+    status: string;
+    store: string | null;
+    current_period_end: string | null;
+    cancel_at_period_end: boolean;
+    last_event_at: string | null;
+    product_code: string | null;
+  }>(
+    `SELECT s.status,
+            s.store,
+            s.current_period_end::text AS current_period_end,
+            s.cancel_at_period_end,
+            s.last_event_at::text AS last_event_at,
+            p.code AS product_code
+     FROM subscriptions s
+     LEFT JOIN products p ON p.id = s.product_id
+     WHERE s.user_id = $1
+     ORDER BY s.updated_at DESC NULLS LAST
+     LIMIT 1`,
+    [actor.userId],
+  ).catch(() => ({ rows: [] as {
+    status: string;
+    store: string | null;
+    current_period_end: string | null;
+    cancel_at_period_end: boolean;
+    last_event_at: string | null;
+    product_code: string | null;
+  }[] }));
+
+  const row = rows.rows[0];
+  if (row === undefined) {
+    const projection = projectEntitlements({ subscription: initialSubscription(), planCode: 'free' });
+    return { ...projection, purchasesEnabled: false, source: 'default_free' };
+  }
+
+  const status = row.status as SubscriptionStatus;
+  const productCode = row.product_code;
+  const planCode: 'free' | 'traina_ai' | 'traina_coach' =
+    productCode?.includes('coach') ? 'traina_coach'
+      : productCode?.includes('ai') ? 'traina_ai'
+        : 'free';
+
+  const projection = projectEntitlements({
+    subscription: {
+      status,
+      productId: productCode,
+      store: (row.store as StoreChannel | null) ?? null,
+      currentPeriodEnd: row.current_period_end === null ? null : iso(row.current_period_end) ?? row.current_period_end,
+      cancelAtPeriodEnd: row.cancel_at_period_end,
+      lastEventAt: row.last_event_at === null ? null : iso(row.last_event_at) ?? row.last_event_at,
+      processedEventIds: [],
+    },
+    planCode,
+  });
+  return { ...projection, purchasesEnabled: false, source: 'subscriptions' };
 }
 
 export async function listMemberNotifications(db: Database, actor: Actor) {

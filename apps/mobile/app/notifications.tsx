@@ -39,7 +39,7 @@ export default function NotificationsScreen() {
   return (
     <Screen>
       <ScreenBody>
-        <AppHeader title={text(locale, 'notifications')} subtitle={text(locale, 'humanCoachLabel')} />
+        <AppHeader title={text(locale, 'notifications')} subtitle={text(locale, 'humanCoachLabel')} showBack />
         {list.isPending ? <LoadingSkeleton /> : null}
         {list.isError ? <EmptyState title={text(locale, 'error')} body={text(locale, 'error')} /> : null}
         {!list.isPending && (list.data?.notifications.length ?? 0) === 0 ? (

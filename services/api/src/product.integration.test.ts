@@ -1299,4 +1299,32 @@ describe('persisted product', () => {
     });
     expect(deniedCoachState.statusCode).toBe(403);
   });
+
+  it('projects free entitlements from the server without client unlock flags', async () => {
+    const token = await tokenFor(`entitlements-${randomUUID()}@sahhti.test`);
+    const denied = await app.inject({ method: 'GET', url: '/v1/member/entitlements' });
+    expect(denied.statusCode).toBe(401);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/member/entitlements',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      planCode: string;
+      capabilities: string[];
+      nutritionAdaptationsBlocked: boolean;
+      purchasesEnabled: boolean;
+      limits: { yazanTurnsPerDay: number; humanReviewsPerMonth: number };
+    };
+    expect(body.planCode).toBe('free');
+    expect(body.purchasesEnabled).toBe(false);
+    expect(body.nutritionAdaptationsBlocked).toBe(true);
+    expect(body.capabilities).toContain('tracking.free');
+    expect(body.capabilities).not.toContain('human_coach.assignment');
+    expect(body.capabilities).not.toContain('nutrition.paid_adaptations');
+    expect(body.limits.humanReviewsPerMonth).toBe(0);
+    expect(body.limits.yazanTurnsPerDay).toBeGreaterThan(0);
+  });
 });

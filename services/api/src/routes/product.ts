@@ -107,6 +107,7 @@ import {
   sendCoachFeedback,
   listMemberCoachFeedback,
   listMemberNotifications,
+  entitlementsFor,
   markMemberNotificationRead,
   addCoachNote,
   listCoachNotes,
@@ -898,6 +899,10 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
 
   app.get('/v1/member/notifications', async (request) => (
     listMemberNotifications(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.get('/v1/member/entitlements', async (request) => (
+    entitlementsFor(dbOf(options), actorOf(request.claims))
   ));
 
   app.post('/v1/member/notifications/:id/read', async (request) => {

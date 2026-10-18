@@ -145,7 +145,7 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 | ID | Title | State | Acceptance |
 | --- | --- | --- | --- |
-| P3-ENT-01 | Server entitlement service (plans → capabilities) | IN_PROGRESS | Domain `projectEntitlements` + capability gate; API wire next |
+| P3-ENT-01 | Server entitlement service (plans → capabilities) | IN_PROGRESS | Domain + `GET /v1/member/entitlements` + membership UI; purchase/webhook still missing |
 | P3-ENT-02 | Schema: plans, prices, customers, checkout sessions, payments, subscriptions, entitlements, usage limits, webhook events, refunds | BACKLOG | Migrations + Zod contracts; idempotent keys |
 | P3-ENT-03 | Usage limits (AI fair-use, review quotas) | BACKLOG | Enforced server-side; over-limit fails closed |
 | P3-ENT-04 | Billing audit log + reconciliation reports | BACKLOG | Every grant/revoke attributable; daily reconcile job sketch |
@@ -155,7 +155,7 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 | ID | Title | State | Acceptance |
 | --- | --- | --- | --- |
-| P3-WEB-01 | Landing page pricing + plan presentation | BACKLOG | Matches service model Free / AI / Coach |
+| P3-WEB-01 | Landing page pricing + plan presentation | IN_PROGRESS | `apps/www` Arabic-first draft + EN; no fake checkout; legal pages are drafts |
 | P3-WEB-02 | Register/purchase on website into same Traina identity | BACKLOG | One account; entitlements visible on mobile after purchase |
 | P3-WEB-03 | Payment gateway provider abstraction | BACKLOG | Swappable adapter; no card data in our DB |
 | P3-WEB-04 | Hosted checkout / secure payment components | BACKLOG | PCI scope stays with provider |
