@@ -145,7 +145,7 @@ Statuses: `BACKLOG | READY | IN_PROGRESS | REVIEW | VERIFIED | DONE | BLOCKED`
 
 | ID | Title | State | Acceptance |
 | --- | --- | --- | --- |
-| P3-ENT-01 | Server entitlement service (plans → capabilities) | IN_PROGRESS | Domain + `GET /v1/member/entitlements` + membership UI; purchase/webhook still missing |
+| P3-ENT-01 | Server entitlement service (plans → capabilities) | IN_PROGRESS | Domain + `GET /v1/member/entitlements` + membership UI; daily Yazan quota; weekly human queue gated; purchase/webhook still missing |
 | P3-ENT-02 | Schema: plans, prices, customers, checkout sessions, payments, subscriptions, entitlements, usage limits, webhook events, refunds | BACKLOG | Migrations + Zod contracts; idempotent keys |
 | P3-ENT-03 | Usage limits (AI fair-use, review quotas) | BACKLOG | Enforced server-side; over-limit fails closed |
 | P3-ENT-04 | Billing audit log + reconciliation reports | BACKLOG | Every grant/revoke attributable; daily reconcile job sketch |

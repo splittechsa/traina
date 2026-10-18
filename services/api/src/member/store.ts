@@ -87,6 +87,7 @@ import {
   type RawMemberEvent,
   type WorkoutSession,
   type WorkoutSet,
+  hasCapability,
   initialSubscription,
   projectEntitlements,
   type EntitlementProjection,
@@ -1866,11 +1867,22 @@ export async function prepareWeeklyReviewForMember(
      VALUES ($1, $2, NULL, $3, 'packet_prepared')`,
     [reviewId, actor.userId, statusAfter ?? 'AUTO_SUMMARY_READY'],
   );
-  if (statusAfter === 'AUTO_SUMMARY_READY' || statusAfter === 'REOPENED') {
+  // Queue for a human only when the member has Coach-plan entitlement OR an active
+  // coach assignment (pilot path). Free members without assignment keep a Yazan-ready
+  // packet and are not placed in the human inbox.
+  const memberEntitlements = await entitlementsFor(db, { userId: memberUserId, roles: ['member'], gymOrganizationIds: [] });
+  const mayQueueHuman =
+    hasCapability(memberEntitlements, 'human_coach.weekly_review') || coachUserId !== null;
+  if ((statusAfter === 'AUTO_SUMMARY_READY' || statusAfter === 'REOPENED') && mayQueueHuman) {
     const queued = await persistWeeklyReviewTransition(db, actor, reviewId, 'QUEUED_FOR_HUMAN', 'queued_after_summary');
-    return { review: queued, packet };
+    return { review: queued, packet, queuedForHuman: true as const };
   }
-  return { review: await loadWeeklyReview(db, reviewId), packet };
+  return {
+    review: await loadWeeklyReview(db, reviewId),
+    packet,
+    queuedForHuman: false as const,
+    entitlementGate: mayQueueHuman ? null : 'human_coach.weekly_review',
+  };
 }
 
 export async function listWeeklyReviewsForCoach(db: Database, actor: Actor) {
@@ -3998,32 +4010,35 @@ export async function submitWeeklyCoachBrief(
   } catch (error) {
     throw asApi(error);
   }
+  const prepared = await prepareWeeklyReviewForMember(db, actor, actor.userId, weekStart);
+  const escalateToHuman = prepared.queuedForHuman === true;
+  const briefStatus = escalateToHuman ? 'queued_for_human' : 'saved_for_yazan';
   // Idempotent per member+week — updates the same brief/review rather than creating duplicates.
   const saved = await db.query<{ id: string }>(
     `INSERT INTO coach_weekly_briefs (user_id, week_of, survey, packet, status)
-     VALUES ($1, $2, $3::jsonb, $4::jsonb, 'queued_for_human')
+     VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
      ON CONFLICT (user_id, week_of) DO UPDATE
-       SET survey = EXCLUDED.survey, packet = EXCLUDED.packet, status = 'queued_for_human', created_at = now()
+       SET survey = EXCLUDED.survey, packet = EXCLUDED.packet, status = EXCLUDED.status, created_at = now()
      RETURNING id`,
-    [actor.userId, weekStart, JSON.stringify(packet.survey), JSON.stringify(packet)],
+    [actor.userId, weekStart, JSON.stringify(packet.survey), JSON.stringify(packet), briefStatus],
   );
   const conversationId = await conversationFor(db, actor.userId);
-  const notice =
-    packet.briefAr.slice(0, 400) +
-    '\n\n— يزن: رفعت ملف الأسبوع لمدرب بشري للمراجعة.';
+  const notice = escalateToHuman
+    ? packet.briefAr.slice(0, 400) + '\n\n— يزن: رفعت ملف الأسبوع لمدرب بشري للمراجعة.'
+    : packet.briefAr.slice(0, 400) +
+      '\n\n— يزن: حفظت ملخص الأسبوع. المراجعة البشرية تتطلب خطة كوتش أو تعيين مدرب.';
   await db.query(`INSERT INTO coach_messages (conversation_id, role, body) VALUES ($1, 'assistant', $2)`, [
     conversationId,
     notice,
   ]);
-  // Bridge into the human-ops weekly_review_queue (authorized packet + status machine).
-  const queued = await prepareWeeklyReviewForMember(db, actor, actor.userId, weekStart);
   return {
     id: String(saved.rows[0]?.id),
     persisted: true,
-    escalateToHuman: true as const,
-    status: 'queued_for_human' as const,
+    escalateToHuman,
+    status: briefStatus,
     packet,
-    review: queued.review,
+    review: prepared.review,
+    entitlementGate: prepared.entitlementGate ?? null,
   };
 }
 

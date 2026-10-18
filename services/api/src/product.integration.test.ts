@@ -1327,4 +1327,37 @@ describe('persisted product', () => {
     expect(body.limits.humanReviewsPerMonth).toBe(0);
     expect(body.limits.yazanTurnsPerDay).toBeGreaterThan(0);
   });
+
+  it('keeps free weekly briefs out of the human inbox without coach entitlement or assignment', async () => {
+    const token = await tokenFor(`weekly-free-${randomUUID()}@sahhti.test`);
+    const weekOf = '2026-10-12';
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/weekly-brief',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        weekOf,
+        energy: 3,
+        sleep: 3,
+        stress: 2,
+        hunger: 3,
+        effort: 3,
+        recovery: 3,
+        satisfaction: 3,
+        difficulties: '',
+        questionForCoach: 'Is my plan ok?',
+      },
+    });
+    expect(submit.statusCode).toBe(200);
+    const body = submit.json() as {
+      escalateToHuman: boolean;
+      status: string;
+      entitlementGate: string | null;
+      review: { status: string };
+    };
+    expect(body.escalateToHuman).toBe(false);
+    expect(body.status).toBe('saved_for_yazan');
+    expect(body.entitlementGate).toBe('human_coach.weekly_review');
+    expect(body.review.status).not.toBe('QUEUED_FOR_HUMAN');
+  });
 });
