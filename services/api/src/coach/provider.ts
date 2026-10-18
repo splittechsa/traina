@@ -153,6 +153,11 @@ export async function completeModelReply(input: {
   localeHint: 'ar' | 'en';
   history: readonly { role: 'member' | 'assistant'; body: string }[];
   context: Record<string, unknown>;
+  /**
+   * Server-side tool resolver. When the model requests a validated read tool,
+   * this must return an authorized projection — never raw client arguments as truth.
+   */
+  resolveTool?: (toolName: string) => Record<string, unknown>;
   fetchImpl?: typeof fetch;
 }): Promise<CoachTurn> {
   const fetchImpl = input.fetchImpl ?? fetch;
@@ -169,6 +174,8 @@ export async function completeModelReply(input: {
     model: input.runtime.model,
     temperature: 0.4,
     messages,
+    tools: toolDefinitions(),
+    tool_choice: 'auto',
   }, fetchImpl, deadline - Date.now());
   if (!first.ok) {
     throw new Error('MODEL_REQUEST_FAILED');
@@ -192,7 +199,12 @@ export async function completeModelReply(input: {
       content: payload.choices?.[0]?.message?.content ?? '',
       tool_calls: payload.choices?.[0]?.message?.tool_calls,
     });
-    messages.push({ role: 'tool', tool_call_id: call?.id ?? 'tool', content: context });
+    const resolved =
+      input.resolveTool !== undefined
+        ? input.resolveTool(toolName)
+        : { note: 'tool_resolver_missing', fallbackContext: input.context };
+    const toolPayload = JSON.stringify(resolved).slice(0, 4_500);
+    messages.push({ role: 'tool', tool_call_id: call?.id ?? 'tool', content: toolPayload });
     // Share the SAME overall deadline rather than granting a fresh timeout: the two-call
     // tool-use path must stay within one client-observable budget, not double it.
     const remaining = deadline - Date.now();

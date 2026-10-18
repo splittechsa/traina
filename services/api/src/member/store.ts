@@ -3588,6 +3588,36 @@ async function coachSnapshot(db: Database, actor: Actor) {
     summary: row.summary,
     requiresHumanReview: row.requiresHumanReview,
   }));
+  const activeVersion = await loadActiveProgramVersion(db, actor.userId);
+  let activeProgram: {
+    programId: string;
+    version: number;
+    templateId: string | null;
+    adaptationKind: string | null;
+    sourceRecommendationId: string | null;
+  } | null = null;
+  if (activeVersion !== null) {
+    try {
+      const doc = parseProgramVersionDocument(
+        activeVersion.template ?? { templateId: activeVersion.templateId, days: [] },
+      );
+      activeProgram = {
+        programId: activeVersion.programId,
+        version: activeVersion.version,
+        templateId: activeVersion.templateId,
+        adaptationKind: doc.adaptation?.kind ?? null,
+        sourceRecommendationId: doc.sourceRecommendationId ?? null,
+      };
+    } catch {
+      activeProgram = {
+        programId: activeVersion.programId,
+        version: activeVersion.version,
+        templateId: activeVersion.templateId,
+        adaptationKind: null,
+        sourceRecommendationId: null,
+      };
+    }
+  }
   return {
     profile,
     todayWorkout,
@@ -3597,6 +3627,8 @@ async function coachSnapshot(db: Database, actor: Actor) {
     memberState,
     humanFeedback,
     recommendations,
+    activeProgram,
+    programName: active?.name ?? null,
     context: {
       coachPersona: 'yazan',
       product: 'Traina — AI coach reads daily logs as infrastructure',
@@ -3641,6 +3673,8 @@ async function coachSnapshot(db: Database, actor: Actor) {
       recentWeights: progress.weights.slice(-5),
       personalRecords: progress.personalRecords,
       missingData: 'Absent values are unknown. Do not invent them. No burned-kcal invention.',
+      activeProgram,
+      programName: active?.name ?? null,
     },
   };
 }
@@ -3798,11 +3832,43 @@ export async function answerCoach(
     text = streamed.text;
     tokens = streamed.promptTokens + streamed.completionTokens;
   } else {
+    const trusted = {
+      userId: actor.userId,
+      profile: null,
+      goals: snapshot.profile.goals,
+      programName: snapshot.programName,
+      activeProgram: snapshot.activeProgram,
+      todayWorkout: snapshot.todayWorkout,
+      upcomingWorkoutNames: [] as string[],
+      recentCompletedSessionIds: [] as string[],
+      nutrition: snapshot.diary.summary,
+      activitySteps: null as number | null,
+      supplementNames: (await listSupplements(db, actor.userId, new Date().toISOString().slice(0, 10))).items.map((item) => item.name),
+      memberState: snapshot.memberState,
+      humanFeedback: snapshot.humanFeedback.map((row) => ({
+        id: row.id,
+        body: row.body,
+        createdAt: row.createdAt,
+        authorKind: 'human_coach' as const,
+      })),
+      recommendations: snapshot.recommendations,
+    };
     const completed = await completeModelReply({
       runtime,
       localeHint,
       history: [...history.filter((item) => item.role === 'member' || item.role === 'assistant').map((item) => ({ role: item.role === 'assistant' ? 'assistant' as const : 'member' as const, body: item.body })), { role: 'member' as const, body: message }],
       context: snapshot.context,
+      resolveTool: (toolName) => {
+        const execution = executeCoachTool({
+          actor,
+          tool: toolName,
+          modelArguments: {},
+          trusted,
+          quota: { limit: 30, used: 0, windowStartMs: Date.now(), windowMs: 60_000 },
+          atMs: Date.now(),
+        });
+        return execution.body;
+      },
       fetchImpl: options.fetchImpl,
     }).catch((error: unknown) => {
       const code = error instanceof Error ? error.message : 'MODEL_REQUEST_FAILED';

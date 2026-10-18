@@ -38,6 +38,61 @@ describe('coach provider', () => {
     expect(reply.text).not.toContain('secret-key');
   });
 
+  it('resolves read tools through the server resolver instead of inventing facts', async () => {
+    let round = 0;
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      round += 1;
+      if (round === 1) {
+        return new Response(
+          JSON.stringify({
+            choices: [{
+              message: {
+                content: '',
+                tool_calls: [{ id: 'call-1', function: { name: 'getCurrentTrainingProgram' } }],
+              },
+            }],
+            usage: { prompt_tokens: 10, completion_tokens: 2 },
+          }),
+          { status: 200 },
+        );
+      }
+      const body = JSON.parse(String(init?.body)) as { messages: { role: string; content: string }[] };
+      const toolMsg = body.messages.find((row) => row.role === 'tool');
+      expect(toolMsg?.content).toContain('recovery_preference');
+      expect(toolMsg?.content).toContain('rec-1');
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'خطتك الحالية عليها تكيّف استشفاء معتمد.' } }],
+          usage: { prompt_tokens: 20, completion_tokens: 12 },
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+
+    const reply = await completeModelReply({
+      runtime: { name: 'openai_compatible', apiKey: 'secret-key', baseUrl: 'https://example.test/v1', model: 'sahhti-model' },
+      localeHint: 'ar',
+      history: [{ role: 'member', body: 'هل تغيّرت خطتي؟' }],
+      context: { goals: ['fat_loss'] },
+      resolveTool: (name) => {
+        expect(name).toBe('getCurrentTrainingProgram');
+        return {
+          activeProgram: {
+            programId: 'p1',
+            version: 2,
+            templateId: 'gym_full_body',
+            adaptationKind: 'recovery_preference',
+            sourceRecommendationId: 'rec-1',
+          },
+        };
+      },
+      fetchImpl,
+    });
+    expect(reply.tool).toBe('getCurrentTrainingProgram');
+    expect(reply.text).toContain('تكيّف');
+    expect(round).toBe(2);
+  });
+
   it('assembles a streamed provider reply', async () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

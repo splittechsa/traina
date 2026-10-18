@@ -11,142 +11,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <style>
-      :root {
-        --charcoal: #161411;
-        --forest: #315c49;
-        --gold: #d6a54a;
-        --paper: #f3eee6;
-        --sand: #c9b7a2;
-        --ink: #1c1915;
-        --muted: #6e655c;
-        --surface: #fffbf6;
-        --hero: #17382d;
-      }
-      * { box-sizing: border-box; }
-      html { scroll-behavior: smooth; }
-      body {
-        margin: 0;
-        font-family: "IBM Plex Sans Arabic", sans-serif;
-        background:
-          radial-gradient(1200px 600px at 100% -10%, rgba(214, 165, 74, 0.18), transparent 55%),
-          linear-gradient(180deg, #efe7db 0%, var(--paper) 38%, #ebe3d6 100%);
-        color: var(--ink);
-        line-height: 1.6;
-      }
-      a { color: inherit; }
-      .wrap { width: min(1080px, calc(100% - 2.5rem)); margin-inline: auto; }
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 1.25rem 0;
-      }
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        font-weight: 700;
-        font-size: 1.35rem;
-        letter-spacing: -0.02em;
-        text-decoration: none;
-      }
-      .mark {
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: 0.8rem;
-        background: var(--surface);
-        border: 1px solid rgba(22, 20, 17, 0.12);
-        display: grid;
-        place-items: center;
-      }
-      .nav { display: flex; gap: 1.25rem; color: var(--muted); font-weight: 500; font-size: 0.95rem; }
-      .nav a { text-decoration: none; }
-      .hero {
-        min-height: calc(100vh - 5rem);
-        display: grid;
-        align-content: center;
-        padding: 2rem 0 4rem;
-        gap: 1rem;
-      }
-      .hero h1 {
-        margin: 0;
-        font-size: clamp(2.6rem, 7vw, 4.4rem);
-        line-height: 1.1;
-        letter-spacing: -0.03em;
-        max-width: 12ch;
-      }
-      .hero p {
-        margin: 0;
-        max-width: 34rem;
-        color: var(--muted);
-        font-size: 1.15rem;
-      }
-      .cta {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-top: 1rem;
-        padding: 0.9rem 1.4rem;
-        border-radius: 999px;
-        background: var(--forest);
-        color: #fff;
-        font-weight: 600;
-        text-decoration: none;
-        width: fit-content;
-      }
-      .panel {
-        background: var(--hero);
-        color: #fff9ef;
-        border-radius: 1.75rem;
-        padding: 2.5rem;
-        margin: 2rem 0 4rem;
-      }
-      .panel h2 { margin: 0 0 0.75rem; font-size: 1.8rem; }
-      .panel p { margin: 0; color: rgba(255, 249, 239, 0.78); max-width: 40rem; }
-      section { padding: 1.5rem 0 3rem; }
-      section h2 { margin: 0 0 0.5rem; font-size: 1.7rem; }
-      section > p.lead { margin: 0 0 1.5rem; color: var(--muted); max-width: 40rem; }
-      .plans {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 1rem;
-      }
-      .plan {
-        background: var(--surface);
-        border: 1px solid rgba(22, 20, 17, 0.1);
-        border-radius: 1.25rem;
-        padding: 1.35rem;
-      }
-      .plan h3 { margin: 0 0 0.4rem; }
-      .plan p { margin: 0; color: var(--muted); font-size: 0.95rem; }
-      .faq details {
-        background: var(--surface);
-        border: 1px solid rgba(22, 20, 17, 0.1);
-        border-radius: 1rem;
-        padding: 1rem 1.15rem;
-        margin-bottom: 0.75rem;
-      }
-      .faq summary { cursor: pointer; font-weight: 600; }
-      footer {
-        border-top: 1px solid rgba(22, 20, 17, 0.08);
-        padding: 2rem 0 3rem;
-        color: var(--muted);
-        font-size: 0.9rem;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem 1.5rem;
-        justify-content: space-between;
-      }
-      footer a { color: var(--forest); }
-      @media (max-width: 800px) {
-        .plans { grid-template-columns: 1fr; }
-        .nav { display: none; }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        html { scroll-behavior: auto; }
-      }
-    </style>
+    <link rel="stylesheet" href="./site.css" />
+    <link rel="icon" href="./brand/traina-mark.svg" type="image/svg+xml" />
   </head>
   <body>
     <div class="wrap">
@@ -163,6 +29,8 @@
         </a>
         <nav class="nav" aria-label="أقسام الصفحة">
           <a href="#how">كيف تعمل</a>
+          <a href="#yazan">يزن</a>
+          <a href="#coach">المدرب البشري</a>
           <a href="#pricing">الخطط</a>
           <a href="#faq">أسئلة</a>
           <a href="#contact">تواصل</a>
@@ -180,6 +48,21 @@
           <h2>كيف تعمل</h2>
           <p>خطة تدريب وتغذية من ملفك، تسجيل يومي، اقتراحات من يزن ضمن قواعد علمية، ومراجعة بشرية عند الاشتراك والموافقة — بدون اختراع نتائج أو موافقات طبية.</p>
         </div>
+
+        <section id="yazan" aria-labelledby="yazan-title">
+          <h2 id="yazan-title">يزن — مدربك اليومي</h2>
+          <p class="lead">يزن يقرأ ما سجّلته فعلاً: التمرين، الغذاء، الماء، والتعافي. يشرح خطتك ويقترح تعديلات ضمن قواعد السلامة، ولا يخترع نتائج أو موافقات بشريّة.</p>
+          <div class="plans">
+            <article class="plan"><h3>يفهم سياقك</h3><p>أهدافك، برنامجك النشط، ونسخته الحالية — بما فيها التكيّفات المعتمدة فقط.</p></article>
+            <article class="plan"><h3>يقترح ولا يتجاوز</h3><p>أي تعديل على البرنامج يحتاج تأكيدك. التوصيات التي تتطلب مراجعة بشرية تبقى معلّقة.</p></article>
+            <article class="plan"><h3>يفصل الحقيقة عن الرأي</h3><p>ما هو مسجّل ≠ ما هو تقديري ≠ ما هو اقتراح. الغائب يبقى مجهولاً.</p></article>
+          </div>
+        </section>
+
+        <section id="coach" aria-labelledby="coach-title">
+          <h2 id="coach-title">المراجعة البشرية</h2>
+          <p class="lead">على خطة كوتش (ومع موافقتك)، يراجع مدرب بشري ملفك الأسبوعي ويرسل ملاحظات واضحة تُميَّز عن رسائل يزن داخل التطبيق.</p>
+        </section>
 
         <section id="pricing" aria-labelledby="pricing-title">
           <h2 id="pricing-title">الخطط</h2>
