@@ -20,6 +20,7 @@ import { useMotion } from '../../src/theme/motion';
 import { tapSuccess } from '../../src/ui/haptics';
 import { planOfflineSync, type PendingSetCommand } from '../../src/offline/queue';
 import { readPendingSets, writePendingSets } from '../../src/offline/sqlite';
+import { readJson, writeJson } from '../../src/storage/local';
 
 type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia'>;
 type WorkoutProgress = {
@@ -73,7 +74,14 @@ export default function WorkoutScreen() {
     const remaining = [...others];
     for (const command of plan.send) {
       try {
-        await apiRequest(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set });
+        if (command.kind === 'replace') {
+          await apiRequest(`/v1/training/sessions/${command.sessionId}/sets/${command.set.id}`, {
+            method: 'PUT',
+            body: command.set,
+          });
+        } else {
+          await apiRequest(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set });
+        }
       } catch (caught) {
         if (caught instanceof ApiClientError && caught.status === 409) continue;
         remaining.push(command);
@@ -140,10 +148,26 @@ export default function WorkoutScreen() {
 
   function startRest(seconds: number) {
     const duration = Math.max(0, seconds);
+    const endsAt = Date.now() + duration * 1000;
     setRest(duration);
     setRestPaused(false);
-    restAnchor.current = { endsAt: Date.now() + duration * 1000 };
+    restAnchor.current = { endsAt };
+    if (typeof id === 'string') {
+      void writeJson(`sahhti.rest.${id}`, { endsAt, paused: false });
+    }
   }
+
+  useEffect(() => {
+    if (typeof id !== 'string') return;
+    void readJson<{ endsAt: number; paused?: boolean } | null>(`sahhti.rest.${id}`, null).then((saved) => {
+      if (saved === null || !Number.isFinite(saved.endsAt)) return;
+      const left = Math.max(0, Math.ceil((saved.endsAt - Date.now()) / 1000));
+      if (left <= 0) return;
+      restAnchor.current = { endsAt: saved.endsAt };
+      setRest(left);
+      setRestPaused(saved.paused === true);
+    });
+  }, [id]);
 
   async function start() {
     if (typeof id !== 'string') return;
@@ -193,26 +217,48 @@ export default function WorkoutScreen() {
         setEditingSetId(null);
         return;
       }
+      const replaceCommand: PendingSetCommand = {
+        clientEventId: Crypto.randomUUID(),
+        sessionId: id,
+        kind: 'replace',
+        set: {
+          id: editingSetId,
+          exerciseId: existing.exerciseId,
+          setIndex: existing.setIndex,
+          reps: setReps,
+          loadGrams,
+          rpeTenths: existing.rpeTenths,
+          completedAt: new Date().toISOString(),
+        },
+      };
       setBusy(true);
       try {
         await apiRequest(`/v1/training/sessions/${id}/sets/${editingSetId}`, {
           method: 'PUT',
-          body: {
-            id: editingSetId,
-            exerciseId: existing.exerciseId,
-            setIndex: existing.setIndex,
-            reps: setReps,
-            loadGrams,
-            rpeTenths: existing.rpeTenths,
-            completedAt: new Date().toISOString(),
-          },
+          body: replaceCommand.set,
         });
         await client.invalidateQueries({ queryKey: ['session', id] });
         setEditingSetId(null);
         setNotice('');
         tapSuccess(reduce);
-      } catch {
-        setNotice(text(locale, 'error'));
+      } catch (caught) {
+        if (!(caught instanceof ApiClientError) || caught.code !== 'OFFLINE') {
+          setNotice(text(locale, 'error'));
+          return;
+        }
+        const pending = await readPendingSets();
+        const others = pending.filter((item) => item.sessionId !== id);
+        const mine = pending.filter((item) => item.sessionId === id);
+        const plan = planOfflineSync(session.data.session, [...mine, replaceCommand]);
+        if (plan.conflicts.some((conflict) => conflict.clientEventId === replaceCommand.clientEventId)) {
+          setNotice(text(locale, 'conflict'));
+          return;
+        }
+        await writePendingSets([...others, ...plan.send]);
+        client.setQueryData(['session', id], { session: plan.session });
+        setEditingSetId(null);
+        setNotice(text(locale, 'queued'));
+        tapSuccess(reduce);
       } finally {
         setBusy(false);
       }
@@ -253,7 +299,11 @@ export default function WorkoutScreen() {
         return;
       }
       await writePendingSets([...others, ...plan.send]);
+      client.setQueryData(['session', id], { session: plan.session });
       setNotice(text(locale, 'queued'));
+      if (planned.prescription.kind === 'strength') {
+        startRest(planned.prescription.restSeconds);
+      }
     } finally {
       setBusy(false);
     }

@@ -349,7 +349,7 @@ function isBetterRecord(candidate: PersonalRecord, current: PersonalRecord): boo
 export type OfflineResolution =
   | { disposition: 'applied'; session: WorkoutSession }
   | { disposition: 'replay'; session: WorkoutSession }
-  | { disposition: 'conflict'; serverStatus: SessionStatus; command: 'log_set' };
+  | { disposition: 'conflict'; serverStatus: SessionStatus; command: 'log_set' | 'replace_set' };
 
 export function applyOfflineSet(server: WorkoutSession, set: WorkoutSet): OfflineResolution {
   if (server.status === 'completed' || server.status === 'abandoned') {
@@ -370,4 +370,26 @@ export function applyOfflineSet(server: WorkoutSession, set: WorkoutSet): Offlin
     return { disposition: 'conflict', serverStatus: server.status, command: 'log_set' };
   }
   return { disposition: 'applied', session: logSet(server, set) };
+}
+
+/** Offline edit of an already-logged set. Idempotent when payload matches server. */
+export function applyOfflineReplace(server: WorkoutSession, set: WorkoutSet): OfflineResolution {
+  if (server.status === 'completed' || server.status === 'abandoned') {
+    return { disposition: 'conflict', serverStatus: server.status, command: 'replace_set' };
+  }
+  if (server.status !== 'in_progress') {
+    return { disposition: 'conflict', serverStatus: server.status, command: 'replace_set' };
+  }
+  const existing = server.sets.find((item) => item.id === set.id);
+  if (existing === undefined) {
+    return { disposition: 'conflict', serverStatus: server.status, command: 'replace_set' };
+  }
+  const same =
+    existing.reps === set.reps &&
+    existing.loadGrams === set.loadGrams &&
+    existing.exerciseId === set.exerciseId;
+  if (same) {
+    return { disposition: 'replay', session: server };
+  }
+  return { disposition: 'applied', session: replaceSet(server, set) };
 }

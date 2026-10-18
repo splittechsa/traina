@@ -4,6 +4,7 @@ import {
   abandonWorkout,
   applyOfflineSet,
   completeWorkout,
+  applyOfflineReplace,
   logSet,
   replaceSet,
   pauseWorkout,
@@ -80,6 +81,18 @@ describe('workout sessions', () => {
     expect(edited.sets).toHaveLength(1);
     expect(edited.sets[0]).toEqual(expect.objectContaining({ id: set.id, reps: 6, loadGrams: 105_000, setIndex: 1 }));
     expect(() => replaceSet(active, { ...set, id: 'missing', reps: 6 })).toThrow(DomainError);
+  });
+
+  it('reconciles offline replaces as apply, replay, or conflict', () => {
+    const active = logSet(session(), set);
+    const applied = applyOfflineReplace(active, { ...set, reps: 6 });
+    expect(applied.disposition).toBe('applied');
+    if (applied.disposition === 'applied') {
+      expect(applied.session.sets[0]?.reps).toBe(6);
+    }
+    expect(applyOfflineReplace(active, set).disposition).toBe('replay');
+    const finished = completeWorkout(active, '2026-06-01T15:30:00.000Z').session;
+    expect(applyOfflineReplace(finished, { ...set, reps: 6 }).disposition).toBe('conflict');
   });
 
   it('derives personal records only from completed sessions', () => {
