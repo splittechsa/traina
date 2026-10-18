@@ -3745,48 +3745,47 @@ export async function answerCoach(
       lower.includes('state') ||
       message.includes('حالتي') ||
       message.includes('وضع');
+    const wantsProgress =
+      lower.includes('progress') ||
+      lower.includes('trend') ||
+      message.includes('تقدمي') ||
+      message.includes('وزني');
+    const wantsProgram =
+      lower.includes('program') ||
+      lower.includes('plan change') ||
+      lower.includes('applied') ||
+      message.includes('خطتي') ||
+      message.includes('البرنامج');
+    const wantsDraft =
+      lower.includes('draft') ||
+      lower.includes('propose') ||
+      message.includes('مسودة') ||
+      message.includes('اقترح');
     tool = wantsFeedback
       ? 'getHumanCoachFeedback'
       : wantsRecs
         ? 'getRecommendationStatus'
-        : wantsState
-          ? 'getMemberState'
-          : lower.includes('food') || message.includes('غداء')
-            ? 'getFoodDiary'
-            : 'getTodaysWorkout';
+        : wantsDraft
+          ? 'draftRecommendationProposal'
+          : wantsProgress
+            ? 'getProgressTrends'
+            : wantsProgram
+              ? 'getCurrentTrainingProgram'
+              : wantsState
+                ? 'getMemberState'
+                : lower.includes('food') || message.includes('غداء')
+                  ? 'getFoodDiary'
+                  : 'getTodaysWorkout';
     const execution = executeCoachTool({
       actor,
       tool,
-      modelArguments: {},
+      modelArguments: wantsDraft ? { category: 'training', summary: 'mock draft — not applied' } : {},
       trusted: {
         userId: actor.userId,
         profile: null,
         goals: snapshot.profile.goals,
-        programName: (await listMemberPrograms(db, actor.userId)).active?.name ?? null,
-        activeProgram: await (async () => {
-          const active = await loadActiveProgramVersion(db, actor.userId);
-          if (active === null) return null;
-          try {
-            const doc = parseProgramVersionDocument(
-              active.template ?? { templateId: active.templateId, days: [] },
-            );
-            return {
-              programId: active.programId,
-              version: active.version,
-              templateId: active.templateId,
-              adaptationKind: doc.adaptation?.kind ?? null,
-              sourceRecommendationId: doc.sourceRecommendationId ?? null,
-            };
-          } catch {
-            return {
-              programId: active.programId,
-              version: active.version,
-              templateId: active.templateId,
-              adaptationKind: null,
-              sourceRecommendationId: null,
-            };
-          }
-        })(),
+        programName: snapshot.programName,
+        activeProgram: snapshot.activeProgram,
         todayWorkout: snapshot.todayWorkout,
         upcomingWorkoutNames: [],
         recentCompletedSessionIds: [],
@@ -3810,6 +3809,27 @@ export async function answerCoach(
     } else if (tool === 'getRecommendationStatus') {
       const pending = snapshot.recommendations.filter((row) => row.status !== 'APPLIED');
       text = `Development mock. ${pending.length} recommendation(s) are guidance-only (not applied). Nutrition remains blocked by ENERGY_POLICY until scientific approval. This is not a production coach.`;
+    } else if (tool === 'draftRecommendationProposal') {
+      text =
+        'Development mock. Recommendation draft is draft_only (mayAutoApply=false). Human approval required before apply; AI cannot bypass safety. This is not a production coach.';
+    } else if (tool === 'getProgressTrends') {
+      const trend = memberState?.weightTrendGramsPerWeek ?? null;
+      text =
+        trend === null
+          ? `Development mock. Progress confidence=${memberState?.confidence ?? 'insufficient'}; weight trend unavailable (not invented). Completeness ${memberState?.dataCompletenessBps ?? 0} bps. This is not a production coach.`
+          : `Development mock. Weight trend ${trend} g/week from authorized MemberState (confidence=${memberState?.confidence ?? 'insufficient'}). This is not a production coach.`;
+    } else if (tool === 'getCurrentTrainingProgram') {
+      const program = snapshot.activeProgram;
+      text =
+        program === null
+          ? 'Development mock. No active program on file. I will not invent an applied adaptation. This is not a production coach.'
+          : program.adaptationKind === null
+            ? `Development mock. Active program ${program.programId} v${program.version} has no stored adaptationKind — do not claim a training change was applied. This is not a production coach.`
+            : `Development mock. Active program ${program.programId} v${program.version} reports adaptationKind=${program.adaptationKind}` +
+              (program.sourceRecommendationId
+                ? ` from recommendation ${program.sourceRecommendationId}.`
+                : '.') +
+              ' This is not a production coach.';
     } else if (tool === 'getMemberState') {
       text = `Development mock. MemberState confidence=${memberState?.confidence ?? 'none'}; meals=${memberState?.adherence.mealDaysLogged ?? 0}/${memberState?.adherence.windowDays ?? 0}. This is not a production coach.`;
     } else if (tool === 'getFoodDiary') {

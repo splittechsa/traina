@@ -732,6 +732,39 @@ describe('persisted product', () => {
     expect((hidden.json().messages as { body: string }[]).some((message) => message.body.includes('Lower strength'))).toBe(false);
   });
 
+  it('lets Yazan explain progress, drafts, and applied program changes without inventing facts', async () => {
+    const token = await tokenFor(`yazan-eval-${randomUUID()}@sahhti.test`);
+    const progress = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/messages',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { message: 'How is my progress trend?' },
+    });
+    expect(progress.statusCode).toBe(200);
+    expect(progress.json().tool).toBe('getProgressTrends');
+    expect(String(progress.json().text).toLowerCase()).toMatch(/unavailable|not invented|g\/week|trend/);
+
+    const draft = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/messages',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { message: 'Please draft a training propose change' },
+    });
+    expect(draft.statusCode).toBe(200);
+    expect(draft.json().tool).toBe('draftRecommendationProposal');
+    expect(String(draft.json().text)).toMatch(/draft_only|mayAutoApply=false|Human approval/i);
+
+    const program = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/messages',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { message: 'Was my program applied / plan change saved?' },
+    });
+    expect(program.statusCode).toBe(200);
+    expect(program.json().tool).toBe('getCurrentTrainingProgram');
+    expect(String(program.json().text).toLowerCase()).toMatch(/no active program|adaptationkind|will not invent/);
+  });
+
   it('does not show another member a private community post', async () => {
     const me = await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${secondToken}` } });
     await database.query(

@@ -113,4 +113,119 @@ describe('coach provider', () => {
     });
     expect(reply.text).toBe('تمارينك محفوظة');
   });
+
+  it('refuses write tools without saving and explains confirmation is required', async () => {
+    const fetchImpl = (async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{
+            message: {
+              content: '',
+              tool_calls: [{ id: 'w1', function: { name: 'proposeNutritionAdjustment' } }],
+            },
+          }],
+          usage: { prompt_tokens: 5, completion_tokens: 1 },
+        }),
+        { status: 200 },
+      )) as typeof fetch;
+    const reply = await completeModelReply({
+      runtime: { name: 'openai_compatible', apiKey: 'secret-key', baseUrl: 'https://example.test/v1', model: 'sahhti-model' },
+      localeHint: 'en',
+      history: [{ role: 'member', body: 'Cut my calories by 500' }],
+      context: { goals: ['fat_loss'] },
+      fetchImpl,
+    });
+    expect(reply.tool).toBe('proposeNutritionAdjustment');
+    expect(reply.text.toLowerCase()).toContain('confirmation');
+    expect(reply.text.toLowerCase()).toContain('nothing was saved');
+  });
+
+  it('aggregates token cost across the tool-calling round trip', async () => {
+    let round = 0;
+    const fetchImpl = (async () => {
+      round += 1;
+      if (round === 1) {
+        return new Response(
+          JSON.stringify({
+            choices: [{
+              message: {
+                content: '',
+                tool_calls: [{ id: 'c1', function: { name: 'getProgressTrends' } }],
+              },
+            }],
+            usage: { prompt_tokens: 11, completion_tokens: 3 },
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'Weight trend is -350 g/week from MemberState.' } }],
+          usage: { prompt_tokens: 17, completion_tokens: 9 },
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    const reply = await completeModelReply({
+      runtime: { name: 'openai_compatible', apiKey: 'secret-key', baseUrl: 'https://example.test/v1', model: 'sahhti-model' },
+      localeHint: 'en',
+      history: [{ role: 'member', body: 'How is my progress?' }],
+      context: { goals: ['strength'] },
+      resolveTool: () => ({
+        inventsTrends: false,
+        weightTrendGramsPerWeek: -350,
+        confidence: 'moderate',
+      }),
+      fetchImpl,
+    });
+    expect(reply.tool).toBe('getProgressTrends');
+    expect(reply.promptTokens).toBe(28);
+    expect(reply.completionTokens).toBe(12);
+    expect(reply.text).toContain('-350');
+  });
+
+  it('recovers from an empty model completion with MODEL_EMPTY', async () => {
+    const fetchImpl = (async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '   ' } }],
+          usage: { prompt_tokens: 2, completion_tokens: 0 },
+        }),
+        { status: 200 },
+      )) as typeof fetch;
+    await expect(
+      completeModelReply({
+        runtime: { name: 'openai_compatible', apiKey: 'secret-key', baseUrl: 'https://example.test/v1', model: 'sahhti-model' },
+        localeHint: 'en',
+        history: [{ role: 'member', body: 'hi' }],
+        context: {},
+        fetchImpl,
+      }),
+    ).rejects.toThrow('MODEL_EMPTY');
+  });
+
+  it('puts ENERGY_POLICY and human-approval rules in the system prompt', async () => {
+    let body = '';
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      body = String(init?.body);
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'ok' } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    await completeModelReply({
+      runtime: { name: 'openai_compatible', apiKey: 'secret-key', baseUrl: 'https://example.test/v1', model: 'sahhti-model' },
+      localeHint: 'en',
+      history: [{ role: 'member', body: 'change my macros' }],
+      context: { goals: ['fat_loss'] },
+      fetchImpl,
+    });
+    expect(body).toContain('ENERGY_POLICY');
+    expect(body).toContain('draft_only');
+    expect(body).toContain('human approval');
+    expect(body).toContain('getProgressTrends');
+  });
 });
