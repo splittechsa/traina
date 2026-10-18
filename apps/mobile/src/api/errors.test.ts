@@ -10,5 +10,8 @@ describe('api errors', () => {
     expect(messageFor('INVALID_CODE', 'ar', 'Request failed')).toContain('الرمز');
     expect(messageFor('CODE_EXPIRED', 'en', 'Request failed')).toContain('expired');
     expect(messageFor('UNKNOWN', 'en', 'Request failed')).toBe('Request failed');
+    expect(messageFor('DAILY_QUOTA', 'en', 'Request failed')).toContain('turn limit');
+    expect(messageFor('DAILY_QUOTA', 'ar', 'Request failed')).toContain('حد محادثات');
   });
 });
+

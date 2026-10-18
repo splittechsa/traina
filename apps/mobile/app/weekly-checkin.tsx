@@ -155,7 +155,7 @@ export default function WeeklyCheckinScreen() {
 
   const submit = useMutation({
     mutationFn: () =>
-      apiRequest('/v1/coach/weekly-brief', {
+      apiRequest<{ escalateToHuman: boolean; status: string }>('/v1/coach/weekly-brief', {
         method: 'POST',
         body: {
           weekOf,
@@ -276,7 +276,7 @@ export default function WeeklyCheckinScreen() {
           )
         }
       >
-        <AppHeader title={text(locale, 'weeklyCheckin')} subtitle={weekOf} />
+        <AppHeader title={text(locale, 'weeklyCheckin')} subtitle={weekOf} showBack />
 
         {preview.isPending || status.isPending ? <LoadingSkeleton /> : null}
         {preview.isError ? <EmptyState title={text(locale, 'error')} body={text(locale, 'error')} /> : null}
@@ -491,10 +491,16 @@ export default function WeeklyCheckinScreen() {
           <View style={{ gap: spacing[3] }}>
             <SurfaceCard tone="raised">
               <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
-                {text(locale, 'weeklySubmitted')}
+                {submit.data?.escalateToHuman === false
+                  ? text(locale, 'weeklySavedYazan')
+                  : text(locale, 'weeklySubmitted')}
               </Text>
               <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 22 }}>
-                {status.data?.hasAssignedCoach ? text(locale, 'weeklySubmittedBody') : text(locale, 'weeklyNoCoachBody')}
+                {submit.data?.escalateToHuman === false
+                  ? text(locale, 'weeklySavedYazanBody')
+                  : status.data?.hasAssignedCoach
+                    ? text(locale, 'weeklySubmittedBody')
+                    : text(locale, 'weeklyNoCoachBody')}
               </Text>
               {status.data?.review !== null && status.data?.review !== undefined ? (
                 <Text style={{ color: theme.accent, fontFamily: fontFamily.medium, marginTop: 10 }}>

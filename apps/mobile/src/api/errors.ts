@@ -45,6 +45,19 @@ const messages: Record<string, Record<Locale, string>> = {
     ar: 'محاولات كثيرة. انتظر ثم أعد المحاولة.',
     en: 'Too many attempts. Wait and try again.',
   },
+  DAILY_QUOTA: {
+    ar: 'وصلت حد محادثات يزن اليوم حسب خطتك. حاول غداً أو راجع الاشتراك.',
+    en: 'You reached today’s Yazan turn limit for your plan. Try tomorrow or check membership.',
+  },
+  MODEL_PROVIDER_NOT_CONFIGURED: {
+    ar: 'المدرب غير متصل بمزوّد نموذج حالياً.',
+    en: 'The coach is not connected to a model provider right now.',
+  },
+  MODEL_REQUEST_FAILED: {
+    ar: 'تعذر إكمال رد يزن. أعد المحاولة بعد لحظات.',
+    en: 'Yazan could not finish that reply. Try again in a moment.',
+  },
+
   VALIDATION: {
     ar: 'البيانات المدخلة غير مكتملة أو غير صالحة.',
     en: 'The entered details are incomplete or invalid.',

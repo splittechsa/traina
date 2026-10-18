@@ -64,7 +64,7 @@ export default function WeightScreen() {
   return (
     <Screen>
       <ScreenBody>
-        <AppHeader title={text(locale, 'weightTracking')} subtitle={text(locale, 'units')} />
+        <AppHeader title={text(locale, 'weightTracking')} subtitle={text(locale, 'units')} showBack />
         {latest !== null ? (
           <View style={{ marginBottom: 16 }}>
             <GlowCard>

@@ -682,7 +682,9 @@ describe('persisted product', () => {
       payload: { weekOf, energy: 3, sleep: 4, stress: 2, hunger: 4, notes: 'اختبار' },
     });
     expect(brief.statusCode).toBe(200);
-    expect(brief.json().escalateToHuman).toBe(true);
+    // Free plan + no coach assignment: summary is saved for Yazan, not the human inbox.
+    expect(brief.json().escalateToHuman).toBe(false);
+    expect(brief.json().status).toBe('saved_for_yazan');
     expect(brief.json().packet.briefAr).toContain('مدرب بشري');
     const latest = await app.inject({
       method: 'GET',
@@ -690,7 +692,7 @@ describe('persisted product', () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(latest.statusCode).toBe(200);
-    expect(latest.json().brief.status).toBe('queued_for_human');
+    expect(latest.json().brief.status).toBe('saved_for_yazan');
   });
 
   it('answers the coach from the signed-in member only and labels the mock', async () => {
@@ -1298,5 +1300,66 @@ describe('persisted product', () => {
       headers: { authorization: `Bearer ${other}` },
     });
     expect(deniedCoachState.statusCode).toBe(403);
+  });
+
+  it('projects free entitlements from the server without client unlock flags', async () => {
+    const token = await tokenFor(`entitlements-${randomUUID()}@sahhti.test`);
+    const denied = await app.inject({ method: 'GET', url: '/v1/member/entitlements' });
+    expect(denied.statusCode).toBe(401);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/member/entitlements',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      planCode: string;
+      capabilities: string[];
+      nutritionAdaptationsBlocked: boolean;
+      purchasesEnabled: boolean;
+      limits: { yazanTurnsPerDay: number; humanReviewsPerMonth: number };
+    };
+    expect(body.planCode).toBe('free');
+    expect(body.purchasesEnabled).toBe(false);
+    expect(body.nutritionAdaptationsBlocked).toBe(true);
+    expect(body.capabilities).toContain('tracking.free');
+    expect(body.capabilities).not.toContain('human_coach.assignment');
+    expect(body.capabilities).not.toContain('nutrition.paid_adaptations');
+    expect(body.limits.humanReviewsPerMonth).toBe(0);
+    expect(body.limits.yazanTurnsPerDay).toBeGreaterThan(0);
+  });
+
+  it('keeps free weekly briefs out of the human inbox without coach entitlement or assignment', async () => {
+    const token = await tokenFor(`weekly-free-${randomUUID()}@sahhti.test`);
+    const weekOf = '2026-10-12';
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/v1/coach/weekly-brief',
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        weekOf,
+        energy: 3,
+        sleep: 3,
+        stress: 2,
+        hunger: 3,
+        effort: 3,
+        recovery: 3,
+        satisfaction: 3,
+        difficulties: '',
+        questionForCoach: 'Is my plan ok?',
+      },
+    });
+    expect(submit.statusCode).toBe(200);
+    const body = submit.json() as {
+      escalateToHuman: boolean;
+      status: string;
+      entitlementGate: string | null;
+      review: { status: string };
+    };
+    expect(body.escalateToHuman).toBe(false);
+    expect(body.status).toBe('saved_for_yazan');
+    expect(body.entitlementGate).toBe('human_coach.weekly_review');
+    expect(body.review.status).not.toBe('QUEUED_FOR_HUMAN');
   });
 });

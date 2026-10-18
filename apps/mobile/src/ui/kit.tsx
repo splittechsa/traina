@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { SymbolView } from 'expo-symbols';
+import { router } from 'expo-router';
 import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';
 import { motion, useMotion } from '../theme/motion';
 import { useTheme } from '../theme/ThemeProvider';
@@ -26,25 +27,48 @@ type SettingsIcon = ComponentProps<typeof SymbolView>['name'];
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
+export function StackBackControl({ label }: { label?: string } = {}) {
+  const theme = useTheme();
+  const { locale } = useLocale();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label ?? text(locale, 'back')}
+      onPress={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace('/(tabs)/home');
+      }}
+      hitSlop={12}
+      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>
+        {label ?? text(locale, 'back')}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function AppHeader({
   title,
   subtitle,
   trailing,
   large = false,
   branded = true,
+  showBack = false,
 }: {
   title: string;
   subtitle?: string;
   trailing?: ReactNode;
   large?: boolean;
   branded?: boolean;
+  showBack?: boolean;
 }) {
   const theme = useTheme();
   const { locale } = useLocale();
   const size = large ? typeScale.hero : typeScale.title;
   return (
     <View style={styles.header}>
-      {branded ? <TrainaMark size={large ? 42 : 34} /> : null}
+      {showBack ? <StackBackControl /> : branded ? <TrainaMark size={large ? 42 : 34} /> : null}
       <View style={{ flex: 1 }}>
         <Text
           style={[styles.headerTitle, { color: theme.text, fontFamily: fontFamily.bold, fontSize: size, lineHeight: size * 1.22, textAlign: locale === 'ar' ? 'right' : 'left' }]}

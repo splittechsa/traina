@@ -87,6 +87,12 @@ import {
   type RawMemberEvent,
   type WorkoutSession,
   type WorkoutSet,
+  hasCapability,
+  initialSubscription,
+  projectEntitlements,
+  type EntitlementProjection,
+  type StoreChannel,
+  type SubscriptionStatus,
 } from '@sahhti/domain';
 import { completeModelReply, streamModelReply, type CoachRuntime } from '../coach/provider.js';
 import type { Database } from '../db/database.js';
@@ -1861,11 +1867,22 @@ export async function prepareWeeklyReviewForMember(
      VALUES ($1, $2, NULL, $3, 'packet_prepared')`,
     [reviewId, actor.userId, statusAfter ?? 'AUTO_SUMMARY_READY'],
   );
-  if (statusAfter === 'AUTO_SUMMARY_READY' || statusAfter === 'REOPENED') {
+  // Queue for a human only when the member has Coach-plan entitlement OR an active
+  // coach assignment (pilot path). Free members without assignment keep a Yazan-ready
+  // packet and are not placed in the human inbox.
+  const memberEntitlements = await entitlementsFor(db, { userId: memberUserId, roles: ['member'], gymOrganizationIds: [] });
+  const mayQueueHuman =
+    hasCapability(memberEntitlements, 'human_coach.weekly_review') || coachUserId !== null;
+  if ((statusAfter === 'AUTO_SUMMARY_READY' || statusAfter === 'REOPENED') && mayQueueHuman) {
     const queued = await persistWeeklyReviewTransition(db, actor, reviewId, 'QUEUED_FOR_HUMAN', 'queued_after_summary');
-    return { review: queued, packet };
+    return { review: queued, packet, queuedForHuman: true as const };
   }
-  return { review: await loadWeeklyReview(db, reviewId), packet };
+  return {
+    review: await loadWeeklyReview(db, reviewId),
+    packet,
+    queuedForHuman: false as const,
+    entitlementGate: mayQueueHuman ? null : 'human_coach.weekly_review',
+  };
 }
 
 export async function listWeeklyReviewsForCoach(db: Database, actor: Actor) {
@@ -2093,6 +2110,72 @@ export async function sendCoachFeedback(
   return { persisted: true, feedback };
 }
 
+/**
+ * P3-ENT-01 — Server-authoritative capability projection for the signed-in member.
+ * Reads the latest subscriptions row when present; otherwise free defaults.
+ * Never unlocks paid capabilities from client flags. Nutrition adaptations stay blocked.
+ */
+export async function entitlementsFor(
+  db: Database,
+  actor: Actor,
+): Promise<EntitlementProjection & { purchasesEnabled: false; source: 'subscriptions' | 'default_free' }> {
+  const rows = await db.query<{
+    status: string;
+    store: string | null;
+    current_period_end: string | null;
+    cancel_at_period_end: boolean;
+    last_event_at: string | null;
+    product_code: string | null;
+  }>(
+    `SELECT s.status,
+            s.store,
+            s.current_period_end::text AS current_period_end,
+            s.cancel_at_period_end,
+            s.last_event_at::text AS last_event_at,
+            p.code AS product_code
+     FROM subscriptions s
+     LEFT JOIN products p ON p.id = s.product_id
+     WHERE s.user_id = $1
+     ORDER BY s.updated_at DESC NULLS LAST
+     LIMIT 1`,
+    [actor.userId],
+  ).catch(() => ({ rows: [] as {
+    status: string;
+    store: string | null;
+    current_period_end: string | null;
+    cancel_at_period_end: boolean;
+    last_event_at: string | null;
+    product_code: string | null;
+  }[] }));
+
+  const row = rows.rows[0];
+  if (row === undefined) {
+    const projection = projectEntitlements({ subscription: initialSubscription(), planCode: 'free' });
+    return { ...projection, purchasesEnabled: false, source: 'default_free' };
+  }
+
+  const status = row.status as SubscriptionStatus;
+  const productCode = row.product_code;
+  const planCode: 'free' | 'traina_ai' | 'traina_coach' =
+    productCode?.includes('coach') ? 'traina_coach'
+      : productCode?.includes('ai') ? 'traina_ai'
+        : 'free';
+
+  const projection = projectEntitlements({
+    subscription: {
+      status,
+      productId: productCode,
+      store: (row.store as StoreChannel | null) ?? null,
+      currentPeriodEnd: row.current_period_end === null ? null : iso(row.current_period_end) ?? row.current_period_end,
+      cancelAtPeriodEnd: row.cancel_at_period_end,
+      lastEventAt: row.last_event_at === null ? null : iso(row.last_event_at) ?? row.last_event_at,
+      processedEventIds: [],
+    },
+    planCode,
+  });
+  return { ...projection, purchasesEnabled: false, source: 'subscriptions' };
+}
+
 export async function listMemberNotifications(db: Database, actor: Actor) {
   const rows = await db.query<{
     id: string;
@@ -2314,7 +2397,7 @@ export async function memberWeeklyHumanReviewStatus(db: Database, actor: Actor) 
     coachAvailable: assignment.rows[0] !== undefined,
     noCoachMessage:
       assignment.rows[0] === undefined
-        ? 'No human coach is assigned yet. Your weekly file stays queued until an authorized coach is assigned.'
+        ? 'No human coach is assigned yet. Without Traina Coach entitlement or an assignment, weekly summaries stay with Yazan only.'
         : null,
     review:
       row === undefined
@@ -3576,13 +3659,21 @@ async function conversationFor(db: Database, userId: string): Promise<string> {
   return id;
 }
 
-async function assertCoachQuota(db: Database, userId: string): Promise<void> {
-  const used = await db.query<{ count: string }>(
+async function assertCoachQuota(db: Database, actor: Actor): Promise<void> {
+  const hourly = await db.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM ai_usage WHERE user_id = $1 AND created_at > now() - interval '1 hour'`,
-    [userId],
+    [actor.userId],
   );
-  if (Number(used.rows[0]?.count ?? 0) >= 20) {
+  if (Number(hourly.rows[0]?.count ?? 0) >= 20) {
     throw new ApiError(429, 'RATE_LIMITED', 'Coach rate limit reached for this hour');
+  }
+  const entitlements = await entitlementsFor(db, actor);
+  const daily = await db.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM ai_usage WHERE user_id = $1 AND created_at > date_trunc('day', now())`,
+    [actor.userId],
+  );
+  if (Number(daily.rows[0]?.count ?? 0) >= entitlements.limits.yazanTurnsPerDay) {
+    throw new ApiError(429, 'DAILY_QUOTA', 'Yazan daily turn limit reached for this plan');
   }
 }
 
@@ -3596,7 +3687,7 @@ export async function answerCoach(
   if (runtime.name === 'unconfigured') {
     throw new ApiError(503, 'MODEL_PROVIDER_NOT_CONFIGURED', 'Set SAHHTI_COACH_PROVIDER, SAHHTI_COACH_API_KEY, SAHHTI_COACH_BASE_URL, and SAHHTI_COACH_MODEL');
   }
-  await assertCoachQuota(db, actor.userId);
+  await assertCoachQuota(db, actor);
   const snapshot = await coachSnapshot(db, actor);
   const memberState = snapshot.memberState;
   const localeHint = /[\u0600-\u06FF]/.test(message) ? 'ar' as const : 'en' as const;
@@ -3919,32 +4010,35 @@ export async function submitWeeklyCoachBrief(
   } catch (error) {
     throw asApi(error);
   }
+  const prepared = await prepareWeeklyReviewForMember(db, actor, actor.userId, weekStart);
+  const escalateToHuman = prepared.queuedForHuman === true;
+  const briefStatus = escalateToHuman ? 'queued_for_human' : 'saved_for_yazan';
   // Idempotent per member+week — updates the same brief/review rather than creating duplicates.
   const saved = await db.query<{ id: string }>(
     `INSERT INTO coach_weekly_briefs (user_id, week_of, survey, packet, status)
-     VALUES ($1, $2, $3::jsonb, $4::jsonb, 'queued_for_human')
+     VALUES ($1, $2, $3::jsonb, $4::jsonb, $5)
      ON CONFLICT (user_id, week_of) DO UPDATE
-       SET survey = EXCLUDED.survey, packet = EXCLUDED.packet, status = 'queued_for_human', created_at = now()
+       SET survey = EXCLUDED.survey, packet = EXCLUDED.packet, status = EXCLUDED.status, created_at = now()
      RETURNING id`,
-    [actor.userId, weekStart, JSON.stringify(packet.survey), JSON.stringify(packet)],
+    [actor.userId, weekStart, JSON.stringify(packet.survey), JSON.stringify(packet), briefStatus],
   );
   const conversationId = await conversationFor(db, actor.userId);
-  const notice =
-    packet.briefAr.slice(0, 400) +
-    '\n\n— يزن: رفعت ملف الأسبوع لمدرب بشري للمراجعة.';
+  const notice = escalateToHuman
+    ? packet.briefAr.slice(0, 400) + '\n\n— يزن: رفعت ملف الأسبوع لمدرب بشري للمراجعة.'
+    : packet.briefAr.slice(0, 400) +
+      '\n\n— يزن: حفظت ملخص الأسبوع. المراجعة البشرية تتطلب خطة كوتش أو تعيين مدرب.';
   await db.query(`INSERT INTO coach_messages (conversation_id, role, body) VALUES ($1, 'assistant', $2)`, [
     conversationId,
     notice,
   ]);
-  // Bridge into the human-ops weekly_review_queue (authorized packet + status machine).
-  const queued = await prepareWeeklyReviewForMember(db, actor, actor.userId, weekStart);
   return {
     id: String(saved.rows[0]?.id),
     persisted: true,
-    escalateToHuman: true as const,
-    status: 'queued_for_human' as const,
+    escalateToHuman,
+    status: briefStatus,
     packet,
-    review: queued.review,
+    review: prepared.review,
+    entitlementGate: prepared.entitlementGate ?? null,
   };
 }
 

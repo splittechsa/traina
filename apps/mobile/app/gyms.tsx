@@ -22,7 +22,7 @@ export default function GymsScreen() {
 
   return (
     <Screen>
-      <AppHeader title={text(locale, 'gyms')} subtitle={text(locale, 'referral')} />
+      <AppHeader title={text(locale, 'gyms')} subtitle={text(locale, 'referral')} showBack />
       <Field label={text(locale, 'referral')} value={code} onChangeText={setCode} />
       {notice.length > 0 ? <Body>{notice}</Body> : null}
       <Button label={text(locale, 'save')} onPress={() => void submit()} />
