@@ -5,6 +5,7 @@ import {
   applyOfflineSet,
   completeWorkout,
   logSet,
+  replaceSet,
   pauseWorkout,
   personalRecordsFromSessions,
   resumeWorkout,
@@ -71,6 +72,14 @@ describe('workout sessions', () => {
     expect(finished.summary.setCount).toBe(1);
     expect(finished.summary.totalReps).toBe(5);
     expect(finished.summary.durationSeconds).toBe(13 * 60);
+  });
+
+  it('edits a previously logged set without duplicating it', () => {
+    const active = logSet(session(), set);
+    const edited = replaceSet(active, { ...set, reps: 6, loadGrams: 105_000 });
+    expect(edited.sets).toHaveLength(1);
+    expect(edited.sets[0]).toEqual(expect.objectContaining({ id: set.id, reps: 6, loadGrams: 105_000, setIndex: 1 }));
+    expect(() => replaceSet(active, { ...set, id: 'missing', reps: 6 })).toThrow(DomainError);
   });
 
   it('derives personal records only from completed sessions', () => {

@@ -2,8 +2,8 @@
 
 **Updated:** 2026-10-18  
 **Master:** includes #43–#45  
-**Open UX reconstruction:** `ux/mobile-rtl-nutrition-workout` — RTL header, meal slots, workout set table, plan hierarchy  
-**Device evidence:** physical iPhone/Android capture still **M** (do not fabricate)  
+**Open UX reconstruction:** `ux/mobile-rtl-nutrition-workout` — RTL header, meal slots, workout set table/edit, custom meal builder, plan hierarchy  
+**Device evidence:** physical iPhone/Android capture still **M** — see `docs/ops/PR49_DEVICE_ACCEPTANCE.md` (**FAIL** until real captures)  
 
 Legend: **V** verified · **I** implemented · **P** polish · **W** partial · **M** missing · **B** blocked · **U** unsafe to claim production-ready
 
@@ -20,14 +20,15 @@ Legend: **V** verified · **I** implemented · **P** polish · **W** partial · 
 | `(auth)/recover` / `reset` | **I** | | stack | |
 | `(auth)/diagnostics` | **W** | | stack | Dev-oriented |
 | `(onboarding)/index` | **W** | | | Re-onboarding / safety screening incomplete |
-| `(tabs)/home` | **I** | skeleton / offline / error | tabs | Coaching signal cards (feedback, recs, notifications) |
+| `(tabs)/home` | **I** | skeleton / offline / error | tabs | Extra tab clearance; device clip QA **M** |
 | `(tabs)/training` | **I** | loading / error | tabs | Adaptation overlay via program versions |
-| `(tabs)/nutrition` | **I** | meal sections + ready library | tabs | ENERGY_POLICY blocks paid adaptations (**B**) |
+| `(tabs)/nutrition` | **I** | meal sections + ready library | tabs | Links to custom meal builder; ENERGY_POLICY **B** |
 | `(tabs)/coach` (Yazan) | **W** | empty / provider / timeout | tabs | Composer/line-height polish |
 | `(tabs)/progress` | **W** | | tabs | Trend explanations thin |
 | `(tabs)/community` | **W** | empty honest | tabs | |
-| `workout/[id]` | **I** | set table + rest timer | back | Auto offline sync; no sync button |
-| `weekly-checkin` | **I** | RTL header + coach empty states | back | Honest Yazan-only vs human queue |
+| `workout/[id]` | **I** | set table + rest timer + edit | back | Auto offline sync; PUT replace set; no sync button |
+| `weekly-checkin` | **I** | RTL header + coach empty states | back | Localized no-coach copy; device **M** |
+| `meal-builder` | **I** | | back | Create/save/edit/reuse custom meals from ingredients |
 | `food-log` | **I** | | back | |
 | `exercises` | **I** | | close | |
 | `macros` | **I** | | back | |
@@ -46,6 +47,21 @@ Legend: **V** verified · **I** implemented · **P** polish · **W** partial · 
 
 ---
 
+## A2. PR #49 user-journey gates (device)
+
+| Journey | Code | Device | Decision |
+| --- | --- | --- | --- |
+| Home | **I** | **M** | **FAIL** until real-device shots |
+| Training / program | **I** | **M** | **FAIL** |
+| Active workout + rest | **I** | **M** | **FAIL** |
+| Set log / edit / pause / offline | **I**/**W** (offline edit **M**) | **M** | **FAIL** |
+| Nutrition + ready meals | **I** | **M** | **FAIL** |
+| Custom meal workflow | **I** | **M** | **FAIL** |
+| Yazan | **W** | **M** | **FAIL** |
+| Weekly check-in | **I** | **M** | **FAIL** |
+
+---
+
 ## B. Backend / services
 
 | Service | Status | Notes |
@@ -53,6 +69,8 @@ Legend: **V** verified · **I** implemented · **P** polish · **W** partial · 
 | Auth sessions | **I** | Register/verify/login/refresh/logout/delete |
 | Member state + recommendations | **I** | Lifecycle + generate |
 | Training adaptation apply | **V** (API) | PR #43 merged; IDOR/self-approve fixed; device UX still open |
+| Training set replace | **I** | `PUT /v1/training/sessions/:id/sets/:setId` |
+| Custom meals | **I** | Migration `0029`; list/create/update; portion `1 serving` |
 | Nutrition program mutate | **B** | ENERGY_POLICY |
 | Yazan `/v1/coach/messages` | **I**/**W** | Timeouts + daily quota + authorized tool resolver; eval suite still **M** |
 | Weekly brief + human queue | **I** | Entitlement/assignment gate |
@@ -96,7 +114,7 @@ Legend: **V** verified · **I** implemented · **P** polish · **W** partial · 
 | Mark (SVG path) | **I** | `TrainaMark` + `apps/www/brand/traina-mark.svg` |
 | App icon / splash pack | **W** | New generated icon staged; Expo splash config incomplete |
 | Component library | **W** | kit exists; not fully systematized |
-| RTL / a11y | **W** | Partial; needs device audit |
+| RTL / a11y | **W** | Code improved; device audit **M** |
 
 ---
 
@@ -107,7 +125,7 @@ Legend: **V** verified · **I** implemented · **P** polish · **W** partial · 
 | P0-PRIV PDPL counsel | **B** |
 | ENERGY_POLICY SME | **B** |
 | P3-APPLE-POLICY | **B** |
-| Physical iPhone QA (P2-HUM-09) | **M** |
+| Physical iPhone QA (P2-HUM-09) | **M** / **FAIL** for PR #49 acceptance |
 | Billing sandbox + webhooks | **M** |
 | FINAL_PRODUCT_READINESS_REPORT | **M** (not until evidence exists) |
 
@@ -119,3 +137,4 @@ Legend: **V** verified · **I** implemented · **P** polish · **W** partial · 
 2. Do not unlock paid nutrition or claim PDPL compliance.  
 3. Prefer focused PRs; preserve Neon forward migrations and backup branch.  
 4. Screenshots and device claims require real capture — never fabricated.  
+5. Do not claim the reconstructed mobile experience is complete until demonstrated on real devices.  

@@ -225,6 +225,29 @@ export function logSet(session: WorkoutSession, set: WorkoutSet): WorkoutSession
   return { ...session, sets: [...session.sets, set] };
 }
 
+/** Replace reps/load on an already-logged set. Keeps setIndex and exerciseId from the original row. */
+export function replaceSet(session: WorkoutSession, set: WorkoutSet): WorkoutSession {
+  if (session.status !== 'in_progress') {
+    throw new DomainError('INVALID_SESSION_STATE', 'Sets can be edited only while the workout is in progress');
+  }
+  assertSet(set);
+  const index = session.sets.findIndex((existing) => existing.id === set.id);
+  if (index < 0) {
+    throw new DomainError('SET_NOT_FOUND', 'That set is not on this session');
+  }
+  const current = session.sets[index]!;
+  if (current.exerciseId !== set.exerciseId) {
+    throw new DomainError('INVALID_SET', 'Cannot move a logged set to a different exercise');
+  }
+  const next = [...session.sets];
+  next[index] = {
+    ...set,
+    setIndex: current.setIndex,
+    exerciseId: current.exerciseId,
+  };
+  return { ...session, sets: next };
+}
+
 function pausedSeconds(session: Pick<WorkoutSession, 'pauses'>, endedAt: string): number {
   let paused = 0;
   for (const pause of session.pauses) {

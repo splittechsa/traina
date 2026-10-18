@@ -331,7 +331,14 @@ export default function NutritionScreen() {
           </SurfaceCard>
         ) : null}
 
-        <View style={{ flexDirection: 'row', gap: spacing[2], marginBottom: spacing[4] }}>
+        <View style={{ flexDirection: 'row', gap: spacing[2], marginBottom: spacing[3] }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: '/meal-builder', params: { day, mealSlot: manualSlot } })}
+            style={{ flex: 1, minHeight: 48, borderRadius: radius.md, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 }}
+          >
+            <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.bold }}>{text(locale, 'customMealBuilder')}</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             onPress={() => { setManualSlot('lunch'); setError(''); setManualOpen(true); }}

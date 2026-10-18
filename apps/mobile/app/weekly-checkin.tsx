@@ -247,26 +247,30 @@ export default function WeeklyCheckinScreen() {
             <View style={{ gap: 10, paddingHorizontal: spacing[4], paddingTop: spacing[2] }}>
               {errorMessage ? <Text style={{ color: theme.danger, fontFamily: fontFamily.medium }}>{errorMessage}</Text> : null}
               <View style={{ flexDirection: 'row', gap: 10 }}>
-                {step > 0 ? (
-                  <Button label={text(locale, 'back')} variant="secondary" onPress={() => setStep((step - 1) as 0 | 1 | 2)} />
-                ) : (
-                  <Button label={text(locale, 'back')} variant="secondary" onPress={() => router.back()} />
-                )}
-                {step < 2 ? (
-                  <Button label={text(locale, 'continue')} onPress={() => setStep((step + 1) as 1 | 2)} />
-                ) : (
-                  <Button
-                    label={text(locale, 'weeklySubmit')}
-                    onPress={() => {
-                      if (preview.data?.consentStatus !== 'granted') {
-                        grantConsent.mutate(undefined, { onSuccess: () => submit.mutate() });
-                      } else {
-                        submit.mutate();
-                      }
-                    }}
-                    disabled={submit.isPending || grantConsent.isPending}
-                  />
-                )}
+                <View style={{ flex: 1 }}>
+                  {step > 0 ? (
+                    <Button label={text(locale, 'back')} variant="secondary" onPress={() => setStep((step - 1) as 0 | 1 | 2)} />
+                  ) : (
+                    <Button label={text(locale, 'back')} variant="secondary" onPress={() => router.back()} />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  {step < 2 ? (
+                    <Button label={text(locale, 'continue')} onPress={() => setStep((step + 1) as 1 | 2)} />
+                  ) : (
+                    <Button
+                      label={text(locale, 'weeklySubmit')}
+                      onPress={() => {
+                        if (preview.data?.consentStatus !== 'granted') {
+                          grantConsent.mutate(undefined, { onSuccess: () => submit.mutate() });
+                        } else {
+                          submit.mutate();
+                        }
+                      }}
+                      disabled={submit.isPending || grantConsent.isPending}
+                    />
+                  )}
+                </View>
               </View>
             </View>
           ) : (
@@ -288,7 +292,7 @@ export default function WeeklyCheckinScreen() {
         {!status.isPending && status.data?.hasAssignedCoach === false ? (
           <EmptyState
             title={text(locale, 'weeklyNoCoachTitle')}
-            body={status.data.noCoachMessage ?? text(locale, 'weeklyNoCoachAssigned')}
+            body={text(locale, 'weeklyNoCoachAssigned')}
           />
         ) : null}
 
@@ -317,18 +321,18 @@ export default function WeeklyCheckinScreen() {
         {step === 0 && packet !== undefined ? (
           <View style={{ gap: spacing[3] }}>
             <SurfaceCard>
-              <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
+              <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8, textAlign: isAr ? 'right' : 'left', writingDirection: isAr ? 'rtl' : 'ltr' }}>
                 {text(locale, 'weeklySummaryTitle')}
               </Text>
-              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 22 }}>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 22, textAlign: isAr ? 'right' : 'left', writingDirection: isAr ? 'rtl' : 'ltr' }}>
                 {isAr
                   ? `وجبات مسجّلة ${packet.adherence.mealDaysLogged} · ماء ${packet.adherence.waterDaysLogged} · حصص مكتملة ${packet.adherence.sessionsCompleted}`
                   : `Meals logged ${packet.adherence.mealDaysLogged} · water ${packet.adherence.waterDaysLogged} · sessions completed ${packet.adherence.sessionsCompleted}`}
               </Text>
-              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 8, lineHeight: 20 }}>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 8, lineHeight: 20, textAlign: isAr ? 'right' : 'left', writingDirection: isAr ? 'rtl' : 'ltr' }}>
                 {text(locale, 'weeklyMissingHint')}
               </Text>
-              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 8 }}>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 8, textAlign: isAr ? 'right' : 'left', writingDirection: isAr ? 'rtl' : 'ltr' }}>
                 {packet.weightTrendGramsPerWeek === null
                   ? text(locale, 'weeklyWeightUnavailable')
                   : isAr

@@ -9,6 +9,7 @@ import {
   customExerciseSchema,
   copyDiarySchema,
   customFoodSchema,
+  customMealSchema,
   foodLogSchema,
   foodPortionSchema,
   programNutritionSchema,
@@ -65,6 +66,9 @@ import {
   createCommunityPost,
   copyDiaryDay,
   createCustomFood,
+  createCustomMeal,
+  listCustomMeals,
+  updateCustomMeal,
   createDraftRule,
   createMemberExercise,
   decideRule,
@@ -531,6 +535,19 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     return { persisted: true, session: await mutateSession(dbOf(options), actor.userId, params.id, { type: 'log_set', set: body }) };
   });
 
+  app.put('/v1/training/sessions/:id/sets/:setId', async (request, reply) => {
+    const body = parse(logSetSchema, request.body, reply);
+    if (body === undefined) return;
+    const params = request.params as { id: string; setId: string };
+    if (body.id !== params.setId) {
+      return reply.code(422).send({ error: { code: 'SET_ID_MISMATCH', message: 'Body id must match the path set id' } });
+    }
+    return {
+      persisted: true,
+      session: await mutateSession(dbOf(options), actorOf(request.claims).userId, params.id, { type: 'replace_set', set: body }),
+    };
+  });
+
   app.post('/v1/training/sessions/:id/pause', async (request, reply) => {
     const body = parse(sessionTimeSchema, request.body, reply);
     if (body === undefined) return;
@@ -562,6 +579,23 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     const body = parse(customFoodSchema, request.body, reply);
     if (body === undefined) return;
     return createCustomFood(dbOf(options), actorOf(request.claims).userId, body);
+  });
+
+  app.get('/v1/nutrition/custom-meals', async (request) => {
+    return listCustomMeals(dbOf(options), actorOf(request.claims).userId);
+  });
+
+  app.post('/v1/nutrition/custom-meals', async (request, reply) => {
+    const body = parse(customMealSchema, request.body, reply);
+    if (body === undefined) return;
+    return createCustomMeal(dbOf(options), actorOf(request.claims).userId, body);
+  });
+
+  app.put('/v1/nutrition/custom-meals/:id', async (request, reply) => {
+    const body = parse(customMealSchema, request.body, reply);
+    if (body === undefined) return;
+    const params = request.params as { id: string };
+    return updateCustomMeal(dbOf(options), actorOf(request.claims).userId, params.id, body);
   });
 
   app.get('/v1/nutrition/favorites', async (request) => {

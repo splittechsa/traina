@@ -46,6 +46,7 @@ export default function WorkoutScreen() {
   const [rest, setRest] = useState(0);
   const [restPaused, setRestPaused] = useState(false);
   const [activeExerciseId, setActiveExerciseId] = useState('');
+  const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const restAnchor = useRef<{ endsAt: number } | null>(null);
 
   const session = useQuery({
@@ -184,6 +185,39 @@ export default function WorkoutScreen() {
       return;
     }
     const bodyweight = planned.prescription.kind !== 'strength';
+    const loadGrams = bodyweight || loadKg.trim().length === 0 ? 0 : parseScaledInteger(loadKg, 1000);
+    if (editingSetId !== null) {
+      const existing = session.data.session.sets.find((set) => set.id === editingSetId);
+      if (existing === undefined || existing.exerciseId !== exerciseId) {
+        setNotice(text(locale, 'error'));
+        setEditingSetId(null);
+        return;
+      }
+      setBusy(true);
+      try {
+        await apiRequest(`/v1/training/sessions/${id}/sets/${editingSetId}`, {
+          method: 'PUT',
+          body: {
+            id: editingSetId,
+            exerciseId: existing.exerciseId,
+            setIndex: existing.setIndex,
+            reps: setReps,
+            loadGrams,
+            rpeTenths: existing.rpeTenths,
+            completedAt: new Date().toISOString(),
+          },
+        });
+        await client.invalidateQueries({ queryKey: ['session', id] });
+        setEditingSetId(null);
+        setNotice('');
+        tapSuccess(reduce);
+      } catch {
+        setNotice(text(locale, 'error'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     const command: PendingSetCommand = {
       clientEventId: Crypto.randomUUID(),
       sessionId: id,
@@ -192,7 +226,7 @@ export default function WorkoutScreen() {
         exerciseId: planned.exerciseId,
         setIndex: session.data.session.sets.filter((set) => set.exerciseId === planned.exerciseId).length + 1,
         reps: setReps,
-        loadGrams: bodyweight || loadKg.trim().length === 0 ? 0 : parseScaledInteger(loadKg, 1000),
+        loadGrams,
         rpeTenths: null,
         completedAt: new Date().toISOString(),
       },
@@ -273,7 +307,15 @@ export default function WorkoutScreen() {
       <Button label={text(locale, 'resume')} onPress={() => void resume()} />
     ) : isRunning && active !== undefined ? (
       <Button
-        label={busy ? (isAr ? 'جارٍ الحفظ…' : 'Saving…') : `${text(locale, 'doneCol')} · ${text(locale, 'setTableHeader')} ${loggedForActive.length + 1}`}
+        label={
+          busy
+            ? isAr
+              ? 'جارٍ الحفظ…'
+              : 'Saving…'
+            : editingSetId !== null
+              ? text(locale, 'updateSet')
+              : `${text(locale, 'doneCol')} · ${text(locale, 'setTableHeader')} ${loggedForActive.length + 1}`
+        }
         onPress={() => {
           if (!busy) void logSetForExercise(active.exerciseId, Number(reps), load);
         }}
@@ -424,10 +466,21 @@ export default function WorkoutScreen() {
               </View>
               {Array.from({ length: plannedSets }, (_, index) => {
                 const logged = loggedForActive[index];
-                const isNext = logged === undefined && loggedForActive.length === index;
+                const isNext = logged === undefined && loggedForActive.length === index && editingSetId === null;
+                const isEditing = logged !== undefined && editingSetId === logged.id;
                 return (
-                  <View
+                  <Pressable
                     key={`set-row-${index}`}
+                    accessibilityRole={logged ? 'button' : undefined}
+                    accessibilityLabel={logged ? text(locale, 'editLoggedSet') : undefined}
+                    disabled={!logged || !isRunning}
+                    onPress={() => {
+                      if (logged === undefined || !isRunning) return;
+                      setEditingSetId(logged.id);
+                      setReps(String(logged.reps));
+                      setLoad(logged.loadGrams > 0 ? String(logged.loadGrams / 1000) : '');
+                      setNotice(text(locale, 'editLoggedSet'));
+                    }}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
@@ -435,6 +488,8 @@ export default function WorkoutScreen() {
                       borderBottomWidth: index === plannedSets - 1 ? 0 : StyleSheetHairline,
                       borderBottomColor: theme.border,
                       opacity: logged ? 1 : isNext ? 1 : 0.55,
+                      backgroundColor: isEditing ? theme.surfaceMuted : 'transparent',
+                      borderRadius: isEditing ? radius.sm : 0,
                     }}
                   >
                     <Text style={{ flex: 1, color: theme.text, fontFamily: fontFamily.bold }}>{index + 1}</Text>
@@ -454,10 +509,10 @@ export default function WorkoutScreen() {
                     </Text>
                     <View style={{ width: 52, alignItems: 'center' }}>
                       <Text style={{ color: logged ? theme.success : theme.textMuted, fontFamily: fontFamily.bold }}>
-                        {logged ? '✓' : isNext ? '○' : '·'}
+                        {logged ? (isEditing ? '✎' : '✓') : isNext ? '○' : '·'}
                       </Text>
                     </View>
-                  </View>
+                  </Pressable>
                 );
               })}
             </SurfaceCard>

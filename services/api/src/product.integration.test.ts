@@ -227,6 +227,24 @@ describe('persisted product', () => {
       },
     });
     expect(logged.statusCode).toBe(200);
+    const edited = await app.inject({
+      method: 'PUT',
+      url: `/v1/training/sessions/${sessionId}/sets/20000000-0000-4000-8000-000000000010`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        id: '20000000-0000-4000-8000-000000000010',
+        exerciseId,
+        setIndex: 1,
+        reps: 6,
+        loadGrams: 105000,
+        rpeTenths: 80,
+        completedAt: '2026-06-01T15:12:00.000Z',
+      },
+    });
+    expect(edited.statusCode).toBe(200);
+    expect((edited.json().session.sets as { reps: number; loadGrams: number }[])[0]).toEqual(
+      expect.objectContaining({ reps: 6, loadGrams: 105000 }),
+    );
     const completed = await app.inject({
       method: 'POST',
       url: `/v1/training/sessions/${sessionId}/complete`,
@@ -235,6 +253,7 @@ describe('persisted product', () => {
     });
     expect(completed.statusCode).toBe(200);
     expect(completed.json().session.status).toBe('completed');
+    expect((completed.json().session.sets as unknown[]).length).toBe(1);
 
     const food = await app.inject({
       method: 'POST',
@@ -868,6 +887,81 @@ describe('persisted product', () => {
       payload: { receipt: 'client' },
     });
     expect(verify.statusCode).toBe(501);
+  });
+
+  it('builds a custom meal from ingredient foods, lists it, edits it, and logs a serving', async () => {
+    const oats = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/foods',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { nameAr: 'شوفان وصفة', nameEn: 'Recipe oats', energyKcal: 200, proteinMg: 10_000, carbohydrateMg: 40_000, fatMg: 4_000 },
+    });
+    const milk = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/foods',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { nameAr: 'حليب وصفة', nameEn: 'Recipe milk', energyKcal: 60, proteinMg: 3_000, carbohydrateMg: 5_000, fatMg: 3_000 },
+    });
+    expect(oats.statusCode).toBe(200);
+    expect(milk.statusCode).toBe(200);
+    const createdMeal = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/custom-meals',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        nameAr: 'شوفان بالحليب',
+        nameEn: 'Oats with milk',
+        servings: 1,
+        ingredients: [
+          { foodItemId: oats.json().id, quantityGrams: 50 },
+          { foodItemId: milk.json().id, quantityGrams: 100 },
+        ],
+      },
+    });
+    expect(createdMeal.statusCode).toBe(200);
+    expect(createdMeal.json().energyKcal).toBe(160);
+    expect(createdMeal.json().ingredients).toHaveLength(2);
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/v1/nutrition/custom-meals',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(listed.statusCode).toBe(200);
+    expect((listed.json().meals as { id: string }[]).some((meal) => meal.id === createdMeal.json().id)).toBe(true);
+    const updated = await app.inject({
+      method: 'PUT',
+      url: `/v1/nutrition/custom-meals/${createdMeal.json().id as string}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        nameAr: 'شوفان بالحليب',
+        nameEn: 'Oats with milk',
+        servings: 2,
+        ingredients: [
+          { foodItemId: oats.json().id, quantityGrams: 100 },
+          { foodItemId: milk.json().id, quantityGrams: 100 },
+        ],
+      },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().servings).toBe(2);
+    expect(updated.json().energyKcal).toBe(130);
+    const loggedMeal = await app.inject({
+      method: 'POST',
+      url: '/v1/nutrition/portions',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        foodItemId: createdMeal.json().foodItemId,
+        quantityGrams: 1,
+        loggedOn: '2026-06-04',
+        mealSlot: 'breakfast',
+      },
+    });
+    expect(loggedMeal.statusCode).toBe(200);
+    const entry = (loggedMeal.json().entries as { label: string; energyKcal: number; source: string }[]).find((row) =>
+      row.label?.includes('شوفان بالحليب'),
+    );
+    expect(entry?.energyKcal).toBe(130);
+    expect(entry?.source).toBe('recipe');
   });
 
   it('scales a member-entered food, hides it from another member, and deletes the diary row', async () => {

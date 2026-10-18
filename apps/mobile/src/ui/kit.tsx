@@ -116,10 +116,11 @@ export function AppHeader({
   confirmUnsaved?: { title: string; body: string; leave: string; stay: string };
 }) {
   const theme = useTheme();
-  const { locale } = useLocale();
+  const { locale, direction } = useLocale();
   const size = large ? typeScale.hero : typeScale.title;
   const align = locale === 'ar' ? 'right' as const : 'left' as const;
   // Rely on native RTL flex mirroring: leading slot = start edge (right in ar, left in en).
+  // Also set `direction` so layout mirrors even when I18nManager has not restarted yet.
   const leading = showBack ? (
     <StackBackControl onPress={onBack} confirmUnsaved={confirmUnsaved} />
   ) : branded ? (
@@ -128,7 +129,7 @@ export function AppHeader({
     <View style={{ width: 44 }} />
   );
   return (
-    <View style={styles.header} accessibilityRole="header">
+    <View style={[styles.header, { direction }]} accessibilityRole="header">
       {leading}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
@@ -619,13 +620,16 @@ export function AIChatBubble({
 
 export function EmptyState({ title, body, compact = false }: { title: string; body: string; compact?: boolean }) {
   const theme = useTheme();
+  const { locale } = useLocale();
+  const align = locale === 'ar' ? ('right' as const) : ('left' as const);
+  const writingDirection = locale === 'ar' ? ('rtl' as const) : ('ltr' as const);
   if (compact) {
     return (
       <View style={{ borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surfaceMuted, borderRadius: radius.md, paddingVertical: spacing[2], paddingHorizontal: spacing[3] }}>
-        <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: typeScale.label, marginBottom: 2 }} numberOfLines={1}>
+        <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: typeScale.label, marginBottom: 2, textAlign: align, writingDirection }} numberOfLines={1}>
           {title}
         </Text>
-        <Text style={{ color: theme.text, fontFamily: fontFamily.regular, fontSize: typeScale.label, lineHeight: 18 }} numberOfLines={2}>
+        <Text style={{ color: theme.text, fontFamily: fontFamily.regular, fontSize: typeScale.label, lineHeight: 18, textAlign: align, writingDirection }} numberOfLines={2}>
           {body}
         </Text>
       </View>
@@ -634,8 +638,8 @@ export function EmptyState({ title, body, compact = false }: { title: string; bo
   return (
     <SurfaceCard tone="muted" style={{ overflow: 'hidden', minHeight: 148, justifyContent: 'flex-end' }}>
       <View style={{ position: 'absolute', top: spacing[2], end: -spacing[5] }}><TrainaMotif width={180} opacity={0.1} /></View>
-      <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: spacing[1] }}>{title}</Text>
-      <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.body, lineHeight: 24 }}>{body}</Text>
+      <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: spacing[1], textAlign: align, writingDirection }}>{title}</Text>
+      <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.body, lineHeight: 24, textAlign: align, writingDirection }}>{body}</Text>
     </SurfaceCard>
   );
 }
