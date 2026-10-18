@@ -320,6 +320,9 @@ const dictionary = {
     emptyCustomMeals: 'لا توجد وجبات محفوظة بعد. أنشئ وجبة من مكوّناتك.',
     updateSet: 'تحديث المجموعة',
     editLoggedSet: 'تعديل مجموعة مسجّلة',
+    yazanQuota: 'حد يزن اليومي',
+    exportAccount: 'تصدير بياناتي',
+    exportAccountDone: 'تم تجهيز التصدير (بدون كلمات مرور أو رموز).',
   },
   en: {
     brand: 'traina',
@@ -640,6 +643,9 @@ const dictionary = {
     emptyCustomMeals: 'No saved meals yet. Build one from your ingredients.',
     updateSet: 'Update set',
     editLoggedSet: 'Edit logged set',
+    yazanQuota: 'Yazan daily limit',
+    exportAccount: 'Export my data',
+    exportAccountDone: 'Export prepared (no passwords or tokens).',
   },
 } as const;
 

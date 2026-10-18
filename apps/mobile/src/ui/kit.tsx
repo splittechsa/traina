@@ -605,15 +605,42 @@ export function AIChatBubble({
   pending?: boolean;
 }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   const mine = role === 'user';
+  const align = locale === 'ar' ? ('right' as const) : ('left' as const);
+  const writingDirection = locale === 'ar' ? ('rtl' as const) : ('ltr' as const);
   return (
     <View style={[styles.bubble, { alignSelf: mine ? 'flex-end' : 'flex-start', backgroundColor: mine ? theme.emphasis : theme.surface }]}>
       {pending ? (
         <TypingIndicator color={mine ? theme.emphasisText : theme.textMuted} />
       ) : (
-        <Text style={{ color: mine ? theme.emphasisText : theme.text, fontFamily: fontFamily.regular, fontSize: typeScale.body, lineHeight: 24 }}>{message}</Text>
+        <Text
+          style={{
+            color: mine ? theme.emphasisText : theme.text,
+            fontFamily: fontFamily.regular,
+            fontSize: typeScale.body,
+            lineHeight: 26,
+            textAlign: align,
+            writingDirection,
+          }}
+        >
+          {message}
+        </Text>
       )}
-      {note !== undefined ? <Text style={{ color: mine ? theme.heroAccent : theme.warning, fontFamily: fontFamily.regular, fontSize: typeScale.label, marginTop: 6 }}>{note}</Text> : null}
+      {note !== undefined ? (
+        <Text
+          style={{
+            color: mine ? theme.heroAccent : theme.warning,
+            fontFamily: fontFamily.regular,
+            fontSize: typeScale.label,
+            marginTop: 6,
+            textAlign: align,
+            writingDirection,
+          }}
+        >
+          {note}
+        </Text>
+      ) : null}
     </View>
   );
 }

@@ -112,6 +112,8 @@ import {
   listMemberCoachFeedback,
   listMemberNotifications,
   entitlementsFor,
+  exportMemberAccount,
+  registerPushDevice,
   markMemberNotificationRead,
   addCoachNote,
   listCoachNotes,
@@ -358,6 +360,22 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     const actor = actorOf(request.claims);
     await deleteAccount(dbOf(options), actor.userId);
     return { deleted: true };
+  });
+
+  app.get('/v1/account/export', async (request) => {
+    return exportMemberAccount(dbOf(options), actorOf(request.claims));
+  });
+
+  app.post('/v1/member/push-devices', async (request, reply) => {
+    const body = request.body as { expoPushToken?: string; platform?: string };
+    if (typeof body?.expoPushToken !== 'string' || body.expoPushToken.trim().length < 8) {
+      return reply.code(422).send({ error: { code: 'INVALID_PUSH_TOKEN', message: 'expoPushToken is required' } });
+    }
+    const platform = body.platform === 'android' || body.platform === 'ios' || body.platform === 'web' ? body.platform : 'unknown';
+    return registerPushDevice(dbOf(options), actorOf(request.claims).userId, {
+      expoPushToken: body.expoPushToken.trim().slice(0, 512),
+      platform,
+    });
   });
 
   app.get('/v1/me', async (request) => {
@@ -1044,13 +1062,25 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   app.get('/v1/coach/messages', async (request) => {
     const actor = actorOf(request.claims);
     const runtime = coachOf(options);
+    const db = dbOf(options);
+    const entitlements = await entitlementsFor(db, actor);
+    const usedRows = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM ai_usage WHERE user_id = $1 AND created_at > date_trunc('day', now())`,
+      [actor.userId],
+    );
+    const used = Number(usedRows.rows[0]?.count ?? 0);
     return {
-      messages: await listCoachMessages(dbOf(options), actor.userId),
+      messages: await listCoachMessages(db, actor.userId),
       productionIntelligence: runtime.name === 'openai_compatible',
       providerConfigured: runtime.name !== 'unconfigured',
       provider: runtime.name,
       persona: 'yazan',
       requiredEnv: runtime.name === 'unconfigured' ? runtime.missing : [],
+      quota: {
+        used,
+        limit: entitlements.limits.yazanTurnsPerDay,
+        remaining: Math.max(0, entitlements.limits.yazanTurnsPerDay - used),
+      },
     };
   });
 
