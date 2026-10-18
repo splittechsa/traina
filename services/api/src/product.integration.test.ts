@@ -1302,6 +1302,41 @@ describe('persisted product', () => {
     expect(deniedCoachState.statusCode).toBe(403);
   });
 
+  it('exports stored member facts and registers push devices without claiming delivery', async () => {
+    const token = await tokenFor(`ops-export-${randomUUID()}@sahhti.test`);
+    const exportDenied = await app.inject({ method: 'GET', url: '/v1/account/export' });
+    expect(exportDenied.statusCode).toBe(401);
+
+    const exported = await app.inject({
+      method: 'GET',
+      url: '/v1/account/export',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.json().schemaVersion).toBe(1);
+    expect(exported.json().entitlements.purchasesEnabled).toBe(false);
+    expect(String(exported.json().disclaimer).toLowerCase()).toContain('not a medical record');
+
+    const push = await app.inject({
+      method: 'POST',
+      url: '/v1/member/push-devices',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { token: 'ExponentPushToken[test-device]', platform: 'ios' },
+    });
+    expect(push.statusCode).toBe(200);
+    expect(push.json().registered).toBe(true);
+    expect(push.json().deliveryConfigured).toBe(false);
+
+    const status = await app.inject({
+      method: 'GET',
+      url: '/v1/member/push-status',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json().deliveryConfigured).toBe(false);
+    expect(status.json().channel).toBe('in_app_only');
+  });
+
   it('projects free entitlements from the server without client unlock flags', async () => {
     const token = await tokenFor(`entitlements-${randomUUID()}@sahhti.test`);
     const denied = await app.inject({ method: 'GET', url: '/v1/member/entitlements' });
