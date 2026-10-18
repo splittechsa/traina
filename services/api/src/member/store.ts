@@ -2116,6 +2116,58 @@ export async function sendCoachFeedback(
  * Reads the latest subscriptions row when present; otherwise free defaults.
  * Never unlocks paid capabilities from client flags. Nutrition adaptations stay blocked.
  */
+/** Member data export for account portability — no secrets, tokens, or password hashes. */
+export async function exportMemberAccount(db: Database, actor: Actor) {
+  const profile = await readProfile(db, actor.userId);
+  const progress = await progressFor(db, actor.userId);
+  const sessions = await listSessions(db, actor.userId);
+  const diary = await diaryFor(db, actor.userId, new Date().toISOString().slice(0, 10));
+  const entitlements = await entitlementsFor(db, actor);
+  return {
+    exportedAt: new Date().toISOString(),
+    userId: actor.userId,
+    profile: profile.profile,
+    goals: profile.goals,
+    entitlements: {
+      planCode: entitlements.planCode,
+      capabilities: entitlements.capabilities,
+      limits: entitlements.limits,
+      purchasesEnabled: entitlements.purchasesEnabled,
+    },
+    progress: {
+      completedWorkouts: progress.completedWorkouts,
+      weightCount: progress.weights.length,
+    },
+    sessions: sessions.map((session) => ({
+      id: session.id,
+      name: session.name,
+      status: session.status,
+      scheduledFor: session.scheduled_for,
+      durationSeconds: session.duration_seconds,
+    })),
+    todayDiary: {
+      entryCount: diary.summary.entryCount,
+      consumed: diary.summary.consumed,
+    },
+    notice: 'Credentials and session tokens are omitted from this export.',
+  };
+}
+
+export async function registerPushDevice(
+  db: Database,
+  userId: string,
+  input: { expoPushToken: string; platform: string },
+) {
+  await db.query(
+    `INSERT INTO member_push_devices (user_id, expo_push_token, platform, updated_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id, expo_push_token)
+     DO UPDATE SET platform = EXCLUDED.platform, updated_at = now(), revoked_at = NULL`,
+    [userId, input.expoPushToken, input.platform],
+  );
+  return { registered: true, deliveryConfigured: false, notice: 'Token stored; push delivery provider is not enabled yet.' };
+}
+
 export async function entitlementsFor(
   db: Database,
   actor: Actor,

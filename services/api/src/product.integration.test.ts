@@ -1396,6 +1396,38 @@ describe('persisted product', () => {
     expect(deniedCoachState.statusCode).toBe(403);
   });
 
+  it('exports account data without secrets and registers a push token without enabling delivery', async () => {
+    const token = await tokenFor(`export-${randomUUID()}@sahhti.test`);
+    const exported = await app.inject({
+      method: 'GET',
+      url: '/v1/account/export',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(exported.statusCode).toBe(200);
+    const body = exported.json() as {
+      userId: string;
+      notice: string;
+      entitlements: { purchasesEnabled: boolean };
+    };
+    expect(body.userId).toBeTruthy();
+    expect(body.entitlements.purchasesEnabled).toBe(false);
+    expect(body.notice).toMatch(/omitted/i);
+    expect(body).not.toHaveProperty('passwordHash');
+    expect(body).not.toHaveProperty('refreshToken');
+    expect(body).not.toHaveProperty('accessToken');
+
+    const push = await app.inject({
+      method: 'POST',
+      url: '/v1/member/push-devices',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { expoPushToken: 'ExponentPushToken[test-device-token]', platform: 'ios' },
+    });
+    expect(push.statusCode).toBe(200);
+    expect(push.json()).toEqual(
+      expect.objectContaining({ registered: true, deliveryConfigured: false }),
+    );
+  });
+
   it('projects free entitlements from the server without client unlock flags', async () => {
     const token = await tokenFor(`entitlements-${randomUUID()}@sahhti.test`);
     const denied = await app.inject({ method: 'GET', url: '/v1/member/entitlements' });
