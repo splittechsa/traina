@@ -70,6 +70,27 @@ export function workload(token: string) {
   }>('/v1/coach/workspace/metrics', { token });
 }
 
+export function listFollowUps(token: string) {
+  return request<{
+    followUps: {
+      id: string;
+      reviewId: string;
+      memberUserId: string;
+      body: string;
+      dueOn: string | null;
+      status: string;
+    }[];
+  }>('/v1/coach/workspace/follow-ups', { token });
+}
+
+export function markOverdue(token: string, olderThanHours = 72) {
+  return request<{ marked: number; olderThanHours: number }>('/v1/coach/workspace/mark-overdue', {
+    method: 'POST',
+    token,
+    body: { olderThanHours },
+  });
+}
+
 export function readPacket(token: string, reviewId: string) {
   return request<{
     review: { id: string; status: string; memberUserId: string; weekOf: string };

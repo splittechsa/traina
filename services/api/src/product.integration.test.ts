@@ -1330,6 +1330,32 @@ describe('persisted product', () => {
     expect(body.limits.yazanTurnsPerDay).toBeGreaterThan(0);
   });
 
+  it('exports stored member facts without inventing metrics', async () => {
+    const token = await tokenFor(`export-${randomUUID()}@sahhti.test`);
+    const denied = await app.inject({ method: 'GET', url: '/v1/account/export' });
+    expect(denied.statusCode).toBe(401);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/account/export',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      schemaVersion: number;
+      account: { userId: string };
+      entitlements: { planCode: string; purchasesEnabled: boolean };
+      progress: { weights: unknown[]; completedWorkouts: number };
+      disclaimer: string;
+    };
+    expect(body.schemaVersion).toBe(1);
+    expect(body.account.userId.length).toBeGreaterThan(0);
+    expect(body.entitlements.planCode).toBe('free');
+    expect(body.entitlements.purchasesEnabled).toBe(false);
+    expect(Array.isArray(body.progress.weights)).toBe(true);
+    expect(body.disclaimer.toLowerCase()).toContain('not a medical record');
+  });
+
   it('keeps free weekly briefs out of the human inbox without coach entitlement or assignment', async () => {
     const token = await tokenFor(`weekly-free-${randomUUID()}@sahhti.test`);
     const weekOf = '2026-10-12';

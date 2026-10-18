@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError, apiRequest } from '../src/api/client';
 import { messageFor } from '../src/api/errors';
+import { useEntitlements } from '../src/entitlements/useEntitlements';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text } from '../src/i18n/copy';
 import { fontFamily, radius, spacing, typeScale } from '../src/theme/tokens';
@@ -118,6 +119,7 @@ function ScoreRow({
 export default function WeeklyCheckinScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
+  const entitlements = useEntitlements();
   const client = useQueryClient();
   const weekOf = useMemo(() => mondayOfWeek(), []);
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
@@ -278,10 +280,30 @@ export default function WeeklyCheckinScreen() {
       >
         <AppHeader title={text(locale, 'weeklyCheckin')} subtitle={weekOf} showBack />
 
+        {!entitlements.hasHumanCoach && !entitlements.isPending ? (
+          <View style={{ gap: spacing[2] }}>
+            <SurfaceCard tone="muted">
+              <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, marginBottom: 6 }}>
+                {entitlements.planCode === 'traina_ai'
+                  ? text(locale, 'planBadgeAi')
+                  : text(locale, 'planBadgeFree')}
+              </Text>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 22 }}>
+                {text(locale, 'planGateHumanCoach')}
+              </Text>
+            </SurfaceCard>
+            <Button
+              label={text(locale, 'membership')}
+              variant="secondary"
+              onPress={() => router.push('/membership')}
+            />
+          </View>
+        ) : null}
+
         {preview.isPending || status.isPending ? <LoadingSkeleton /> : null}
         {preview.isError ? <EmptyState title={text(locale, 'error')} body={text(locale, 'error')} /> : null}
 
-        {status.data?.unreadHumanFeedback?.[0] !== undefined ? (
+        {entitlements.hasHumanCoach && status.data?.unreadHumanFeedback?.[0] !== undefined ? (
           <SurfaceCard tone="raised">
             <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, marginBottom: 6 }}>
               {text(locale, 'humanFeedbackReady')}

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { messageFor } from '../../src/api/errors';
 import { useSession } from '../../src/auth/SessionProvider';
+import { useEntitlements } from '../../src/entitlements/useEntitlements';
 import { labelList } from '../../src/i18n/labels';
 import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
@@ -12,8 +13,9 @@ import { fontFamily, typeScale } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { useMotion } from '../../src/theme/motion';
 import { Button, Screen, ScreenBody } from '../../src/ui/Screen';
-import { AIChatBubble, AppHeader, EmptyState, LoadingSkeleton } from '../../src/ui/kit';
+import { AIChatBubble, AppHeader, EmptyState, LoadingSkeleton, SurfaceCard } from '../../src/ui/kit';
 import { stableRecordKey } from '../../src/lists/keys';
+import { router } from 'expo-router';
 
 type CoachReply = { text: string; provider: string; productionIntelligence: boolean };
 type StoredMessage = { id: string; role: string; body: string; authorKind?: string };
@@ -24,12 +26,15 @@ export default function CoachScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
   const { tokens } = useSession();
+  const entitlements = useEntitlements();
   const client = useQueryClient();
   const { reduce } = useMotion();
   const scroll = useRef<ScrollView>(null);
   const [message, setMessage] = useState('');
+  const yazanEnabled = entitlements.hasYazanDaily;
   const history = useQuery({
     queryKey: ['coach-messages'],
+    enabled: yazanEnabled || entitlements.isPending,
     queryFn: () => apiRequest<History>('/v1/coach/messages'),
   });
   const me = useQuery({
@@ -93,26 +98,36 @@ export default function CoachScreen() {
     scroll.current?.scrollToEnd({ animated: !reduce });
   }, [messages.length, send.isPending, reduce]);
 
-  const statusLine = history.data === undefined
-    ? text(locale, 'askCoach')
-    : providerConfigured
-      ? text(locale, history.data.provider === 'openai_compatible' ? 'coachReady' : 'coachLocal')
-      : text(locale, 'coachUnavailable');
+  const canChat = yazanEnabled && providerConfigured;
+  const statusLine = !yazanEnabled
+    ? text(locale, 'planGateYazan')
+    : history.data === undefined
+      ? text(locale, 'askCoach')
+      : providerConfigured
+        ? text(locale, history.data.provider === 'openai_compatible' ? 'coachReady' : 'coachLocal')
+        : text(locale, 'coachUnavailable');
   const welcomeTitle = providerConfigured ? text(locale, 'coachHeroReady') : text(locale, 'coachHeroUnavailable');
   const welcomeCaption = goals.length > 0 ? labelList(locale, 'goal', goals) : statusLine;
+  const planLabel =
+    entitlements.planCode === 'traina_coach'
+      ? text(locale, 'planBadgeCoach')
+      : entitlements.planCode === 'traina_ai'
+        ? text(locale, 'planBadgeAi')
+        : text(locale, 'planBadgeFree');
 
   return (
     <Screen>
       <ScreenBody
         scrollRef={scroll}
         footer={
+          yazanEnabled ? (
           <View style={{ gap: 10 }}>
             <RNScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 2 }}>
               {prompts.map((prompt) => (
                 <Pressable
                   key={prompt.key}
                   accessibilityRole="button"
-                  disabled={send.isPending || !providerConfigured}
+                  disabled={send.isPending || !canChat}
                   onPress={() => send.mutate(text(locale, prompt.key))}
                   style={{
                     flexDirection: 'row',
@@ -122,7 +137,7 @@ export default function CoachScreen() {
                     paddingVertical: 10,
                     paddingHorizontal: 14,
                     backgroundColor: theme.surfaceMuted,
-                    opacity: providerConfigured ? 1 : 0.5,
+                    opacity: canChat ? 1 : 0.5,
                   }}
                 >
                   <SymbolView name={prompt.icon} size={15} tintColor={theme.accent} />
@@ -165,7 +180,7 @@ export default function CoachScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={text(locale, 'send')}
-                disabled={send.isPending || !providerConfigured || message.trim().length === 0}
+                disabled={send.isPending || !canChat || message.trim().length === 0}
                 onPress={() => send.mutate(message.trim())}
                 style={{
                   height: 40,
@@ -173,7 +188,7 @@ export default function CoachScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderRadius: 20,
-                  backgroundColor: send.isPending || !providerConfigured || message.trim().length === 0 ? theme.surfaceMuted : theme.emphasis,
+                  backgroundColor: send.isPending || !canChat || message.trim().length === 0 ? theme.surfaceMuted : theme.emphasis,
                 }}
               >
                 <SymbolView
@@ -184,26 +199,49 @@ export default function CoachScreen() {
               </Pressable>
             </View>
           </View>
+          ) : null
         }
       >
         <AppHeader
           title={text(locale, 'coachTitle')}
           subtitle={welcomeCaption}
           trailing={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            <View style={{ height: 6, width: 6, borderRadius: 3, backgroundColor: providerConfigured ? theme.success : theme.textMuted }} />
+            <View style={{ height: 6, width: 6, borderRadius: 3, backgroundColor: canChat ? theme.success : theme.textMuted }} />
             <Text numberOfLines={1} style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 11, maxWidth: 110 }}>{statusLine}</Text>
           </View>}
         />
-        {history.isPending ? <LoadingSkeleton /> : null}
-        {history.isError ? (
+        <SurfaceCard tone="muted">
+          <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>
+            {planLabel}
+            {entitlements.yazanTurnsPerDay > 0
+              ? ` · ${text(locale, 'membershipYazanTurns')}: ${entitlements.yazanTurnsPerDay}`
+              : ''}
+          </Text>
+          {!entitlements.hasHumanCoach ? (
+            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginTop: 6, lineHeight: 20 }}>
+              {text(locale, 'planGateHumanCoach')}
+            </Text>
+          ) : null}
+        </SurfaceCard>
+        {!yazanEnabled && !entitlements.isPending ? (
+          <EmptyState
+            title={text(locale, 'unavailable')}
+            body={text(locale, 'planGateYazan')}
+          />
+        ) : null}
+        {!yazanEnabled && !entitlements.isPending ? (
+          <Button label={text(locale, 'membership')} variant="secondary" onPress={() => router.push('/membership')} />
+        ) : null}
+        {yazanEnabled && history.isPending ? <LoadingSkeleton /> : null}
+        {yazanEnabled && history.isError ? (
           <EmptyState
             compact
             title={text(locale, 'error')}
             body={history.error instanceof ApiClientError ? messageFor(history.error.code, locale, text(locale, 'error')) : text(locale, 'error')}
           />
         ) : null}
-        {history.data !== undefined && !providerConfigured ? <EmptyState title={text(locale, 'unavailable')} body={text(locale, 'coachUnavailable')} /> : null}
-        {providerConfigured && messages.length === 0 && !send.isPending ? (
+        {yazanEnabled && history.data !== undefined && !providerConfigured ? <EmptyState title={text(locale, 'unavailable')} body={text(locale, 'coachUnavailable')} /> : null}
+        {yazanEnabled && providerConfigured && messages.length === 0 && !send.isPending ? (
           <View style={{ alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20 }}>
             <View style={{ height: 56, width: 56, borderRadius: 28, backgroundColor: theme.hero, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
               <SymbolView name={{ ios: 'bolt.heart.fill', android: 'favorite', web: 'favorite' }} size={24} tintColor={theme.heroAccent} />
