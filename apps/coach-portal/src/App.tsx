@@ -7,9 +7,11 @@ import {
   decideRecommendation,
   escalateReview,
   listAssignments,
+  listFollowUps,
   listInbox,
   listNotes,
   login,
+  markOverdue,
   memberState,
   readPacket,
   sendFeedback,
@@ -63,6 +65,12 @@ export function App() {
   const [notes, setNotes] = useState<{ id: string; body: string; createdAt: string }[]>([]);
   const [feedback, setFeedback] = useState('');
   const [noteDraft, setNoteDraft] = useState('');
+  const [followUps, setFollowUps] = useState<
+    { id: string; reviewId: string; memberUserId: string; body: string; dueOn: string | null; status: string }[]
+  >([]);
+  const [workspaceLoading, setWorkspaceLoading] = useState(false);
+  const [deskLoading, setDeskLoading] = useState(false);
+  const [supervisorNote, setSupervisorNote] = useState<string | null>(null);
 
   function persist(next: Session | null) {
     setSession(next);
@@ -71,14 +79,21 @@ export function App() {
   }
 
   async function refreshWorkspace(token: string) {
-    const [metricsResult, assignmentResult, inboxResult] = await Promise.all([
-      workload(token),
-      listAssignments(token),
-      listInbox(token),
-    ]);
-    setMetrics(metricsResult);
-    setAssignments(assignmentResult.assignments);
-    setInbox(inboxResult.reviews);
+    setWorkspaceLoading(true);
+    try {
+      const [metricsResult, assignmentResult, inboxResult, followUpResult] = await Promise.all([
+        workload(token),
+        listAssignments(token),
+        listInbox(token),
+        listFollowUps(token).catch(() => ({ followUps: [] as typeof followUps })),
+      ]);
+      setMetrics(metricsResult);
+      setAssignments(assignmentResult.assignments);
+      setInbox(inboxResult.reviews);
+      setFollowUps(followUpResult.followUps);
+    } finally {
+      setWorkspaceLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -109,6 +124,7 @@ export function App() {
     setSelectedId(review.id);
     setError(null);
     setBusy(true);
+    setDeskLoading(true);
     try {
       const [packetResult, stateResult, notesResult] = await Promise.all([
         readPacket(session.accessToken, review.id),
@@ -123,9 +139,11 @@ export function App() {
       );
     } catch (err) {
       setPacket(null);
+      setReviewMeta(null);
       setError(err instanceof Error ? err.message : 'Unable to load review');
     } finally {
       setBusy(false);
+      setDeskLoading(false);
     }
   }
 
@@ -251,7 +269,7 @@ export function App() {
         </button>
       </div>
 
-      <div className="metrics">
+      <div className="metrics" aria-busy={workspaceLoading}>
         <div className="metric">
           <strong>{metrics.assignedMembers}</strong>
           <span>Assigned members</span>
@@ -277,14 +295,54 @@ export function App() {
         </div>
       </div>
 
-      {error ? <p className="error">{error}</p> : null}
+      <div className="actions" style={{ marginBottom: '1rem' }}>
+        <button
+          className="ghost"
+          type="button"
+          disabled={busy || workspaceLoading}
+          onClick={() => {
+            if (session === null) return;
+            void refreshWorkspace(session.accessToken).catch((err: Error) => setError(err.message));
+          }}
+        >
+          Refresh workspace
+        </button>
+        <button
+          className="ghost"
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (session === null) return;
+            setBusy(true);
+            setSupervisorNote(null);
+            void markOverdue(session.accessToken)
+              .then((result) => {
+                setSupervisorNote(`Supervisor: marked ${result.marked} review(s) overdue (>${result.olderThanHours}h).`);
+                return refreshWorkspace(session.accessToken);
+              })
+              .catch((err: Error) => {
+                setSupervisorNote(err.message.includes('Access denied')
+                  ? 'Mark-overdue requires coach_supervisor or admin.'
+                  : err.message);
+              })
+              .finally(() => setBusy(false));
+          }}
+        >
+          Mark overdue (supervisor)
+        </button>
+      </div>
+
+      {error ? <p className="error" role="alert">{error}</p> : null}
+      {supervisorNote ? <p className="banner">{supervisorNote}</p> : null}
+      {workspaceLoading ? <p className="loading">Refreshing inbox and assignments…</p> : null}
 
       <div className="layout">
         <section className="panel stack">
           <div>
             <h2>Assigned members</h2>
             <div className="list">
-              {assignments.length === 0 ? <p className="meta">No active assignments.</p> : null}
+              {workspaceLoading && assignments.length === 0 ? <div className="skeleton" aria-hidden /> : null}
+              {assignments.length === 0 && !workspaceLoading ? <p className="meta">No active assignments.</p> : null}
               {assignments.map((row) => (
                 <div key={`${row.coachUserId}-${row.memberUserId}`} className="chip">
                   {row.memberUserId.slice(0, 8)}… · since {row.assignedAt.slice(0, 10)}
@@ -296,6 +354,12 @@ export function App() {
           <div>
             <h2>Weekly review inbox</h2>
             <div className="list">
+              {workspaceLoading && inbox.length === 0 ? (
+                <>
+                  <div className="skeleton" aria-hidden />
+                  <div className="skeleton" aria-hidden />
+                </>
+              ) : null}
               {inbox.map((review) => (
                 <button
                   key={review.id}
@@ -305,20 +369,39 @@ export function App() {
                 >
                   <div>
                     {review.weekOf} · {review.status}
+                    {review.status === 'OVERDUE' || review.status === 'ESCALATED' ? (
+                      <span className="chip warn" style={{ marginInlineStart: 8 }}>{review.status}</span>
+                    ) : null}
                   </div>
                   <div className="meta">{review.memberUserId}</div>
                 </button>
               ))}
-              {inbox.length === 0 ? <p className="meta">Inbox clear.</p> : null}
+              {inbox.length === 0 && !workspaceLoading ? <p className="meta">Inbox clear.</p> : null}
+            </div>
+          </div>
+
+          <div>
+            <h2>Open follow-ups</h2>
+            <div className="list">
+              {followUps.length === 0 ? <p className="meta">No open follow-ups.</p> : null}
+              {followUps.map((item) => (
+                <div key={item.id} className="chip" style={{ display: 'block', borderRadius: 12, padding: '0.65rem 0.8rem' }}>
+                  <div>{item.body}</div>
+                  <div className="meta">
+                    due {item.dueOn ?? 'unset'} · member {item.memberUserId.slice(0, 8)}…
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
         <section className="panel stack">
           <h2>Review desk</h2>
-          {!packet || !reviewMeta ? (
+          {deskLoading ? <p className="loading">Loading authorized packet…</p> : null}
+          {!deskLoading && (!packet || !reviewMeta) ? (
             <p className="meta">Select a review to load the authorized weekly packet.</p>
-          ) : (
+          ) : !packet || !reviewMeta ? null : (
             <>
               <div className="banner">
                 Human review for week {reviewMeta.weekOf}. Status {reviewMeta.status}. {timeline}
@@ -462,7 +545,10 @@ export function App() {
                     if (session === null || selectedId === null) return;
                     setBusy(true);
                     void addFollowUp(session.accessToken, selectedId, followUpDraft.trim())
-                      .then(() => setFollowUpDraft(''))
+                      .then(() => {
+                        setFollowUpDraft('');
+                        return refreshWorkspace(session.accessToken);
+                      })
                       .catch((err: Error) => setError(err.message))
                       .finally(() => setBusy(false));
                   }}

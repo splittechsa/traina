@@ -108,6 +108,7 @@ import {
   listMemberCoachFeedback,
   listMemberNotifications,
   entitlementsFor,
+  exportMemberData,
   markMemberNotificationRead,
   addCoachNote,
   listCoachNotes,
@@ -355,6 +356,10 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     await deleteAccount(dbOf(options), actor.userId);
     return { deleted: true };
   });
+
+  app.get('/v1/account/export', async (request) => (
+    exportMemberData(dbOf(options), actorOf(request.claims))
+  ));
 
   app.get('/v1/me', async (request) => {
     const actor = actorOf(request.claims);

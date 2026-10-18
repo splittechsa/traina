@@ -6,6 +6,7 @@ import type { HomeDashboard } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { profileIsComplete } from '../../src/auth/gate';
 import { useSession } from '../../src/auth/SessionProvider';
+import { useEntitlements } from '../../src/entitlements/useEntitlements';
 import { formatCount, formatGramsFromMg, formatKg, formatRiyadhDate } from '../../src/format';
 import { label } from '../../src/i18n/labels';
 import { useLocale } from '../../src/i18n/LocaleProvider';
@@ -37,6 +38,7 @@ type Progress = { weights: { id: string; weight_grams: number; recorded_on: stri
 export default function HomeScreen() {
   const { locale } = useLocale();
   const { tokens } = useSession();
+  const entitlements = useEntitlements();
   const theme = useTheme();
   const home = useQuery({ queryKey: ['home', locale], queryFn: () => apiRequest<HomeResponse>('/v1/home') });
   const me = useQuery({
@@ -197,7 +199,9 @@ export default function HomeScreen() {
         </View>
 
         {(() => {
-          const unreadHuman = coachingSignals.data?.weekly.unreadHumanFeedback?.length ?? 0;
+          const unreadHuman = entitlements.hasHumanCoach
+            ? (coachingSignals.data?.weekly.unreadHumanFeedback?.length ?? 0)
+            : 0;
           const unreadNotes = (coachingSignals.data?.notifications.notifications ?? []).filter(
             (row) => row.readAt === null,
           ).length;

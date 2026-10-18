@@ -2176,6 +2176,60 @@ export async function entitlementsFor(
   return { ...projection, purchasesEnabled: false, source: 'subscriptions' };
 }
 
+/**
+ * Member data export — facts the member already owns. No invented metrics.
+ * Privacy: this is the account-holder export path; counsel still owns PDPL packaging (P0-PRIV).
+ */
+export async function exportMemberData(db: Database, actor: Actor) {
+  const profile = await readProfile(db, actor.userId);
+  const entitlements = await entitlementsFor(db, actor);
+  const consent = await coachShareConsentFor(db, actor);
+  const progress = await progressFor(db, actor.userId);
+  const sessions = await listSessions(db, actor.userId);
+  const recommendations = await listMemberRecommendations(db, actor);
+  const feedback = await listMemberCoachFeedback(db, actor);
+  const weekly = await latestWeeklyCoachBrief(db, actor.userId);
+  return {
+    exportedAt: new Date().toISOString(),
+    schemaVersion: 1,
+    disclaimer:
+      'Machine-readable export of stored Traina account facts. Not a medical record. Legal packaging pending P0-PRIV counsel.',
+    account: {
+      userId: actor.userId,
+      roles: actor.roles,
+      onboardingCompleted: profile.profile !== null,
+      displayName: profile.profile?.display_name ?? null,
+      goals: profile.goals,
+    },
+    entitlements: {
+      planCode: entitlements.planCode,
+      status: entitlements.status,
+      capabilities: entitlements.capabilities,
+      purchasesEnabled: entitlements.purchasesEnabled,
+      nutritionAdaptationsBlocked: entitlements.nutritionAdaptationsBlocked,
+    },
+    coachShareConsent: consent,
+    progress: {
+      weights: progress.weights,
+      completedWorkouts: progress.completedWorkouts,
+      personalRecords: progress.personalRecords,
+    },
+    sessions: sessions.slice(0, 100).map((row) => ({
+      id: (row as { id?: string }).id ?? null,
+      status: (row as { status?: string }).status ?? null,
+      name: (row as { name?: string }).name ?? null,
+    })),
+    recommendations: recommendations.recommendations.slice(0, 50).map((row) => ({
+      id: row.id,
+      category: row.category,
+      status: row.status,
+      summary: row.summary,
+    })),
+    humanCoachFeedback: feedback.feedback.slice(0, 50),
+    latestWeeklyBrief: weekly.brief,
+  };
+}
+
 export async function listMemberNotifications(db: Database, actor: Actor) {
   const rows = await db.query<{
     id: string;
@@ -2475,7 +2529,11 @@ export async function addCoachFollowUp(
 }
 
 export async function listCoachFollowUps(db: Database, actor: Actor) {
-  if (!actor.roles.includes('coach_reviewer') && !actor.roles.includes('admin')) {
+  if (
+    !actor.roles.includes('coach_reviewer')
+    && !actor.roles.includes('coach_supervisor')
+    && !actor.roles.includes('admin')
+  ) {
     throw new ApiError(403, 'FORBIDDEN', 'Access denied');
   }
   const rows = await db.query<{
