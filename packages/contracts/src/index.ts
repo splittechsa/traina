@@ -241,6 +241,8 @@ export const foodLogSchema = z
     fatMg: z.number().int().nonnegative(),
     source: z.enum(['manual', 'barcode', 'image_estimate', 'recipe']),
     mealSlot: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).optional(),
+    /** Member-visible name for ready meals / custom logs. */
+    label: z.string().trim().min(1).max(120).optional(),
   })
   .strict();
 

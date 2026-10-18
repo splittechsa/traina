@@ -91,6 +91,14 @@ export default function TrainingScreen() {
     queryKey: ['sessions'],
     queryFn: () => apiRequest<{ sessions: SessionRow[] }>('/v1/training/sessions'),
   });
+  const programs = useQuery({
+    queryKey: ['training-programs'],
+    queryFn: () =>
+      apiRequest<{
+        active: { id: string; name: string; templateId: string | null } | null;
+        templates: { id: string; nameAr?: string; nameEn?: string; name?: string }[];
+      }>('/v1/training/programs'),
+  });
   const progress = useQuery({
     queryKey: ['progress'],
     queryFn: () => apiRequest<Progress>('/v1/progress'),
@@ -108,11 +116,13 @@ export default function TrainingScreen() {
     calisthenics: allRows.filter((session) => familyForDiscipline(session.discipline) === 'calisthenics').length,
   }), [allRows]);
   const featured = featuredSession(rows, riyadhToday());
-  const rest = rows.filter((session) => session.id !== featured?.id);
+  const inProgress = allRows.find((session) => session.status === 'in_progress' || session.status === 'paused') ?? null;
+  const rest = rows.filter((session) => session.id !== featured?.id && session.id !== inProgress?.id);
   const today = riyadhToday();
   const todayCount = rows.filter((session) => String(session.scheduled_for).slice(0, 10) === today).length;
   const completedCount = rows.filter((session) => session.status === 'completed').length;
   const activeCount = rows.filter((session) => session.status === 'in_progress' || session.status === 'paused').length;
+  const activePlan = programs.data?.active ?? null;
 
   async function schedule() {
     if (saving) return;
@@ -192,8 +202,46 @@ export default function TrainingScreen() {
   const builderFamily = familyForDiscipline(discipline);
   return (
     <Screen>
-      <ScreenBody footer={<Button label={text(locale, 'createPlan')} onPress={() => setOpen(true)} />}>
-        <AppHeader title={text(locale, 'training')} subtitle={locale === 'ar' ? 'خطتك، قوتك، وتقدمك في مكان واحد' : 'Your plan, strength and progress'} />
+      <ScreenBody
+        footer={
+          <Button
+            label={activePlan === null ? text(locale, 'createOrCustomizePlan') : text(locale, 'createPlan')}
+            onPress={() => setOpen(true)}
+          />
+        }
+      >
+        <AppHeader
+          title={text(locale, 'training')}
+          subtitle={activePlan === null ? text(locale, 'noActivePlanHint') : text(locale, 'hasActivePlanHint')}
+        />
+
+        <SurfaceCard style={{ marginBottom: 12 }}>
+          <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12, marginBottom: 4 }}>
+            {text(locale, 'myActivePlan')}
+          </Text>
+          <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 18 }}>
+            {activePlan?.name ?? (locale === 'ar' ? 'لا توجد خطة نشطة' : 'No active plan')}
+          </Text>
+        </SurfaceCard>
+
+        {inProgress !== null ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: '/workout/[id]', params: { id: inProgress.id } })}
+            style={{ marginBottom: 14 }}
+          >
+            <SurfaceCard tone="raised">
+              <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, marginBottom: 4 }}>
+                {text(locale, 'resumeWorkout')}
+              </Text>
+              <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{inProgress.name}</Text>
+              <Text style={{ color: theme.textMuted, marginTop: 4 }}>
+                {label(locale, 'session', inProgress.status)}
+              </Text>
+            </SurfaceCard>
+          </Pressable>
+        ) : null}
+
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
           {[
             [locale === 'ar' ? 'اليوم' : 'Today', todayCount],
@@ -207,8 +255,7 @@ export default function TrainingScreen() {
           ))}
         </View>
 
-        {/* A real training photo instead of a flat color block — Home's hero already owns that
-            composition, so Training reaches for movement and texture instead of repeating it. */}
+        <SectionLabel>{text(locale, 'todayWorkout')}</SectionLabel>
         <Pressable
           accessibilityRole="button"
           onPress={() => (featured ? router.push({ pathname: '/workout/[id]', params: { id: featured.id } }) : setOpen(true))}
@@ -216,16 +263,25 @@ export default function TrainingScreen() {
           <PhotoWash source={editorialPhotos[photoFor(featured?.discipline ?? 'general_fitness')]} height={204}>
             <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
               <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: 11, letterSpacing: 1.2, marginBottom: 6 }}>
-                {locale === 'ar' ? 'جلستك' : 'YOUR SESSION'}
+                {locale === 'ar' ? 'تمرين اليوم' : 'TODAY'}
               </Text>
               <Text style={{ color: '#FFFFFF', fontFamily: fontFamily.bold, fontSize: 23, lineHeight: 29, marginBottom: 4 }} numberOfLines={2}>
-                {featured?.name ?? (locale === 'ar' ? 'ابنِ خطتك وابدأ' : 'Build your plan')}
+                {featured?.name
+                  ?? (activePlan !== null
+                    ? (locale === 'ar' ? 'لا يوجد تمرين مجدول اليوم' : 'No workout scheduled today')
+                    : (locale === 'ar' ? 'ابنِ خطتك وابدأ' : 'Build your plan'))}
               </Text>
               <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: fontFamily.regular, fontSize: 13, lineHeight: 19, marginBottom: 14 }}>
-                {featured === null ? (locale === 'ar' ? 'اختر رياضتك وابدأ أول جلسة' : 'Choose a sport and start the first session') : `${label(locale, 'discipline', featured.discipline)} · ${label(locale, 'session', featured.status)}`}
+                {featured === null
+                  ? (activePlan !== null
+                    ? (locale === 'ar' ? 'يمكنك إنشاء جلسة سريعة من خطتك' : 'You can start a quick session from your plan')
+                    : text(locale, 'noActivePlanHint'))
+                  : `${label(locale, 'discipline', featured.discipline)} · ${label(locale, 'session', featured.status)}`}
               </Text>
               <View style={{ minHeight: 42, borderRadius: 16, backgroundColor: theme.heroAccent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, alignSelf: 'flex-start' }}>
-                <Text style={{ color: theme.goldInk, fontFamily: fontFamily.bold, fontSize: 14 }}>{featured ? text(locale, 'start') : text(locale, 'createPlan')}</Text>
+                <Text style={{ color: theme.goldInk, fontFamily: fontFamily.bold, fontSize: 14 }}>
+                  {featured ? text(locale, 'start') : activePlan !== null ? text(locale, 'createPlan') : text(locale, 'createOrCustomizePlan')}
+                </Text>
               </View>
             </View>
           </PhotoWash>
@@ -246,7 +302,7 @@ export default function TrainingScreen() {
         </View>
 
         <TrainingFamilyCards value={filter} onChange={setFilter} counts={sessionFamilyCounts} />
-        {rest.length > 0 ? <SectionLabel>{text(locale, 'history')}</SectionLabel> : null}
+        {rest.length > 0 ? <SectionLabel>{text(locale, 'workoutHistory')}</SectionLabel> : null}
         {rest.map((session) => (
           <SurfaceCard key={session.id} padding={8} style={{ marginBottom: 10 }}>
             <MediaRow
@@ -258,7 +314,7 @@ export default function TrainingScreen() {
             />
           </SurfaceCard>
         ))}
-        <SectionTitle title={text(locale, 'exercises')} action={locale === 'ar' ? 'عرض الكل' : 'See all'} onAction={() => router.push('/exercises')} />
+        <SectionTitle title={text(locale, 'workoutLibrary')} action={locale === 'ar' ? 'عرض الكل' : 'See all'} onAction={() => router.push('/exercises')} />
         {library.slice(0, 5).map((exercise, index) => (
           <ExerciseCard
             key={exercise.id}

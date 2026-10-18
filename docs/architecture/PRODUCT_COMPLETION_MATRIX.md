@@ -1,10 +1,9 @@
 # Traina — Product completion matrix (release audit)
 
 **Updated:** 2026-10-18  
-**Master:** includes merged PR #43 (`a2d7011`) — real training adaptation apply  
-**Merged:** PR #43 (adaptation apply) + PR #44 (entitlements / membership / landing / supplements)  
-**Open follow-on:** Yazan tool resolver + www sections (`product/yazan-tools-and-www`)  
-**Backup:** `backup/dirty-tree-2026-10-17` preserved  
+**Master:** includes #43–#45  
+**Open UX reconstruction:** `ux/mobile-rtl-nutrition-workout` — RTL header, meal slots, workout set table, plan hierarchy  
+**Device evidence:** physical iPhone/Android capture still **M** (do not fabricate)  
 
 Legend: **V** verified · **I** implemented · **P** polish · **W** partial · **M** missing · **B** blocked · **U** unsafe to claim production-ready
 
@@ -23,12 +22,12 @@ Legend: **V** verified · **I** implemented · **P** polish · **W** partial · 
 | `(onboarding)/index` | **W** | | | Re-onboarding / safety screening incomplete |
 | `(tabs)/home` | **I** | skeleton / offline / error | tabs | Coaching signal cards (feedback, recs, notifications) |
 | `(tabs)/training` | **I** | loading / error | tabs | Adaptation overlay via program versions |
-| `(tabs)/nutrition` | **I** | | tabs | ENERGY_POLICY blocks paid adaptations (**B**) |
-| `(tabs)/coach` (Yazan) | **W** | empty / provider / timeout | tabs | Gemini live; tool eval suite **M** |
+| `(tabs)/nutrition` | **I** | meal sections + ready library | tabs | ENERGY_POLICY blocks paid adaptations (**B**) |
+| `(tabs)/coach` (Yazan) | **W** | empty / provider / timeout | tabs | Composer/line-height polish |
 | `(tabs)/progress` | **W** | | tabs | Trend explanations thin |
 | `(tabs)/community` | **W** | empty honest | tabs | |
-| `workout/[id]` | **I** | | back | Reflects adapted sets after apply |
-| `weekly-checkin` | **I** | | back | Honest Yazan-only vs human queue |
+| `workout/[id]` | **I** | set table + rest timer | back | Auto offline sync; no sync button |
+| `weekly-checkin` | **I** | RTL header + coach empty states | back | Honest Yazan-only vs human queue |
 | `food-log` | **I** | | back | |
 | `exercises` | **I** | | close | |
 | `macros` | **I** | | back | |

@@ -309,6 +309,14 @@ export function proposeWeeklyNutritionStep(input: {
 }
 
 /** Ready meal with declared macros only — never invent a Saudi dish calculator. */
+export type ReadyMealIngredient = {
+  nameAr: string;
+  nameEn: string;
+  /** Declared quantity string for the member UI — not a lab assay. */
+  quantityAr: string;
+  quantityEn: string;
+};
+
 export type ReadyMealTemplate = {
   id: string;
   slot: MealSlot;
@@ -320,6 +328,12 @@ export type ReadyMealTemplate = {
   fatMg: number;
   /** Provenance label shown to the member. */
   provenance: 'program_template';
+  /** Approximate recipe lines — declared templates, not lab-verified assays. */
+  ingredients?: readonly ReadyMealIngredient[];
+  prepAr?: string;
+  prepEn?: string;
+  servings?: number;
+  tags?: readonly string[];
 };
 
 export type MealPlanSlotPick = {
@@ -367,6 +381,15 @@ export const READY_MEAL_TEMPLATES: readonly ReadyMealTemplate[] = [
     carbohydrateMg: 42_000,
     fatMg: 14_000,
     provenance: 'program_template',
+    servings: 1,
+    tags: ['saudi', 'high_protein'],
+    ingredients: [
+      { nameAr: 'بيض كامل', nameEn: 'Whole eggs', quantityAr: '٢ حبة', quantityEn: '2 eggs' },
+      { nameAr: 'شوفان مطبوخ', nameEn: 'Cooked oats', quantityAr: '١٥٠ غ', quantityEn: '150 g' },
+      { nameAr: 'زيت زيتون', nameEn: 'Olive oil', quantityAr: '٥ مل', quantityEn: '5 ml' },
+    ],
+    prepAr: 'اطبخ الشوفان، اقلي البيض بخفة، واخلط مع زيت الزيتون.',
+    prepEn: 'Cook oats, lightly scramble eggs, finish with olive oil.',
   },
   {
     id: 'breakfast_yogurt_fruit',
@@ -378,6 +401,14 @@ export const READY_MEAL_TEMPLATES: readonly ReadyMealTemplate[] = [
     carbohydrateMg: 30_000,
     fatMg: 6_000,
     provenance: 'program_template',
+    servings: 1,
+    tags: ['quick', 'no_cook'],
+    ingredients: [
+      { nameAr: 'زبادي يوناني', nameEn: 'Greek yogurt', quantityAr: '١٧٠ غ', quantityEn: '170 g' },
+      { nameAr: 'فاكهة طازجة', nameEn: 'Fresh fruit', quantityAr: '١٢٠ غ', quantityEn: '120 g' },
+    ],
+    prepAr: 'اخلط الزبادي مع الفاكهة وقدّم مباشرة.',
+    prepEn: 'Mix yogurt with fruit and serve.',
   },
   {
     id: 'lunch_chicken_rice',
@@ -389,6 +420,16 @@ export const READY_MEAL_TEMPLATES: readonly ReadyMealTemplate[] = [
     carbohydrateMg: 55_000,
     fatMg: 10_000,
     provenance: 'program_template',
+    servings: 1,
+    tags: ['saudi', 'high_protein', 'gym'],
+    ingredients: [
+      { nameAr: 'صدر دجاج مشوي', nameEn: 'Grilled chicken breast', quantityAr: '١٥٠ غ', quantityEn: '150 g' },
+      { nameAr: 'رز مطبوخ', nameEn: 'Cooked rice', quantityAr: '١٨٠ غ', quantityEn: '180 g' },
+      { nameAr: 'خضار مشكلة', nameEn: 'Mixed vegetables', quantityAr: '١٠٠ غ', quantityEn: '100 g' },
+      { nameAr: 'زيت زيتون', nameEn: 'Olive oil', quantityAr: '١٠ غ', quantityEn: '10 g' },
+    ],
+    prepAr: 'اشوِ الدجاج، قدّم مع الرز والخضار وملعقة زيت زيتون.',
+    prepEn: 'Grill chicken; serve with rice, vegetables, and olive oil.',
   },
   {
     id: 'lunch_beef_potato',
@@ -400,6 +441,14 @@ export const READY_MEAL_TEMPLATES: readonly ReadyMealTemplate[] = [
     carbohydrateMg: 48_000,
     fatMg: 18_000,
     provenance: 'program_template',
+    servings: 1,
+    tags: ['saudi'],
+    ingredients: [
+      { nameAr: 'لحم بقري قليل الدهن', nameEn: 'Lean beef', quantityAr: '١٤٠ غ', quantityEn: '140 g' },
+      { nameAr: 'بطاطس مشوية', nameEn: 'Baked potato', quantityAr: '٢٠٠ غ', quantityEn: '200 g' },
+    ],
+    prepAr: 'اطبخ اللحم والقِ البطاطس. قدّم معاً.',
+    prepEn: 'Cook beef and bake potato. Serve together.',
   },
   {
     id: 'dinner_fish_veg',
@@ -411,6 +460,14 @@ export const READY_MEAL_TEMPLATES: readonly ReadyMealTemplate[] = [
     carbohydrateMg: 18_000,
     fatMg: 14_000,
     provenance: 'program_template',
+    servings: 1,
+    tags: ['light'],
+    ingredients: [
+      { nameAr: 'سمك أبيض', nameEn: 'White fish', quantityAr: '١٦٠ غ', quantityEn: '160 g' },
+      { nameAr: 'خضار مشوية', nameEn: 'Roasted vegetables', quantityAr: '٢٠٠ غ', quantityEn: '200 g' },
+    ],
+    prepAr: 'اشوِ السمك والخضار مع توابل خفيفة.',
+    prepEn: 'Bake fish and vegetables with light seasoning.',
   },
   {
     id: 'dinner_chicken_salad',
@@ -422,6 +479,14 @@ export const READY_MEAL_TEMPLATES: readonly ReadyMealTemplate[] = [
     carbohydrateMg: 12_000,
     fatMg: 12_000,
     provenance: 'program_template',
+    servings: 1,
+    tags: ['light', 'high_protein'],
+    ingredients: [
+      { nameAr: 'صدر دجاج', nameEn: 'Chicken breast', quantityAr: '١٥٠ غ', quantityEn: '150 g' },
+      { nameAr: 'سلطة خضراء', nameEn: 'Green salad', quantityAr: '١٥٠ غ', quantityEn: '150 g' },
+    ],
+    prepAr: 'قطّع الدجاج المشوي فوق السلطة.',
+    prepEn: 'Slice grilled chicken over salad.',
   },
   {
     id: 'snack_whey_banana',
@@ -433,6 +498,14 @@ export const READY_MEAL_TEMPLATES: readonly ReadyMealTemplate[] = [
     carbohydrateMg: 27_000,
     fatMg: 3_000,
     provenance: 'program_template',
+    servings: 1,
+    tags: ['quick', 'post_workout'],
+    ingredients: [
+      { nameAr: 'بروتين واي', nameEn: 'Whey protein', quantityAr: '١ مغرفة', quantityEn: '1 scoop' },
+      { nameAr: 'موز', nameEn: 'Banana', quantityAr: '١ حبة متوسطة', quantityEn: '1 medium' },
+    ],
+    prepAr: 'اخلط الواي بالماء وقدّم مع الموز.',
+    prepEn: 'Shake whey with water; serve with banana.',
   },
   {
     id: 'snack_cottage_dates',
@@ -444,6 +517,14 @@ export const READY_MEAL_TEMPLATES: readonly ReadyMealTemplate[] = [
     carbohydrateMg: 28_000,
     fatMg: 4_000,
     provenance: 'program_template',
+    servings: 1,
+    tags: ['saudi', 'quick'],
+    ingredients: [
+      { nameAr: 'جبن قريش', nameEn: 'Cottage cheese', quantityAr: '١٥٠ غ', quantityEn: '150 g' },
+      { nameAr: 'تمر', nameEn: 'Dates', quantityAr: '٣ حبات', quantityEn: '3 dates' },
+    ],
+    prepAr: 'قدّم الجبن مع التمر مباشرة.',
+    prepEn: 'Serve cottage cheese with dates.',
   },
 ];
 

@@ -152,14 +152,15 @@ export default function CoachScreen() {
                 placeholderTextColor={theme.textMuted}
                 style={{
                   flex: 1,
-                  minHeight: 40,
-                  maxHeight: 120,
-                  paddingVertical: 8,
+                  minHeight: 44,
+                  maxHeight: 140,
+                  paddingVertical: 10,
                   color: theme.text,
                   fontFamily: fontFamily.regular,
                   fontSize: typeScale.body,
-                  // Natural alignment: start edge follows the RTL/LTR root, so no manual flip.
-                  writingDirection: isAr ? 'rtl' : 'ltr',
+                  lineHeight: 24,
+                  writingDirection: 'auto',
+                  textAlign: isAr ? 'right' : 'left',
                 }}
               />
               <Pressable

@@ -2907,16 +2907,18 @@ export async function logFood(
     fatMg: number;
     source: FoodEntry['source'];
     mealSlot?: string;
+    label?: string;
   },
 ) {
   const mealSlot = entry.mealSlot === undefined ? null : isMealSlot(entry.mealSlot) ? entry.mealSlot : null;
   if (entry.mealSlot !== undefined && mealSlot === null) {
     throw new ApiError(422, 'UNKNOWN_MEAL_SLOT', 'That meal slot is not in the catalog');
   }
+  const label = typeof entry.label === 'string' && entry.label.trim().length > 0 ? entry.label.trim().slice(0, 120) : null;
   await db.query(
-    `INSERT INTO food_entries (user_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, meal_slot)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [userId, entry.loggedOn, entry.energyKcal, entry.proteinMg, entry.carbohydrateMg, entry.fatMg, entry.source, entry.source === 'image_estimate', mealSlot],
+    `INSERT INTO food_entries (user_id, logged_on, energy_kcal, protein_mg, carbohydrate_mg, fat_mg, source, estimate, meal_slot, label)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [userId, entry.loggedOn, entry.energyKcal, entry.proteinMg, entry.carbohydrateMg, entry.fatMg, entry.source, entry.source === 'image_estimate', mealSlot, label],
   );
   return diaryFor(db, userId, entry.loggedOn);
 }

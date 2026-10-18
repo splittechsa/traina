@@ -27,23 +27,71 @@ type SettingsIcon = ComponentProps<typeof SymbolView>['name'];
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-export function StackBackControl({ label }: { label?: string } = {}) {
+/**
+ * Native-style back control. With I18nManager RTL, the first flex child sits on the
+ * trailing edge (right in Arabic). The chevron points "back" along the reading axis:
+ * Arabic → chevron.right, English → chevron.left.
+ */
+export function StackBackControl({
+  label,
+  onPress,
+  confirmUnsaved,
+}: {
+  label?: string;
+  onPress?: () => void;
+  /** When true, confirm before leaving (workout / form sessions). */
+  confirmUnsaved?: { title: string; body: string; leave: string; stay: string };
+} = {}) {
   const theme = useTheme();
-  const { locale } = useLocale();
+  const { locale, direction } = useLocale();
+  const rtl = direction === 'rtl';
+
+  function goBack() {
+    if (onPress !== undefined) {
+      onPress();
+      return;
+    }
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/home');
+  }
+
+  function handlePress() {
+    if (confirmUnsaved === undefined) {
+      goBack();
+      return;
+    }
+    // Lazy require avoids circular imports with Alert-only callers.
+    const { Alert } = require('react-native') as typeof import('react-native');
+    Alert.alert(confirmUnsaved.title, confirmUnsaved.body, [
+      { text: confirmUnsaved.stay, style: 'cancel' },
+      { text: confirmUnsaved.leave, style: 'destructive', onPress: goBack },
+    ]);
+  }
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label ?? text(locale, 'back')}
-      onPress={() => {
-        if (router.canGoBack()) router.back();
-        else router.replace('/(tabs)/home');
-      }}
+      onPress={handlePress}
       hitSlop={12}
-      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+      style={{
+        minWidth: 44,
+        minHeight: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 22,
+        backgroundColor: theme.surfaceMuted,
+      }}
     >
-      <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>
-        {label ?? text(locale, 'back')}
-      </Text>
+      <SymbolView
+        name={{
+          ios: rtl ? 'chevron.right' : 'chevron.left',
+          android: rtl ? 'chevron_right' : 'chevron_left',
+          web: rtl ? 'chevron_right' : 'chevron_left',
+        }}
+        size={18}
+        tintColor={theme.accent}
+      />
     </Pressable>
   );
 }
@@ -55,6 +103,8 @@ export function AppHeader({
   large = false,
   branded = true,
   showBack = false,
+  onBack,
+  confirmUnsaved,
 }: {
   title: string;
   subtitle?: string;
@@ -62,26 +112,61 @@ export function AppHeader({
   large?: boolean;
   branded?: boolean;
   showBack?: boolean;
+  onBack?: () => void;
+  confirmUnsaved?: { title: string; body: string; leave: string; stay: string };
 }) {
   const theme = useTheme();
   const { locale } = useLocale();
   const size = large ? typeScale.hero : typeScale.title;
+  const align = locale === 'ar' ? 'right' as const : 'left' as const;
+  // Rely on native RTL flex mirroring: leading slot = start edge (right in ar, left in en).
+  const leading = showBack ? (
+    <StackBackControl onPress={onBack} confirmUnsaved={confirmUnsaved} />
+  ) : branded ? (
+    <TrainaMark size={large ? 42 : 34} />
+  ) : (
+    <View style={{ width: 44 }} />
+  );
   return (
-    <View style={styles.header}>
-      {showBack ? <StackBackControl /> : branded ? <TrainaMark size={large ? 42 : 34} /> : null}
-      <View style={{ flex: 1 }}>
+    <View style={styles.header} accessibilityRole="header">
+      {leading}
+      <View style={{ flex: 1, minWidth: 0 }}>
         <Text
-          style={[styles.headerTitle, { color: theme.text, fontFamily: fontFamily.bold, fontSize: size, lineHeight: size * 1.22, textAlign: locale === 'ar' ? 'right' : 'left' }]}
+          style={[
+            styles.headerTitle,
+            {
+              color: theme.text,
+              fontFamily: fontFamily.bold,
+              fontSize: size,
+              lineHeight: size * 1.22,
+              writingDirection: 'auto',
+              textAlign: align,
+            },
+          ]}
           numberOfLines={2}
           maxFontSizeMultiplier={1.2}
         >
           {title}
         </Text>
         {subtitle !== undefined ? (
-          <Text style={[styles.caption, { color: theme.textMuted, fontFamily: fontFamily.medium, marginTop: 2, textAlign: locale === 'ar' ? 'right' : 'left' }]}>{subtitle}</Text>
+          <Text
+            style={[
+              styles.caption,
+              {
+                color: theme.textMuted,
+                fontFamily: fontFamily.medium,
+                marginTop: 2,
+                writingDirection: 'auto',
+                textAlign: align,
+              },
+            ]}
+            numberOfLines={2}
+          >
+            {subtitle}
+          </Text>
         ) : null}
       </View>
-      {trailing}
+      {trailing ?? (showBack ? <View style={{ width: 44 }} /> : null)}
     </View>
   );
 }

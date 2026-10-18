@@ -276,10 +276,29 @@ export default function WeeklyCheckinScreen() {
           )
         }
       >
-        <AppHeader title={text(locale, 'weeklyCheckin')} subtitle={weekOf} showBack />
+        <AppHeader
+          title={text(locale, 'weeklyCheckin')}
+          subtitle={weekOf}
+          showBack
+        />
 
         {preview.isPending || status.isPending ? <LoadingSkeleton /> : null}
         {preview.isError ? <EmptyState title={text(locale, 'error')} body={text(locale, 'error')} /> : null}
+
+        {!status.isPending && status.data?.hasAssignedCoach === false ? (
+          <EmptyState
+            title={text(locale, 'weeklyNoCoachTitle')}
+            body={status.data.noCoachMessage ?? text(locale, 'weeklyNoCoachAssigned')}
+          />
+        ) : null}
+
+        {status.data?.hasAssignedCoach === true && status.data.review === null ? (
+          <SurfaceCard tone="muted">
+            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 22 }}>
+              {text(locale, 'weeklyPendingCoach')}
+            </Text>
+          </SurfaceCard>
+        ) : null}
 
         {status.data?.unreadHumanFeedback?.[0] !== undefined ? (
           <SurfaceCard tone="raised">
@@ -317,9 +336,6 @@ export default function WeeklyCheckinScreen() {
                     : `Weight trend: ${packet.weightTrendGramsPerWeek} g/week`}
               </Text>
             </SurfaceCard>
-            {!status.data?.hasAssignedCoach ? (
-              <EmptyState title={text(locale, 'weeklyNoCoachTitle')} body={status.data?.noCoachMessage ?? text(locale, 'weeklyNoCoachBody')} />
-            ) : null}
             {status.data?.review !== null && status.data?.review !== undefined ? (
               <SurfaceCard tone={status.data.review.status === 'OVERDUE' ? 'raised' : 'muted'}>
                 <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>

@@ -98,7 +98,17 @@ function FoodRow({ food, onPress }: { food: LibraryFood; onPress: () => void }) 
   );
 }
 
-function PortionSheet({ food, day, onClose }: { food: LibraryFood | null; day: string; onClose: () => void }) {
+function PortionSheet({
+  food,
+  day,
+  mealSlot,
+  onClose,
+}: {
+  food: LibraryFood | null;
+  day: string;
+  mealSlot?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  onClose: () => void;
+}) {
   const theme = useTheme();
   const { locale } = useLocale();
   const { reduce } = useMotion();
@@ -124,7 +134,7 @@ function PortionSheet({ food, day, onClose }: { food: LibraryFood | null; day: s
     setSaving(true);
     setError('');
     try {
-      await logLibraryFood(food, amount, day);
+      await logLibraryFood(food, amount, day, mealSlot);
       await Promise.all([
         client.invalidateQueries({ queryKey: ['diary', day] }),
         client.invalidateQueries({ queryKey: ['home'] }),
@@ -211,9 +221,13 @@ export default function FoodLogScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
   const ar = locale === 'ar';
-  const params = useLocalSearchParams<{ day?: string; code?: string }>();
+  const params = useLocalSearchParams<{ day?: string; code?: string; mealSlot?: string }>();
   const day = typeof params.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(params.day) ? params.day : riyadhToday();
   const code = typeof params.code === 'string' ? params.code : undefined;
+  const mealSlot =
+    params.mealSlot === 'breakfast' || params.mealSlot === 'lunch' || params.mealSlot === 'dinner' || params.mealSlot === 'snack'
+      ? params.mealSlot
+      : undefined;
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<LibraryFood | null>(null);
   const term = useDebounced(query.trim(), 420);
@@ -255,12 +269,14 @@ export default function FoodLogScreen() {
       <ScreenBody>
         <AppHeader
           title={ar ? 'أضف طعاماً' : 'Add food'}
-          subtitle={ar ? 'ابحث، اختر الكمية، وأضف' : 'Search, set the amount, add'}
-          trailing={
-            <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={10}>
-              <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.body }}>{ar ? 'إغلاق' : 'Close'}</Text>
-            </Pressable>
+          subtitle={
+            mealSlot === 'breakfast' ? text(locale, 'mealBreakfast')
+              : mealSlot === 'lunch' ? text(locale, 'mealLunch')
+                : mealSlot === 'dinner' ? text(locale, 'mealDinner')
+                  : mealSlot === 'snack' ? text(locale, 'mealSnacks')
+                    : ar ? 'ابحث، اختر الكمية، وأضف' : 'Search, set the amount, add'
           }
+          showBack
         />
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
@@ -363,7 +379,7 @@ export default function FoodLogScreen() {
       </ScreenBody>
 
       <BottomSheet visible={selected !== null} onClose={() => setSelected(null)}>
-        <PortionSheet food={selected} day={day} onClose={() => setSelected(null)} />
+        <PortionSheet food={selected} day={day} mealSlot={mealSlot} onClose={() => setSelected(null)} />
       </BottomSheet>
     </Screen>
   );

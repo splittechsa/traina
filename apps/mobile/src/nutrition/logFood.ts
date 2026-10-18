@@ -36,26 +36,64 @@ async function resolveFoodId(food: LibraryFood): Promise<{ id: string; linkKey: 
   return { id, linkKey };
 }
 
-async function postPortion(foodItemId: string, grams: number, day: string) {
-  await apiRequest('/v1/nutrition/portions', { method: 'POST', body: { foodItemId, quantityGrams: grams, loggedOn: day } });
+async function postPortion(
+  foodItemId: string,
+  grams: number,
+  day: string,
+  mealSlot?: 'breakfast' | 'lunch' | 'dinner' | 'snack',
+) {
+  await apiRequest('/v1/nutrition/portions', {
+    method: 'POST',
+    body: { foodItemId, quantityGrams: grams, loggedOn: day, ...(mealSlot ? { mealSlot } : {}) },
+  });
 }
 
-export async function logLibraryFood(food: LibraryFood, grams: number, day: string): Promise<void> {
+export async function logLibraryFood(
+  food: LibraryFood,
+  grams: number,
+  day: string,
+  mealSlot?: 'breakfast' | 'lunch' | 'dinner' | 'snack',
+): Promise<void> {
   const { id, linkKey } = await resolveFoodId(food);
   try {
-    await postPortion(id, grams, day);
+    await postPortion(id, grams, day, mealSlot);
   } catch (error) {
     // A remembered link can go stale (account reset, food deleted) — recreate once.
     if (linkKey !== null && error instanceof ApiClientError && error.code === 'FOOD_NOT_FOUND') {
       await removeKey(linkKey);
       const fresh = await createMemberFood(food);
       await writeJson(linkKey, fresh);
-      await postPortion(fresh, grams, day);
+      await postPortion(fresh, grams, day, mealSlot);
     } else {
       throw error;
     }
   }
   await rememberRecent({ ...food, localId: food.localId ?? id });
+}
+
+/** Log a declared ready-meal template as a diary entry (program_template macros, not lab assays). */
+export async function logReadyMeal(input: {
+  loggedOn: string;
+  mealSlot: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  label: string;
+  energyKcal: number;
+  proteinMg: number;
+  carbohydrateMg: number;
+  fatMg: number;
+}): Promise<void> {
+  await apiRequest('/v1/nutrition/entries', {
+    method: 'POST',
+    body: {
+      loggedOn: input.loggedOn,
+      mealSlot: input.mealSlot,
+      label: input.label,
+      energyKcal: input.energyKcal,
+      proteinMg: input.proteinMg,
+      carbohydrateMg: input.carbohydrateMg,
+      fatMg: input.fatMg,
+      source: 'manual',
+    },
+  });
 }
 
 export async function readRecentFoods(): Promise<LibraryFood[]> {
