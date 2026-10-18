@@ -13,7 +13,7 @@ Legend: **V** verified · **I** implemented needs integration · **P** polish ·
 | Auth register/login/verify/recover/reset | **I** | API + mobile auth screens; needs device QA |
 | Session persistence | **I** | SessionProvider; expiry UX polish |
 | Onboarding | **W** | Present; re-onboarding / safety screening incomplete |
-| Home today coaching surface | **W** | Exists; pending recs / human feedback prominence uneven |
+| Home today coaching surface | **I** | Coaching signal cards for human feedback / pending recs / unread notes (PR #44) |
 | Training programs + workout execution | **I** | Catalog, start-day, sets; adaptation overlay wired in PR #43 |
 | Real training recommendation apply | **I** → awaiting **V** | Atomic apply + tests; **not VERIFIED until PR #43 merge + review** |
 | Exercise library / scanner | **I** | Needs licensed media audit |
