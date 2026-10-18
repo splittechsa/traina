@@ -60,8 +60,17 @@ Verified present on `fragrant-fog-72018396`.
 | Mobile typecheck | passed |
 | Prior GitHub CI on PR #43 | api + mobile SUCCESS (pre-hardening SHA) |
 
+## Independent review findings (2026-10-18) — fixed on branch
+
+| Severity | Finding | Fix |
+| --- | --- | --- |
+| High | Idempotent apply IDOR leaked `diff` / version after apply | Owner-scoped `loadAdaptationApplication` JOIN; 404 when recommendation not owned |
+| High | Member could `APPROVED` from `REVIEW_REQUIRED` then apply | Member advance rejects with `HUMAN_REVIEW_REQUIRED`; coach decide only |
+| Medium | Adaptation apply without `expectedProgramVersion` | Fail closed (`MISSING_EXPECTED_PROGRAM_VERSION`) except preview |
+| Medium | Soft/no-op integration asserts | Hard asserts for stale, post-apply IDOR, ENERGY_POLICY code |
+
 ## Remaining before VERIFIED / merge
 
-- [ ] Push hardening commit; CI green on **latest** SHA  
-- [ ] Human code review on PR #43 (none yet — **do not merge without review**)  
+- [x] Push review-fix commit; CI green on **latest** SHA  
+- [ ] Explicit human approve on GitHub (automated review findings addressed)  
 - [ ] Physical iPhone evidence still open (non-blocking for API apply gate; blocks full P2 product exit)

@@ -183,6 +183,13 @@ export function buildProgramAdaptationPlan(input: {
     throw new DomainError('INVALID_PROGRAM_VERSION', 'Program version must be >= 1');
   }
   const expected = recommendation.payload.expectedProgramVersion;
+  // Non-preview applies fail closed without a version stamp so adaptations cannot land on a newer plan silently.
+  if (input.preview !== true && typeof expected !== 'number') {
+    throw new DomainError(
+      'MISSING_EXPECTED_PROGRAM_VERSION',
+      'Training adaptations require expectedProgramVersion before apply',
+    );
+  }
   if (typeof expected === 'number' && expected !== currentVersion) {
     throw new DomainError(
       'STALE_PROGRAM_VERSION',

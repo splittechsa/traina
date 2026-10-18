@@ -159,39 +159,44 @@ describe('program adaptation apply loop', () => {
     );
     expect(Number(linked.rows[0]?.version)).toBe(2);
 
-    // Stale expectedProgramVersion after apply must fail for a new recovery draft stamped at v1.
-    const stale = await app.inject({
-      method: 'POST',
-      url: `/v1/member/recommendations/generate`,
-      headers: auth,
-    });
-    const nextTraining = (stale.json().recommendations as { id: string; category: string; status: string; payload?: { expectedProgramVersion?: number } }[]).find(
-      (row) => row.category === 'training' && row.status === 'MEMBER_CONFIRMATION_REQUIRED',
+    // Stale expectedProgramVersion (stamped at v1 while program is now v2) must fail closed.
+    const me = await app.inject({ method: 'GET', url: '/v1/me', headers: auth });
+    const memberId = me.json().userId as string;
+    const staleId = 'a1000000-0000-4000-8000-000000000099';
+    await database.query(
+      `INSERT INTO coaching_recommendations (
+         id, user_id, category, status, summary, rationale, confidence, missing_data, evidence,
+         policy_version, expires_at, payload, requires_human_review, requires_member_confirmation, audit
+       ) VALUES (
+         $1, $2, 'training', 'APPROVED', 'Stale recovery', 'test', 'low', '[]'::jsonb, '[]'::jsonb,
+         'test', now() + interval '7 days',
+         '{"kind":"recovery_preference","expectedProgramVersion":1}'::jsonb,
+         false, true, '[]'::jsonb
+       )`,
+      [staleId, memberId],
     );
-    if (nextTraining !== undefined) {
-      await app.inject({
-        method: 'POST',
-        url: `/v1/member/recommendations/${nextTraining.id}/advance`,
-        headers: auth,
-        payload: { status: 'APPROVED' },
-      });
-      // Force stale stamp
-      await database.query(
-        `UPDATE coaching_recommendations
-         SET payload = jsonb_set(payload, '{expectedProgramVersion}', '1'::jsonb)
-         WHERE id = $1`,
-        [nextTraining.id],
-      );
-      const blockedStale = await app.inject({
-        method: 'POST',
-        url: `/v1/member/recommendations/${nextTraining.id}/advance`,
-        headers: auth,
-        payload: { status: 'APPLIED' },
-      });
-      expect(blockedStale.statusCode).toBeGreaterThanOrEqual(400);
-    }
+    const blockedStale = await app.inject({
+      method: 'POST',
+      url: `/v1/member/recommendations/${staleId}/advance`,
+      headers: auth,
+      payload: { status: 'APPLIED' },
+    });
+    expect(blockedStale.statusCode).toBeGreaterThanOrEqual(400);
+    expect(blockedStale.json().error?.code).toBe('STALE_PROGRAM_VERSION');
 
-    // Unauthorized / cross-user
+    // Member cannot self-approve REVIEW_REQUIRED (coach-only path).
+    const humanGate = all.find((row) => row.status === 'REVIEW_REQUIRED');
+    expect(humanGate).toBeDefined();
+    const selfApprove = await app.inject({
+      method: 'POST',
+      url: `/v1/member/recommendations/${humanGate!.id}/advance`,
+      headers: auth,
+      payload: { status: 'APPROVED' },
+    });
+    expect(selfApprove.statusCode).toBe(403);
+    expect(selfApprove.json().error?.code).toBe('HUMAN_REVIEW_REQUIRED');
+
+    // Unauthorized / cross-user — including post-apply idempotent path (must not leak diff).
     const other = await register(app, 'adapt.other@sahhti.test');
     const stolen = await app.inject({
       method: 'POST',
@@ -200,26 +205,31 @@ describe('program adaptation apply loop', () => {
       payload: { status: 'APPLIED' },
     });
     expect(stolen.statusCode).toBe(404);
+    expect(stolen.json().diff).toBeUndefined();
+    expect(stolen.json().programVersion).toBeUndefined();
 
-    // Nutrition cannot be applied (ENERGY_POLICY)
-    const nutrition = all.find((row) => row.category === 'nutrition');
-    if (nutrition !== undefined) {
-      await database.query(
-        `UPDATE coaching_recommendations SET status = 'APPROVED' WHERE id = $1`,
-        [nutrition.id],
-      );
-      const blocked = await app.inject({
-        method: 'POST',
-        url: `/v1/member/recommendations/${nutrition.id}/advance`,
-        headers: auth,
-        payload: { status: 'APPLIED' },
-      });
-      expect(blocked.statusCode).toBeGreaterThanOrEqual(400);
-      const code = blocked.json().error?.code as string | undefined;
-      expect(['ENERGY_POLICY_UNAPPROVED', 'POLICY_BLOCKED', 'USE_PROGRAM_APPLY', 'NOT_TRAINING_ADAPTATION'].includes(code ?? '')).toBe(
-        true,
-      );
-    }
+    // Nutrition cannot be applied (ENERGY_POLICY) even when already APPROVED.
+    const nutritionId = 'a1000000-0000-4000-8000-000000000098';
+    await database.query(
+      `INSERT INTO coaching_recommendations (
+         id, user_id, category, status, summary, rationale, confidence, missing_data, evidence,
+         policy_version, expires_at, payload, requires_human_review, requires_member_confirmation, audit
+       ) VALUES (
+         $1, $2, 'nutrition', 'APPROVED', 'Nutrition step', 'test', 'low', '[]'::jsonb, '[]'::jsonb,
+         'test', now() + interval '7 days',
+         '{"kind":"nutrition_pace"}'::jsonb,
+         true, false, '[]'::jsonb
+       )`,
+      [nutritionId, memberId],
+    );
+    const blocked = await app.inject({
+      method: 'POST',
+      url: `/v1/member/recommendations/${nutritionId}/advance`,
+      headers: auth,
+      payload: { status: 'APPLIED' },
+    });
+    expect(blocked.statusCode).toBeGreaterThanOrEqual(400);
+    expect(blocked.json().error?.code).toBe('ENERGY_POLICY_UNAPPROVED');
 
     const nutritionProgram = await app.inject({
       method: 'POST',

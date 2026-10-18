@@ -1110,14 +1110,16 @@ type AdaptationApplicationRow = {
 async function loadAdaptationApplication(
   db: Database,
   recommendationId: string,
+  ownerUserId: string,
 ): Promise<AdaptationApplicationRow | null> {
-  const existing = await db
-    .query<AdaptationApplicationRow>(
-      `SELECT id::text AS id, to_version, to_version_id::text AS to_version_id, diff
-       FROM program_adaptation_applications WHERE recommendation_id = $1`,
-      [recommendationId],
-    )
-    .catch(() => ({ rows: [] as AdaptationApplicationRow[] }));
+  // Owner-scoped: never surface adaptation audit/diff for another member's recommendation.
+  const existing = await db.query<AdaptationApplicationRow>(
+    `SELECT a.id::text AS id, a.to_version, a.to_version_id::text AS to_version_id, a.diff
+     FROM program_adaptation_applications a
+     INNER JOIN coaching_recommendations r ON r.id = a.recommendation_id
+     WHERE a.recommendation_id = $1 AND r.user_id = $2`,
+    [recommendationId, ownerUserId],
+  );
   return existing.rows[0] ?? null;
 }
 
@@ -1131,12 +1133,16 @@ async function idempotentAdaptationResponse(
     `SELECT * FROM coaching_recommendations WHERE id = $1 AND user_id = $2`,
     [recommendationId, actor.userId],
   );
-  const rec = rows.rows[0] === undefined ? null : recommendationRowToDomain(rows.rows[0]);
+  const row = rows.rows[0];
+  if (row === undefined) {
+    throw new ApiError(404, 'RECOMMENDATION_NOT_FOUND', 'Recommendation not found');
+  }
+  const rec = recommendationRowToDomain(row);
   return {
     persisted: true,
     idempotent: true,
     recommendation: rec,
-    applied: rec?.status === 'APPLIED',
+    applied: rec.status === 'APPLIED',
     programVersion: Number(existing.to_version),
     programVersionId: existing.to_version_id,
     diff: existing.diff,
@@ -1152,7 +1158,7 @@ export async function applyTrainingRecommendationToProgram(
   actor: Actor,
   recommendationId: string,
 ) {
-  const existingApply = await loadAdaptationApplication(db, recommendationId);
+  const existingApply = await loadAdaptationApplication(db, recommendationId, actor.userId);
   if (existingApply !== null) {
     return idempotentAdaptationResponse(db, actor, recommendationId, existingApply);
   }
@@ -1169,7 +1175,7 @@ export async function applyTrainingRecommendationToProgram(
       }
 
       // Re-check under row lock so concurrent / retry storms return idempotent success.
-      const lockedExisting = await loadAdaptationApplication(tx, recommendationId);
+      const lockedExisting = await loadAdaptationApplication(tx, recommendationId, actor.userId);
       if (lockedExisting !== null) {
         return idempotentAdaptationResponse(tx, actor, recommendationId, lockedExisting);
       }
@@ -1307,7 +1313,7 @@ export async function applyTrainingRecommendationToProgram(
     const code =
       error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : '';
     if (code === '23505') {
-      const raced = await loadAdaptationApplication(db, recommendationId);
+      const raced = await loadAdaptationApplication(db, recommendationId, actor.userId);
       if (raced !== null) {
         return idempotentAdaptationResponse(db, actor, recommendationId, raced);
       }
@@ -1335,7 +1341,19 @@ export async function advanceMemberRecommendation(
   let applyResult: ReturnType<typeof applyPermittedRecommendation>['result'] | null = null;
   let programDiff: unknown = null;
   try {
-    if (nextStatus === 'APPROVED' && current.status === 'MEMBER_CONFIRMATION_REQUIRED') {
+    if (nextStatus === 'APPROVED') {
+      // Members may only confirm their own MEMBER_CONFIRMATION_REQUIRED items.
+      // REVIEW_REQUIRED → APPROVED is coachDecideRecommendation only.
+      if (current.status === 'REVIEW_REQUIRED') {
+        throw new ApiError(
+          403,
+          'HUMAN_REVIEW_REQUIRED',
+          'A human coach must approve recommendations that require human review',
+        );
+      }
+      if (current.status !== 'MEMBER_CONFIRMATION_REQUIRED' && current.status !== 'APPROVED') {
+        throw new ApiError(422, 'INVALID_TRANSITION', 'Member cannot approve from this status');
+      }
       current = memberConfirmRecommendation(current, at, actor.userId);
     } else if (nextStatus === 'APPLIED') {
       if (current.category === 'training') {

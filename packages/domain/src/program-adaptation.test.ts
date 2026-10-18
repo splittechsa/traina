@@ -62,6 +62,22 @@ describe('program adaptation (real apply)', () => {
     ).toThrow(DomainError);
   });
 
+  it('rejects apply without expectedProgramVersion (non-preview)', () => {
+    const stamped = approvedRecovery();
+    const rec = {
+      ...stamped,
+      payload: { ...stamped.payload, expectedProgramVersion: undefined },
+    };
+    expect(() =>
+      buildProgramAdaptationPlan({
+        recommendation: rec,
+        currentDocument: parseProgramVersionDocument({ templateId: 'gym_full_body', days: [] }),
+        currentVersion: 1,
+        at: '2026-06-01T12:03:00.000Z',
+      }),
+    ).toThrow(DomainError);
+  });
+
   it('planTemplateDay reflects adaptation overlay on strength sessions', () => {
     const overlay = overlayFromRecommendation(approvedRecovery(), '2026-06-01T12:03:00.000Z');
     const plain = planTemplateDay('gym_full_body', 0, null);
