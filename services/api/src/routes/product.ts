@@ -30,6 +30,8 @@ import {
   simulateSchema,
   startProgramDaySchema,
   customizeProgramSchema,
+  programActionSchema,
+  programHistoryQuerySchema,
   verifySchema,
   weightSchema,
   waterLogSchema,
@@ -61,6 +63,9 @@ import {
 import {
   activateMemberProgram,
   customizeMemberProgram,
+  memberProgramHistory,
+  memberProgramDetail,
+  manageMemberProgram,
   exerciseSubstitutionsFor,
   answerCoach,
   attributeReferral,
@@ -483,6 +488,18 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
         locale,
       }),
     };
+  });
+
+  app.get('/v1/training/programs/:id', async request => memberProgramDetail(dbOf(options), actorOf(request.claims).userId, (request.params as { id: string }).id));
+  app.get('/v1/training/programs/:id/history', async (request, reply) => {
+    const query = parse(programHistoryQuerySchema, request.query, reply);
+    if (!query) return;
+    return memberProgramHistory(dbOf(options), actorOf(request.claims).userId, (request.params as { id: string }).id, query.before);
+  });
+  app.post('/v1/training/programs/:id/actions', async (request, reply) => {
+    const body = parse(programActionSchema, request.body, reply);
+    if (!body) return;
+    return { program: await manageMemberProgram(dbOf(options), actorOf(request.claims).userId, (request.params as { id: string }).id, body) };
   });
 
   app.put('/v1/training/programs/:id', async (request, reply) => {

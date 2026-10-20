@@ -44,8 +44,11 @@ export default function ProgramEditScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const programs = useQuery({
-    queryKey: ['training-programs'],
-    queryFn: () => apiRequest<ProgramsResponse>('/v1/training/programs'),
+    queryKey: ['program-detail', id],
+    queryFn: async () => {
+      if (typeof id === 'string') { const response = await apiRequest<{ program: NonNullable<ProgramsResponse['active']> }>(`/v1/training/programs/${id}`); return { active: response.program }; }
+      return apiRequest<ProgramsResponse>('/v1/training/programs');
+    },
   });
   const exercises = useQuery({
     queryKey: ['exercises'],
@@ -94,6 +97,8 @@ export default function ProgramEditScreen() {
     onSuccess: async () => {
       setMessage('');
       await client.invalidateQueries({ queryKey: ['training-programs'] });
+      await client.invalidateQueries({ queryKey: ['program-detail'] });
+      await client.invalidateQueries({ queryKey: ['program-history'] });
       router.back();
     },
     onError: (caught) => {
