@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -84,6 +85,8 @@ export default function MealBuilderScreen() {
   const [editingId, setEditingId] = useState<string | null>(typeof params.mealId === 'string' ? params.mealId : null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  const recovery = useFormRecovery('meal:' + (params.mealId ?? 'new'), { nameAr, nameEn, servings, ingredients, editingId }, draft => { setNameAr(draft.nameAr); setNameEn(draft.nameEn); setServings(draft.servings); setIngredients(draft.ingredients); setEditingId(draft.editingId); }, nameAr !== '' || nameEn !== '' || servings !== '1' || ingredients.length > 0);
 
   const meals = useQuery({
     queryKey: ['custom-meals'],
@@ -198,6 +201,7 @@ export default function MealBuilderScreen() {
       return apiRequest<CustomMeal>('/v1/nutrition/custom-meals', { method: 'POST', body: payload });
     },
     onSuccess: async (meal) => {
+      await recovery.clear();
       setEditingId(meal.id);
       setNotice(text(locale, 'saveCustomMeal'));
       await client.invalidateQueries({ queryKey: ['custom-meals'] });
@@ -221,6 +225,7 @@ export default function MealBuilderScreen() {
       });
     },
     onSuccess: async () => {
+      await recovery.clear();
       await client.invalidateQueries({ queryKey: ['diary', day] });
       await client.invalidateQueries({ queryKey: ['home'] });
       router.back();

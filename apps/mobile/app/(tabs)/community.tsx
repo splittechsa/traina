@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -35,6 +36,7 @@ export default function CommunityScreen() {
   const [body, setBody] = useState('');
   const [draft, setDraft] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const recovery = useFormRecovery('community-composer', { body, draft, activeId }, saved => { setBody(saved.body); setDraft(saved.draft); setActiveId(saved.activeId); setCompose(saved.body !== ''); }, body !== '' || draft !== '');
   const [error, setError] = useState('');
   const [older, setOlder] = useState<Post[]>([]);
   const [more, setMore] = useState(true);
@@ -62,6 +64,7 @@ export default function CommunityScreen() {
     setError('');
     try {
       await apiRequest('/v1/community/posts', { method: 'POST', body: { body, visibility } });
+      await recovery.clear();
       setBody('');
       setCompose(false);
       setOlder([]);

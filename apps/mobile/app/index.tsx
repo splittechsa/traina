@@ -1,6 +1,7 @@
+import { accountResource } from '../src/offline/resource';
 import { Redirect, router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiClientError, apiRequest } from '../src/api/client';
+import { ApiClientError } from '../src/api/client';
 import { messageFor } from '../src/api/errors';
 import { gateDestination, profileIsComplete } from '../src/auth/gate';
 import { useSession } from '../src/auth/SessionProvider';
@@ -18,7 +19,7 @@ export default function Gate() {
     queryKey: ['me', tokens?.accessToken],
     enabled: ready && tokens !== null,
     retry: false,
-    queryFn: () => apiRequest<Me>('/v1/me'),
+    queryFn: () => accountResource<Me>('/v1/me'),
   });
   const destination = gateDestination({
     ready,

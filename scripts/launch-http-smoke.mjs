@@ -66,6 +66,16 @@ try {
   await request('POST', '/v1/training/sessions/' + session.id + '/complete', { at: new Date().toISOString() }, token);
   assert.equal((await request('GET', '/v1/training/sessions/' + session.id, undefined, token)).session.status, 'completed');
   evidence.steps.push({ id: 'workout-completion', status: 'PASS' });
+  const copy = await request('POST', '/v1/training/programs/' + program.id + '/actions', { action: 'duplicate', expectedVersion: 2, name: 'Synthetic copy' }, token);
+  await request('GET', '/v1/training/programs/' + copy.program.id + '/history', undefined, other, 404);
+  await request('POST', '/v1/training/programs/' + program.id + '/actions', { action: 'restore', expectedVersion: 2, version: 1 }, token);
+  const history = await request('GET', '/v1/training/programs/' + program.id + '/history', undefined, token);
+  assert.deepEqual(history.versions.map(row => row.version), [3, 2, 1]);
+  assert.equal(history.versions[0].document.restoredFromVersion, 1);
+  await request('POST', '/v1/training/programs/' + copy.program.id + '/actions', { action: 'activate', expectedVersion: 1 }, token);
+  await request('POST', '/v1/training/programs/' + copy.program.id + '/actions', { action: 'archive', expectedVersion: 1 }, token);
+  await request('POST', '/v1/training/programs/' + copy.program.id + '/start-day', { dayIndex: 0 }, token, 404);
+  evidence.steps.push({ id: 'program-history-copy-restore-activate-archive-owner-isolation', status: 'PASS' });
   const entitlement = await request('GET', '/v1/member/entitlements', undefined, token);
   assert.equal(entitlement.purchasesEnabled, false);
   assert.equal(entitlement.nutritionAdaptationsBlocked, true);

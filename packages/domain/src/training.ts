@@ -360,7 +360,7 @@ export function applyOfflineSet(server: WorkoutSession, set: WorkoutSet): Offlin
     const same =
       existing.reps === set.reps &&
       existing.loadGrams === set.loadGrams &&
-      existing.exerciseId === set.exerciseId;
+      existing.exerciseId === set.exerciseId && existing.setIndex === set.setIndex && existing.rpeTenths === set.rpeTenths && Date.parse(existing.completedAt) === Date.parse(set.completedAt);
     if (same) {
       return { disposition: 'replay', session: server };
     }
@@ -387,7 +387,7 @@ export function applyOfflineReplace(server: WorkoutSession, set: WorkoutSet): Of
   const same =
     existing.reps === set.reps &&
     existing.loadGrams === set.loadGrams &&
-    existing.exerciseId === set.exerciseId;
+    existing.exerciseId === set.exerciseId && existing.setIndex === set.setIndex && existing.rpeTenths === set.rpeTenths && Date.parse(existing.completedAt) === Date.parse(set.completedAt);
   if (same) {
     return { disposition: 'replay', session: server };
   }

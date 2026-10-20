@@ -9,7 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LocaleProvider } from '../src/i18n/LocaleProvider';
-import { SessionProvider } from '../src/auth/SessionProvider';
+import { SessionProvider, useSession } from '../src/auth/SessionProvider';
 import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider';
 import { useMotion } from '../src/theme/motion';
 
@@ -28,9 +28,10 @@ const queryClient = new QueryClient({
 
 function Navigation() {
   const theme = useTheme();
+  const { tokens } = useSession();
   const { reduce } = useMotion();
   return (
-    <Stack
+    <Stack key={tokens?.userId ?? 'signed-out'}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.background },

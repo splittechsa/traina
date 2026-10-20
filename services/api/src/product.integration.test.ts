@@ -1546,6 +1546,37 @@ describe('persisted product', () => {
     expect(library.filter((row: { active: boolean }) => row.active)).toHaveLength(1);
   });
 
+  it('serializes replayed workout writes and rejects partially matching payloads', async () => {
+    const owner = await tokenFor('set-replay-' + randomUUID() + '@sahhti.test');
+    const headers = { authorization: 'Bearer ' + owner };
+    const active = (await app.inject({ method: 'POST', url: '/v1/training/programs', headers, payload: { templateId: 'gym_full_body' } })).json().program;
+    const session = (await app.inject({ method: 'POST', url: '/v1/training/programs/' + active.id + '/start-day', headers, payload: { dayIndex: 0, startNow: true } })).json().session;
+    const set = { id: randomUUID(), exerciseId: session.plannedExercises[0].exerciseId, setIndex: 1, reps: 8, loadGrams: 20000, rpeTenths: null, completedAt: new Date().toISOString() };
+    const log = (payload: unknown) => app.inject({ method: 'POST', url: '/v1/training/sessions/' + session.id + '/sets', headers, payload });
+    expect((await Promise.all([log(set), log(set)])).map(row => row.statusCode)).toEqual([200, 200]);
+    expect((await log({ ...set, setIndex: 2 })).statusCode).toBe(409);
+    expect((await log({ ...set, rpeTenths: 80 })).statusCode).toBe(409);
+    const saved = (await app.inject({ method: 'GET', url: '/v1/training/sessions/' + session.id, headers })).json().session;
+    expect(saved.sets).toHaveLength(1);
+    const edit = (reps: number) => app.inject({ method: 'PUT', url: '/v1/training/sessions/' + session.id + '/sets/' + set.id, headers, payload: { ...set, reps, expectedSet: set } });
+    const changes = await Promise.all([edit(9), edit(10)]);
+    expect(changes.map(row => row.statusCode).sort()).toEqual([200, 409]);
+    const accepted = changes.find(row => row.statusCode === 200)!.json().session.sets[0];
+    const replay = await app.inject({ method: 'PUT', url: '/v1/training/sessions/' + session.id + '/sets/' + set.id, headers, payload: { ...accepted, expectedSet: set } });
+    expect(replay.statusCode).toBe(200);
+  });
+
+  it('fails closed on an invalid saved program document without creating or abandoning workouts', async () => {
+    const owner = await tokenFor('invalid-doc-' + randomUUID() + '@sahhti.test');
+    const headers = { authorization: 'Bearer ' + owner };
+    const active = (await app.inject({ method: 'POST', url: '/v1/training/programs', headers, payload: { templateId: 'gym_full_body' } })).json().program;
+    await database.query("UPDATE program_versions SET template = '{}'::jsonb WHERE program_id = $1", [active.id]);
+    const failed = await app.inject({ method: 'POST', url: '/v1/training/programs/' + active.id + '/start-day', headers, payload: { dayIndex: 0, startNow: true } });
+    expect(failed.statusCode).toBe(422);
+    const user = (await app.inject({ method: 'GET', url: '/v1/me', headers })).json().userId;
+    expect((await database.query('SELECT id FROM workout_sessions WHERE user_id = $1', [user])).rows).toEqual([]);
+  });
+
   it('projects free entitlements from the server without client unlock flags', async () => {
     const token = await tokenFor(`entitlements-${randomUUID()}@sahhti.test`);
     const denied = await app.inject({ method: 'GET', url: '/v1/member/entitlements' });

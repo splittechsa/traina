@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView as RNScrollView, Text, TextInput, View, type ScrollView } from 'react-native';
 import { SymbolView } from 'expo-symbols';
@@ -49,6 +50,7 @@ export default function CoachScreen() {
   const params = useLocalSearchParams<{ seed?: string }>();
   const seed = typeof params.seed === 'string' ? params.seed : '';
   const [message, setMessage] = useState(seed);
+  const recovery = useFormRecovery('coach-composer', { message }, draft => setMessage(draft.message), message.trim() !== '');
   const [lastTool, setLastTool] = useState<string | null>(null);
 
   const [previousSeed, setPreviousSeed] = useState(seed);
@@ -80,6 +82,7 @@ export default function CoachScreen() {
       return { previous };
     },
     onSuccess: async (reply) => {
+      await recovery.clear();
       setMessage('');
       setLastTool(reply.tool ?? null);
       await client.invalidateQueries({ queryKey: ['coach-messages'] });

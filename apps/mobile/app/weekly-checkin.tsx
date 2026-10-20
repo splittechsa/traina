@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
@@ -137,6 +138,8 @@ export default function WeeklyCheckinScreen() {
   >({});
   const isAr = locale === 'ar';
 
+  const recoveryDraft = useFormRecovery('weekly:' + weekOf, { step, effort, recovery, satisfaction, energy, sleep, stress, hunger, difficulties, questionForCoach }, draft => { setStep(draft.step); setEffort(draft.effort); setRecovery(draft.recovery); setSatisfaction(draft.satisfaction); setEnergy(draft.energy); setSleep(draft.sleep); setStress(draft.stress); setHunger(draft.hunger); setDifficulties(draft.difficulties); setQuestionForCoach(draft.questionForCoach); }, step !== 3 && (step > 0 || difficulties !== '' || questionForCoach !== '' || effort !== 3 || recovery !== 3 || satisfaction !== 3 || energy !== 3 || sleep !== 3 || stress !== 2 || hunger !== 3));
+
   const preview = useQuery({
     queryKey: ['weekly-share-preview', weekOf],
     queryFn: () => apiRequest<Preview>(`/v1/member/weekly-share-preview?weekOf=${weekOf}`),
@@ -173,6 +176,7 @@ export default function WeeklyCheckinScreen() {
         },
       }),
     onSuccess: async () => {
+      await recoveryDraft.clear();
       await Promise.all([
         client.invalidateQueries({ queryKey: ['weekly-review-status'] }),
         client.invalidateQueries({ queryKey: ['coach-messages'] }),

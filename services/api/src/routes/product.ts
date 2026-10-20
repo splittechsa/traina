@@ -16,6 +16,7 @@ import {
   mealPlanDaySchema,
   loginSchema,
   logSetSchema,
+  replaceSetSchema,
   onboardingRequestSchema,
   profilePatchSchema,
   recoverSchema,
@@ -189,6 +190,8 @@ function coachOf(options: ProductOptions): CoachRuntime {
   }
   return coachRuntimeFromEnv({});
 }
+
+
 
 const loginThrottle = createThrottle(8, 15 * 60 * 1000);
 const registerThrottle = createThrottle(5, 60 * 60 * 1000);
@@ -588,7 +591,7 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   });
 
   app.put('/v1/training/sessions/:id/sets/:setId', async (request, reply) => {
-    const body = parse(logSetSchema, request.body, reply);
+    const body = parse(replaceSetSchema, request.body, reply);
     if (body === undefined) return;
     const params = request.params as { id: string; setId: string };
     if (body.id !== params.setId) {
@@ -596,7 +599,7 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     }
     return {
       persisted: true,
-      session: await mutateSession(dbOf(options), actorOf(request.claims).userId, params.id, { type: 'replace_set', set: body }),
+      session: await mutateSession(dbOf(options), actorOf(request.claims).userId, params.id, { type: 'replace_set', set: { id: body.id, exerciseId: body.exerciseId, setIndex: body.setIndex, reps: body.reps, loadGrams: body.loadGrams, rpeTenths: body.rpeTenths, completedAt: body.completedAt }, expectedSet: body.expectedSet }),
     };
   });
 

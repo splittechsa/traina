@@ -1,3 +1,4 @@
+import { requestNavigation } from '../storage/navigationDrafts';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -82,7 +83,7 @@ export function BottomTabBar({ state, descriptors, navigation }: TabBarProps) {
               const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
               if (!focused && !event.defaultPrevented) {
                 tapSelection(reduce);
-                navigation.navigate(route.name);
+                requestNavigation(() => navigation.navigate(route.name));
               }
             }}
             style={styles.item}

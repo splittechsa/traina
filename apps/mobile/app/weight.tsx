@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -43,6 +44,8 @@ export default function WeightScreen() {
     setInitialized(true);
   }
 
+  const recovery = useFormRecovery('weight', { weightKg }, draft => setWeightKg(draft.weightKg), weightKg !== (latest ? Number(latest.weight_grams) / 1000 : DEFAULT_WEIGHT_KG), progress.isFetched);
+
   async function save() {
     setSaving(true);
     try {
@@ -51,6 +54,7 @@ export default function WeightScreen() {
         body: { weightKg: weightKg.toFixed(1), recordedOn: riyadhToday() },
       });
       await client.invalidateQueries({ queryKey: ['progress'] });
+      await recovery.clear();
       setNotice(text(locale, 'saved'));
       tapSuccess(reduce);
     } catch (caught) {

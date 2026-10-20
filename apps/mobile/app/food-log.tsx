@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 // Search-first food logging: type (or scan) → pick → adjust grams → see calories & macros
 // update instantly → one tap to add. Combines the member's own foods with the global Open
 // Food Facts library. Logging goes through the existing API contracts (see logFood.ts).
@@ -119,6 +120,7 @@ function PortionSheet({
   const [error, setError] = useState('');
 
 
+  const recovery = useFormRecovery('portion:' + day + ':' + food?.key, { amount }, draft => setAmount(draft.amount), food !== null && amount !== (food?.servingGrams ?? 100), food !== null);
   if (food === null) return null;
   const preview = previewPortion(food, amount);
   const shares = preview === null ? { protein: 0, carbs: 0, fat: 0 } : macroEnergyShares(preview);
@@ -132,8 +134,9 @@ function PortionSheet({
       await Promise.all([
         client.invalidateQueries({ queryKey: ['diary', day] }),
         client.invalidateQueries({ queryKey: ['home'] }),
-        client.invalidateQueries({ queryKey: ['local', 'sahhti.recentFoods'] }),
+        client.invalidateQueries({ queryKey: ['local'] }),
       ]);
+      await recovery.clear();
       tapSuccess(reduce);
       onClose();
       router.back();

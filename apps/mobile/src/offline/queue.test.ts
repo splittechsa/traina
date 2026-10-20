@@ -29,6 +29,12 @@ function session(status: WorkoutSession['status'], sets: WorkoutSession['sets'] 
 }
 
 describe('offline set queue', () => {
+  it('retains a stale offline edit instead of overwriting a newer server change', () => {
+    const newer = { ...set, reps: 12 };
+    const plan = planOfflineSync(session('in_progress', [newer]), [{ clientEventId: 'stale', sessionId: 'session-1', kind: 'replace', baseSet: set, set: { ...set, reps: 8 } }]);
+    expect(plan.send).toEqual([]); expect(plan.conflicts).toEqual([{ clientEventId: 'stale', reason: 'payload_conflict' }]);
+    expect(plan.session.sets[0]?.reps).toBe(12);
+  });
   it('queues a set against an in-progress session', () => {
     const plan = planOfflineSync(session('in_progress'), [{ clientEventId: 'evt-1', sessionId: 'session-1', set }]);
     expect(plan.send).toHaveLength(1);
@@ -59,7 +65,7 @@ describe('offline set queue', () => {
   it('queues offline replaces, replays identical edits, and conflicts on terminal sessions', () => {
     const server = session('in_progress', [set]);
     const edited = planOfflineSync(server, [
-      { clientEventId: 'evt-edit', sessionId: 'session-1', kind: 'replace', set: { ...set, reps: 6, loadGrams: 105_000 } },
+      { clientEventId: 'evt-edit', sessionId: 'session-1', kind: 'replace', baseSet: set, set: { ...set, reps: 6, loadGrams: 105_000 } },
     ]);
     expect(edited.send).toHaveLength(1);
     expect(edited.send[0]?.kind).toBe('replace');
@@ -73,7 +79,7 @@ describe('offline set queue', () => {
 
     const done = session('completed', [set]);
     const blocked = planOfflineSync(done, [
-      { clientEventId: 'evt-late', sessionId: 'session-1', kind: 'replace', set: { ...set, reps: 7 } },
+      { clientEventId: 'evt-late', sessionId: 'session-1', kind: 'replace', baseSet: set, set: { ...set, reps: 7 } },
     ]);
     expect(blocked.send).toHaveLength(0);
     expect(blocked.conflicts[0]?.reason).toBe('terminal_session');
@@ -82,7 +88,7 @@ describe('offline set queue', () => {
   it('applies log then replace in order without duplicating the set id', () => {
     const plan = planOfflineSync(session('in_progress'), [
       { clientEventId: 'evt-1', sessionId: 'session-1', kind: 'log', set },
-      { clientEventId: 'evt-2', sessionId: 'session-1', kind: 'replace', set: { ...set, reps: 8 } },
+      { clientEventId: 'evt-2', sessionId: 'session-1', kind: 'replace', baseSet: set, set: { ...set, reps: 8 } },
     ]);
     expect(plan.send).toHaveLength(2);
     expect(plan.session.sets).toHaveLength(1);
@@ -93,7 +99,7 @@ describe('offline set queue', () => {
 
 describe('durable offline synchronization', () => {
   const create = { clientEventId: 'create', sessionId: 'session-1', kind: 'log' as const, set };
-  const replace = { clientEventId: 'replace', sessionId: 'session-1', kind: 'replace' as const, set: { ...set, reps: 8 } };
+  const replace = { clientEventId: 'replace', sessionId: 'session-1', kind: 'replace' as const, baseSet: set, set: { ...set, reps: 8 } };
 
   it('retains an unacknowledged create and its dependent edit after a failed write', async () => {
     const sent: string[] = [];

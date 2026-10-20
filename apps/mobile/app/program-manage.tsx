@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -18,6 +19,7 @@ export default function ProgramManage() {
   const [selected, setSelected] = useState<Version | null>(null); const [comparison, setComparison] = useState<Version | null>(null);
   const [confirm, setConfirm] = useState<'archive' | 'restore' | null>(null);
   const [before, setBefore] = useState<number | null>(null);
+  const nameDraft = useFormRecovery('program-name:' + id, { name }, draft => setName(draft.name), name !== '');
   const program = useQuery({ queryKey: ['program-detail', id], queryFn: () => apiRequest<{ program: Program }>(`/v1/training/programs/${id}`) });
   const history = useQuery({ queryKey: ['program-history', id, before], queryFn: () => apiRequest<{ versions: Version[]; nextBefore: number | null }>(`/v1/training/programs/${id}/history${before === null ? '' : '?before=' + before}`) });
   const exercises = useQuery({ queryKey: ['exercises'], queryFn: () => apiRequest<{ exercises: { id: string; name_ar: string; name_en: string }[] }>('/v1/exercises') });
@@ -25,7 +27,7 @@ export default function ProgramManage() {
   const action = useMutation({
     mutationFn: (kind: string) => apiRequest(`/v1/training/programs/${id}/actions`, { method: 'POST', body: { action: kind, expectedVersion: current?.version,
       ...(['rename', 'duplicate'].includes(kind) ? { name: name.trim() } : {}), ...(kind === 'restore' ? { version: selected?.version } : {}) } }),
-    onSuccess: async () => { setConfirm(null); setBefore(null); setMessage(ar ? 'تم حفظ التغيير' : 'Change saved');
+    onSuccess: async () => { await nameDraft.clear(); setName(''); setConfirm(null); setBefore(null); setMessage(ar ? 'تم حفظ التغيير' : 'Change saved');
       await Promise.all(['training-programs', 'program-detail', 'program-history', 'home'].map(key => client.invalidateQueries({ queryKey: [key] }))); },
     onError: error => setMessage(error instanceof ApiClientError && error.code === 'PROGRAM_VERSION_CONFLICT' ? (ar ? 'تغير البرنامج. حدّث الصفحة ثم راجع اختيارك.' : 'Program changed. Refresh and review your selection.') : (ar ? 'تعذر حفظ التغيير. حاول مجددًا.' : 'Could not save the change. Try again.')),
   });

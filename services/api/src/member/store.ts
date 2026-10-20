@@ -314,7 +314,7 @@ export async function scheduleMemberWorkout(
   },
 ): Promise<WorkoutSession> {
   for (const exercise of input.exercises) {
-    const found = await db.query(`SELECT id FROM exercises WHERE id = $1`, [exercise.exerciseId]);
+    const found = await db.query(`SELECT id FROM exercises WHERE id = $1 AND (owner_user_id IS NULL OR owner_user_id = $2)`, [exercise.exerciseId, userId]);
     if (found.rows[0] === undefined) {
       throw new ApiError(422, 'UNKNOWN_EXERCISE', 'Exercise is not in the library');
     }
@@ -3026,14 +3026,21 @@ export async function abandonOpenWorkouts(db: Database, userId: string) {
   }
 }
 
-export async function startProgramDay(
+export async function startProgramDay(db: Database, userId: string, programId: string, input: { dayIndex: number; startNow?: boolean; locale?: 'ar' | 'en' }) {
+  return db.transaction(async tx => {
+    await tx.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    return startProgramDayWithin(tx, userId, programId, input);
+  });
+}
+
+async function startProgramDayWithin(
   db: Database,
   userId: string,
   programId: string,
   input: { dayIndex: number; startNow?: boolean; locale?: 'ar' | 'en' },
 ) {
   const owned = await db.query<{ id: string; template_id: string | null }>(
-    `SELECT id, template_id FROM programs WHERE id = $1 AND user_id = $2 AND active = true AND archived_at IS NULL`,
+    `SELECT id, template_id FROM programs WHERE id = $1 AND user_id = $2 AND active = true AND archived_at IS NULL FOR UPDATE`,
     [programId, userId],
   );
   const program = owned.rows[0];
@@ -3089,19 +3096,27 @@ export async function startProgramDay(
     programVersionId: latestDoc.rows[0]?.id ?? null,
   });
   if (input.startNow === true) {
-    return mutateSession(db, userId, session.id, { type: 'start', at: new Date().toISOString() });
+    return mutateSessionWithin(db, userId, session.id, { type: 'start', at: new Date().toISOString() });
   }
   return session;
 }
 
-export async function mutateSession(
+export async function mutateSession(db: Database, userId: string, sessionId: string, command: Parameters<typeof mutateSessionWithin>[3]): Promise<WorkoutSession> {
+  return db.transaction(async tx => {
+    await tx.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    await tx.query('SELECT id FROM workout_sessions WHERE id = $1 AND user_id = $2 FOR UPDATE', [sessionId, userId]);
+    return mutateSessionWithin(tx, userId, sessionId, command);
+  });
+}
+
+async function mutateSessionWithin(
   db: Database,
   userId: string,
   sessionId: string,
   command:
     | { type: 'start' | 'pause' | 'resume' | 'complete'; at: string }
     | { type: 'log_set'; set: WorkoutSet }
-    | { type: 'replace_set'; set: WorkoutSet },
+    | { type: 'replace_set'; set: WorkoutSet; expectedSet?: WorkoutSet },
 ): Promise<WorkoutSession> {
   const current = await sessionOwned(db, userId, sessionId);
   try {
@@ -3126,7 +3141,9 @@ export async function mutateSession(
         const same =
           existing.reps === command.set.reps &&
           existing.loadGrams === command.set.loadGrams &&
-          existing.exerciseId === command.set.exerciseId;
+          existing.exerciseId === command.set.exerciseId &&
+          existing.setIndex === command.set.setIndex && existing.rpeTenths === command.set.rpeTenths &&
+          Date.parse(existing.completedAt) === Date.parse(command.set.completedAt);
         if (same) {
           return current;
         }
@@ -3145,6 +3162,9 @@ export async function mutateSession(
       return next;
     }
     if (command.type === 'replace_set') {
+      const existing = current.sets.find(set => set.id === command.set.id);
+      const matches = (a: WorkoutSet, b: WorkoutSet) => a.id === b.id && a.exerciseId === b.exerciseId && a.setIndex === b.setIndex && a.reps === b.reps && a.loadGrams === b.loadGrams && a.rpeTenths === b.rpeTenths && Date.parse(a.completedAt) === Date.parse(b.completedAt);
+      if (existing && command.expectedSet && !matches(existing, command.expectedSet) && !matches(existing, command.set)) throw new ApiError(409, 'SET_CONFLICT', 'The set changed since this edit began');
       const next = replaceSet(current, command.set);
       const updated = next.sets.find((set) => set.id === command.set.id);
       if (updated === undefined) {

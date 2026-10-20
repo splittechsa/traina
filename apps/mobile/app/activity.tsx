@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -30,6 +31,7 @@ export default function ActivityScreen() {
   const [draftGoal, setDraftGoal] = useState(DEFAULT_STEP_GOAL);
   const ar = locale === 'ar';
 
+  const recovery = useFormRecovery('step-goal', { draftGoal }, draft => { setDraftGoal(draft.draftGoal); setEditingGoal(true); }, editingGoal && draftGoal !== goal.value, goal.ready);
   const header = (
     <AppHeader
       title={ar ? 'الخطوات والنشاط' : 'Steps & activity'}
@@ -202,7 +204,7 @@ export default function ActivityScreen() {
           <Button
             label={text(locale, 'save')}
             onPress={() => {
-              void goal.save(draftGoal);
+              void goal.save(draftGoal).then(() => recovery.clear());
               tapSuccess(reduce);
               setEditingGoal(false);
             }}

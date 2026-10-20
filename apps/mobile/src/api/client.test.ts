@@ -10,6 +10,25 @@ afterEach(() => {
 });
 
 describe('apiRequest token refresh', () => {
+  it('rejects a late account A response after switching to B', async () => {
+    setTokenMemory({ accessToken: 'a', refreshToken: 'ra', userId: 'account-a' });
+    let finish!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
+    const response = apiRequest('/v1/me');
+    const rejected = expect(response).rejects.toMatchObject({ code: 'ACCOUNT_CHANGED' });
+    setTokenMemory({ accessToken: 'b', refreshToken: 'rb', userId: 'account-b' });
+    finish(new Response(JSON.stringify({ userId: 'account-a' })));
+    await rejected;
+  });
+  it('does not resurrect old credentials when a delayed refresh finishes after logout', async () => {
+    setTokenMemory({ accessToken: 'expired', refreshToken: 'ra', userId: 'account-a' });
+    let finish!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/v1/auth/refresh') ? new Promise<Response>(resolve => { finish = resolve; }) : new Response('{}', { status: 401 })));
+    const response = apiRequest('/v1/me'); const rejected = expect(response).rejects.toMatchObject({ code: 'ACCOUNT_CHANGED' });
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    setTokenMemory(null); finish(new Response(JSON.stringify({ accessToken: 'late', refreshToken: 'late' })));
+    await rejected;
+  });
   it('deduplicates concurrent refreshes and retries both requests', async () => {
     setApiBaseOverride('https://api.test');
     setTokenMemory({ accessToken: 'expired', refreshToken: 'refresh' });

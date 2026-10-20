@@ -1,9 +1,10 @@
+import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, Text, TextInput, View, Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
-import type { WorkoutSession } from '@sahhti/domain';
+import type { WorkoutSession, WorkoutSet } from '@sahhti/domain';
 import { parseScaledInteger } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { formatCount, formatKg } from '../../src/format';
@@ -21,9 +22,10 @@ import { useTheme } from '../../src/theme/ThemeProvider';
 import { useMotion } from '../../src/theme/motion';
 import { tapSuccess } from '../../src/ui/haptics';
 import { planOfflineSync, synchronizeOfflineSets, type PendingSetCommand } from '../../src/offline/queue';
-import { acknowledgePendingSets, enqueuePendingSet, readPendingSets } from '../../src/offline/sqlite';
+import { acknowledgePendingSets, enqueuePendingSet, readPendingSets, readAccountSnapshot, writeAccountSnapshot, replaceConflictingSet } from '../../src/offline/sqlite';
 import { pauseRestTimer, remainingRest, resumeRestTimer, startRestTimer, type RestTimerState } from '../../src/training/restTimer';
-import { readJson, writeJson } from '../../src/storage/local';
+import { accountScope, accountResource } from '../../src/offline/resource';
+import { useSession } from '../../src/auth/SessionProvider';
 
 type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia'>;
 type WorkoutProgress = {
@@ -42,7 +44,11 @@ export default function WorkoutScreen() {
   const { reduce } = useMotion();
   const client = useQueryClient();
   const theme = useTheme();
+  const { tokens } = useSession();
+  const owner = tokens?.userId ? accountScope() : null;
+  const [conflicts, setConflicts] = useState<PendingSetCommand[]>([]);
   const isAr = locale === 'ar';
+  const [inputDirty, setInputDirty] = useState(false);
   const [reps, setReps] = useState('8');
   const [load, setLoad] = useState('');
   const [notice, setNotice] = useState('');
@@ -50,47 +56,52 @@ export default function WorkoutScreen() {
   const [rest, setRest] = useState(0);
   const [restPaused, setRestPaused] = useState(false);
   const [activeExerciseId, setActiveExerciseId] = useState('');
+  const [editingBase, setEditingBase] = useState<WorkoutSet | null>(null);
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const restAnchor = useRef<RestTimerState | null>(null);
 
   const session = useQuery({
-    queryKey: ['session', id],
-    enabled: typeof id === 'string',
+    queryKey: ['session', id, owner],
+    enabled: typeof id === 'string' && owner !== null,
     queryFn: async () => {
-      const fresh = await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
-      const pending = await readPendingSets();
+      const fresh = await accountResource<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
+      const pending = await readPendingSets(owner!);
       return { session: planOfflineSync(fresh.session, pending).session };
     },
   });
   const exerciseLibrary = useQuery({
     queryKey: ['exercises'],
-    queryFn: () => apiRequest<{ exercises: ExerciseMeta[] }>('/v1/exercises'),
+    queryFn: () => accountResource<{ exercises: ExerciseMeta[] }>('/v1/exercises'),
   });
   const progress = useQuery({
     queryKey: ['progress'],
-    queryFn: () => apiRequest<WorkoutProgress>('/v1/progress'),
+    queryFn: () => accountResource<WorkoutProgress>('/v1/progress'),
   });
 
   const syncing = useRef(false);
   const flushPending = useCallback(async (): Promise<boolean> => {
-    if (typeof id !== 'string' || syncing.current) return false;
+    if (typeof id !== 'string' || owner === null || syncing.current) return false;
     syncing.current = true;
     try {
-      const pending = await readPendingSets();
+      const pending = await readPendingSets(owner!);
       if (!pending.some(command => command.sessionId === id)) return true;
       // The query cache may include optimistic offline sets. Only server state can prove a replay.
       const fresh = await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
+      if (accountScope() !== owner) return false;
+      const plan = planOfflineSync(fresh.session, pending);
+      setConflicts(pending.filter(command => plan.conflicts.some(conflict => conflict.clientEventId === command.clientEventId)));
       const result = await synchronizeOfflineSets(fresh.session, pending, async command => {
+        if (accountScope() !== owner) throw new Error('ACCOUNT_CHANGED');
         if (command.kind === 'replace') {
           await apiRequest(`/v1/training/sessions/${command.sessionId}/sets/${command.set.id}`, {
-            method: 'PUT', body: command.set,
+            method: 'PUT', body: { ...command.set, expectedSet: command.baseSet },
           });
         } else {
           await apiRequest(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set });
         }
       });
-      await acknowledgePendingSets(pending, result.remaining);
-      const remaining = await readPendingSets();
+      await acknowledgePendingSets(owner!, pending, result.remaining);
+      const remaining = await readPendingSets(owner!);
       if (result.hasConflicts) setNotice(text(locale, 'conflict'));
       await client.invalidateQueries({ queryKey: ['session', id] });
       return !remaining.some(command => command.sessionId === id);
@@ -100,7 +111,12 @@ export default function WorkoutScreen() {
     } finally {
       syncing.current = false;
     }
-  }, [client, id, locale]);
+  }, [client, id, locale, owner]);
+
+  useEffect(() => {
+    const retry = setInterval(() => { if (AppState.currentState === 'active') void flushPending(); }, 15000);
+    return () => clearInterval(retry);
+  }, [flushPending]);
 
   useFocusEffect(
     useCallback(() => {
@@ -157,12 +173,14 @@ export default function WorkoutScreen() {
     }
   }
 
+  const inputRecovery = useFormRecovery('workout-input:' + id, { reps, load, activeExerciseId: activeExercise?.exerciseId ?? activeExerciseId, editingSetId, editingBase }, draft => { setReps(draft.reps); setLoad(draft.load); setActiveExerciseId(draft.activeExerciseId); setPrefilledExercise(draft.activeExerciseId); setEditingSetId(draft.editingSetId); setEditingBase(draft.editingBase ?? null); setInputDirty(true); }, inputDirty, currentSession !== undefined);
+
   function startRest(seconds: number) {
     const state = startRestTimer(seconds, Date.now());
     setRest(remainingRest(state, Date.now()));
     setRestPaused(false);
     restAnchor.current = state;
-    if (typeof id === 'string') void writeJson(`sahhti.rest.${id}`, state);
+    if (typeof id === 'string') owner && void writeAccountSnapshot(owner, `rest:${id}`, state);
   }
 
   function toggleRest() {
@@ -172,29 +190,29 @@ export default function WorkoutScreen() {
     restAnchor.current = state;
     setRest(remainingRest(state, Date.now()));
     setRestPaused(state.paused === true);
-    if (typeof id === 'string') void writeJson(`sahhti.rest.${id}`, state);
+    if (typeof id === 'string') owner && void writeAccountSnapshot(owner, `rest:${id}`, state);
   }
 
   function skipRest() {
     setRest(0);
     restAnchor.current = null;
     setRestPaused(false);
-    if (typeof id === 'string') void writeJson(`sahhti.rest.${id}`, null);
+    if (typeof id === 'string') owner && void writeAccountSnapshot(owner, `rest:${id}`, null);
   }
 
   useEffect(() => {
-    if (typeof id !== 'string') return;
+    if (typeof id !== 'string' || owner === null) return;
     let cancelled = false;
-    void readJson<RestTimerState | null>(`sahhti.rest.${id}`, null).then(saved => {
+    void readAccountSnapshot<RestTimerState | null>(owner, `rest:${id}`).then(saved => {
       if (cancelled || saved === null || restAnchor.current !== null) return;
       const left = remainingRest(saved, Date.now());
       if (left <= 0) return;
       restAnchor.current = saved;
       setRest(left);
       setRestPaused(saved.paused === true);
-    });
+    }).catch(() => setNotice(text(locale, 'error')));
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, owner, locale]);
 
   async function start() {
     if (typeof id !== 'string') return;
@@ -228,6 +246,28 @@ export default function WorkoutScreen() {
     await client.invalidateQueries({ queryKey: ['progress'] });
   }
 
+  async function keepLocalEdit(command: PendingSetCommand) {
+    if (!owner || accountScope() !== owner) return;
+    try {
+      const fresh = await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
+      const baseSet = fresh.session.sets.find(set => set.id === command.set.id);
+      if (fresh.session.status !== 'in_progress' || !baseSet || baseSet.exerciseId !== command.set.exerciseId || baseSet.setIndex !== command.set.setIndex) { setNotice(text(locale, 'conflict')); return; }
+      await replaceConflictingSet(owner, command, { ...command, clientEventId: Crypto.randomUUID(), kind: 'replace', baseSet });
+      await flushPending();
+    } catch { setNotice(text(locale, 'error')); }
+  }
+
+  async function recordCommand(command: PendingSetCommand): Promise<void> {
+    if (owner === null || accountScope() !== owner || session.data === undefined) throw new Error('OFFLINE_ACCOUNT_UNVERIFIED');
+    await enqueuePendingSet(owner, command);
+    await inputRecovery.clear(); setInputDirty(false);
+    const pending = await readPendingSets(owner);
+    const projected = planOfflineSync(session.data.session, pending).session;
+    client.setQueryData(['session', id, owner], { session: projected });
+    const saved = await flushPending();
+    setNotice(saved ? '' : text(locale, 'queued'));
+  }
+
   async function logSetForExercise(exerciseId: string, setReps: number, loadKg: string) {
     if (typeof id !== 'string' || session.data === undefined || busy) return;
     if (!Number.isInteger(setReps) || setReps <= 0 || setReps > 10000 || (loadKg.trim() !== '' && (!Number.isFinite(Number(loadKg)) || Number(loadKg) < 0))) {
@@ -242,7 +282,7 @@ export default function WorkoutScreen() {
     const bodyweight = planned.prescription.kind !== 'strength';
     const loadGrams = bodyweight || loadKg.trim().length === 0 ? 0 : parseScaledInteger(loadKg, 1000);
     if (editingSetId !== null) {
-      const existing = session.data.session.sets.find((set) => set.id === editingSetId);
+      const existing = editingBase ?? session.data.session.sets.find((set) => set.id === editingSetId);
       if (existing === undefined || existing.exerciseId !== exerciseId) {
         setNotice(text(locale, 'error'));
         setEditingSetId(null);
@@ -252,6 +292,7 @@ export default function WorkoutScreen() {
         clientEventId: Crypto.randomUUID(),
         sessionId: id,
         kind: 'replace',
+        baseSet: existing,
         set: {
           id: editingSetId,
           exerciseId: existing.exerciseId,
@@ -263,35 +304,8 @@ export default function WorkoutScreen() {
         },
       };
       setBusy(true);
-      try {
-        await apiRequest(`/v1/training/sessions/${id}/sets/${editingSetId}`, {
-          method: 'PUT',
-          body: replaceCommand.set,
-        });
-        await client.invalidateQueries({ queryKey: ['session', id] });
-        setEditingSetId(null);
-        setNotice('');
-        tapSuccess(reduce);
-      } catch (caught) {
-        if (!(caught instanceof ApiClientError) || caught.code !== 'OFFLINE') {
-          setNotice(text(locale, 'error'));
-          return;
-        }
-        const pending = await readPendingSets();
-        const mine = pending.filter((item) => item.sessionId === id);
-        const plan = planOfflineSync(session.data.session, [...mine, replaceCommand]);
-        if (plan.conflicts.some((conflict) => conflict.clientEventId === replaceCommand.clientEventId)) {
-          setNotice(text(locale, 'conflict'));
-          return;
-        }
-        await enqueuePendingSet(replaceCommand);
-        client.setQueryData(['session', id], { session: plan.session });
-        setEditingSetId(null);
-        setNotice(text(locale, 'queued'));
-        tapSuccess(reduce);
-      } finally {
-        setBusy(false);
-      }
+      try { await recordCommand(replaceCommand); setEditingSetId(null); tapSuccess(reduce); }
+      catch { setNotice(text(locale, 'error')); } finally { setBusy(false); }
       return;
     }
     const command: PendingSetCommand = {
@@ -309,35 +323,13 @@ export default function WorkoutScreen() {
     };
     setBusy(true);
     try {
-      await apiRequest(`/v1/training/sessions/${id}/sets`, { method: 'POST', body: command.set });
-      await client.invalidateQueries({ queryKey: ['session', id] });
-      setNotice('');
-      tapSuccess(reduce);
-      if (planned.prescription.kind === 'strength') {
-        startRest(planned.prescription.restSeconds);
-      }
-    } catch (caught) {
-      if (!(caught instanceof ApiClientError) || caught.code !== 'OFFLINE') {
-        setNotice(text(locale, 'error'));
-        return;
-      }
-      const pending = await readPendingSets();
-      const plan = planOfflineSync(session.data.session, [...pending.filter((item) => item.sessionId === id), command]);
-      if (plan.conflicts.some((conflict) => conflict.clientEventId === command.clientEventId)) {
-        setNotice(text(locale, 'conflict'));
-        return;
-      }
-      await enqueuePendingSet(command);
-      client.setQueryData(['session', id], { session: plan.session });
-      setNotice(text(locale, 'queued'));
-      if (planned.prescription.kind === 'strength') {
-        startRest(planned.prescription.restSeconds);
-      }
-    } finally {
-      setBusy(false);
-    }
+      await recordCommand(command); tapSuccess(reduce);
+      if (planned.prescription.kind === 'strength') startRest(planned.prescription.restSeconds);
+    } catch { setNotice(text(locale, 'error')); } finally { setBusy(false); }
   }
 
+
+  if (owner === null) return <Screen><ErrorState body={isAr ? 'سجّل الدخول مجددًا لتأكيد الحساب قبل استخدام التخزين المحلي.' : 'Sign in again to verify this account before using local storage.'} onRetry={() => router.push('/(auth)/login')} /></Screen>;
   if (session.isPending) {
     return (
       <Screen>
@@ -586,6 +578,7 @@ export default function WorkoutScreen() {
                     onPress={() => {
                       if (logged === undefined || !isRunning) return;
                       setEditingSetId(logged.id);
+                      setEditingBase(logged);
                       setReps(String(logged.reps));
                       setLoad(logged.loadGrams > 0 ? String(logged.loadGrams / 1000) : '');
                       setNotice(text(locale, 'editLoggedSet'));
@@ -651,7 +644,7 @@ export default function WorkoutScreen() {
                 <TextInput
                   accessibilityLabel={text(locale, 'reps')}
                   value={reps}
-                  onChangeText={setReps}
+                  onChangeText={value => { setReps(value); setInputDirty(true); }}
                   keyboardType="number-pad"
                   placeholder={text(locale, 'reps')}
                   placeholderTextColor={theme.textMuted}
@@ -671,7 +664,7 @@ export default function WorkoutScreen() {
                     <TextInput
                       accessibilityLabel={text(locale, 'load')}
                       value={load}
-                      onChangeText={setLoad}
+                      onChangeText={value => { setLoad(value); setInputDirty(true); }}
                       keyboardType="decimal-pad"
                       placeholder={`${text(locale, 'load')} (${text(locale, 'kilograms')})`}
                       placeholderTextColor={theme.textMuted}
@@ -745,6 +738,23 @@ export default function WorkoutScreen() {
           </SurfaceCard>
         ) : null}
 
+        {conflicts.length > 0 ? <SurfaceCard>
+          <Text style={{ color: theme.text }}>{isAr ? 'تعارض في المزامنة. السجلات المحلية محفوظة. أعد المحاولة أو اعتمد سجل الخادم.' : 'Sync conflict. Local records are retained. Retry or keep the server records.'}</Text>
+          {conflicts.filter((command, index, all) => all.findLastIndex(item => item.set.id === command.set.id) === index).map(command => <View key={command.clientEventId}><Text style={{ color: theme.textMuted }}>{isAr ? 'مجموعة محلية' : 'Local set'} {command.set.setIndex}: {command.set.reps} × {command.set.loadGrams / 1000} kg</Text>
+            <Button label={isAr ? 'اعتماد تعديلي المحلي' : 'Keep my edit'} variant="secondary" onPress={() => Alert.alert(isAr ? 'اعتماد التعديل؟' : 'Keep this edit?', isAr ? 'سيستبدل القيم الحالية إذا كان التمرين قابلاً للتحرير.' : 'Replace the current values if this workout is still editable.', [
+              { text: isAr ? 'إلغاء' : 'Cancel', style: 'cancel' }, { text: isAr ? 'تأكيد' : 'Confirm', onPress: () => void keepLocalEdit(command) },
+            ])} /></View>)} 
+          <Button label={isAr ? 'إعادة المحاولة' : 'Retry'} onPress={() => void flushPending()} />
+          <Button label={isAr ? 'اعتماد سجل الخادم' : 'Keep server records'} variant="secondary" onPress={() => Alert.alert(isAr ? 'تجاهل التغييرات المتعارضة؟' : 'Discard conflicting local changes?', isAr ? 'لن تتغير مجموعات الخادم.' : 'Server sets will remain unchanged.', [
+            { text: isAr ? 'متابعة التحرير' : 'Continue editing', style: 'cancel' },
+            { text: isAr ? 'تجاهل المحلي' : 'Discard local', style: 'destructive', onPress: () => { void (async () => {
+              if (accountScope() !== owner) return;
+              const pending = await readPendingSets(owner); const setIds = new Set(conflicts.map(command => command.set.id));
+              await acknowledgePendingSets(owner, pending, pending.filter(command => command.sessionId !== id || !setIds.has(command.set.id)));
+              setConflicts([]); await client.invalidateQueries({ queryKey: ['session', id] });
+            })().catch(() => setNotice(text(locale, 'error'))); } },
+          ])} />
+        </SurfaceCard> : null}
         {notice ? (
           <Text accessibilityRole="alert" style={{ color: theme.warning, fontFamily: fontFamily.medium, marginBottom: 12 }}>
             {notice}

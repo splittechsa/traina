@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +26,7 @@ export default function SupplementsScreen() {
   const client = useQueryClient();
   const on = useMemo(() => todayIso(), []);
   const [name, setName] = useState('');
+  const recovery = useFormRecovery('supplement-name', { name }, draft => setName(draft.name), name !== '');
   const list = useQuery({
     queryKey: ['supplements', on],
     queryFn: () => apiRequest<{ items: SupplementItem[] }>(`/v1/supplements?on=${on}`),
@@ -33,6 +35,7 @@ export default function SupplementsScreen() {
     mutationFn: (raw: string) =>
       apiRequest('/v1/supplements', { method: 'POST', body: { name: raw, loggedOn: on } }),
     onSuccess: async () => {
+      await recovery.clear();
       setName('');
       await client.invalidateQueries({ queryKey: ['supplements', on] });
     },

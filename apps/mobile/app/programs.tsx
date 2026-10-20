@@ -1,3 +1,4 @@
+import { accountResource } from '../src/offline/resource';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -70,7 +71,7 @@ export default function ProgramsScreen() {
 
   const programs = useQuery({
     queryKey: ['training-programs'],
-    queryFn: () => apiRequest<ProgramsResponse>('/v1/training/programs'),
+    queryFn: () => accountResource<ProgramsResponse>('/v1/training/programs'),
   });
 
   const activate = useMutation({
