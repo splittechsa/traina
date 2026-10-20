@@ -1,0 +1,19 @@
+
+> sahhti@0.1.0 typecheck
+> npm run typecheck -w @sahhti/domain && npm run typecheck -w @sahhti/contracts && npm run typecheck -w @sahhti/design-tokens && npm run typecheck -w @sahhti/api
+
+
+> @sahhti/domain@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+
+> @sahhti/contracts@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+
+> @sahhti/design-tokens@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit
+
+
+> @sahhti/api@0.1.0 typecheck
+> tsc -p tsconfig.json --noEmit

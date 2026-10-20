@@ -18,12 +18,14 @@
 | Journey | Automated / code | Device |
 | --- | --- | --- |
 | Home RTL + tab clearance | PARTIAL (unit/UI code) | BLOCKED |
-| Training / program | PARTIAL | BLOCKED |
+| Training / program templates | PASS (catalog + activate + customize + start-day API) | BLOCKED |
+| Program edit + smart substitutions | PASS (API + domain ranking) | BLOCKED |
+| Exercise library + 3D MovementDemo | PARTIAL (procedural demo in UI) | BLOCKED |
 | Active workout + rest | PARTIAL (rest persist + tests) | BLOCKED |
 | Set log / edit / offline reconcile | PASS (domain + API + queue tests) | BLOCKED |
 | Nutrition + ready meals | PARTIAL | BLOCKED |
 | Custom meal workflow | PASS (API integration) | BLOCKED |
-| Yazan | PARTIAL (quota/tool UI + real provider path) | BLOCKED |
+| Yazan contextual presence | PARTIAL (cards on home/training/nutrition/progress/workout/weekly + seed prompts) | BLOCKED |
 | Weekly check-in | PARTIAL | BLOCKED |
 
 User-supplied screenshots remain **before** evidence (pre-reconstruction build). They are not FAIL of the new build.

@@ -1,3 +1,13 @@
+# Traina production completion matrix — 2026-10-20
+
+**Release: NO-GO.** The authoritative requirement-level inventory is [LAUNCH_MATRIX.json](LAUNCH_MATRIX.json), with 447 entries extracted from directive sections 1–17, explicit approval gates and five end-to-end journeys. Each entry records implementation, gaps, UI/backend/database, integrations, security, tests, devices, dependencies, blockers and acceptance status.
+
+This is a targeted engineering audit and complete bullet inventory, not a claim that every requirement has been individually audited. NOT_TESTED means evidence is absent; it does not mean a test failed. Most requirements remain open. No feature is marked DONE solely because a file or test exists.
+
+Application fixes are published in draft [PR #50](https://github.com/splittechsa/traina/pull/50), stacked on #49. Project access and workflow publication were skipped when additional scopes were declined. Current evidence and fixes are in [FINAL_PRODUCT_READINESS_REPORT.md](FINAL_PRODUCT_READINESS_REPORT.md). The earlier matrix is retained below as historical context; its feature claims are not accepted without current evidence.
+
+## Historical pre-session matrix
+
 # Traina — Product completion matrix (release audit)
 
 **Updated:** 2026-10-18  
@@ -19,14 +29,16 @@ Device legend: **PASS** · **FAIL** · **BLOCKED** · **NOT TESTED** · **PARTIA
 | `(auth)/*` | **I** | localized | stack | Device **NOT TESTED** |
 | `(onboarding)/index` | **W** | | | Safety screening incomplete |
 | `(tabs)/home` | **I** | skeleton / offline / error | tabs | Extra tab clearance |
-| `(tabs)/training` | **I** | loading / error | tabs | Program versions |
-| `(tabs)/nutrition` | **I** | meal slots + ready library | tabs | Meal builder entry |
-| `(tabs)/coach` (Yazan) | **I**/**W** | quota / tool note / retry | tabs | History refetch; Arabic bubbles |
-| `(tabs)/progress` | **W** | | tabs | |
-| `workout/[id]` | **I** | set table + rest + offline edit | back | PUT replace; rest persist |
-| `weekly-checkin` | **I** | RTL + localized coach empty | back | |
+| `(tabs)/training` | **I** | loading / error | tabs | My plan + explore CTA + Yazan card |
+| `(tabs)/nutrition` | **I** | meal slots + ready library | tabs | Yazan meal nudge |
+| `(tabs)/coach` (Yazan) | **I**/**W** | quota / tool note / retry | tabs | Seed prompt from contextual actions |
+| `(tabs)/progress` | **I**/**W** | | tabs | Yazan progress tip |
+| `programs` | **I** | templates + activate + start-day | back | PPL/Bro/Arnold/CF/Calisthenics |
+| `program-edit` | **I** | replace/reorder/save | back | Smart substitutions API |
+| `workout/[id]` | **I** | set table + rest + offline edit | back | 3D demo + Yazan tips |
+| `weekly-checkin` | **I** | RTL + localized coach empty | back | Yazan weekly tip |
 | `meal-builder` | **I** | | back | Custom meal CRUD |
-| `food-log` / `exercises` / `macros` | **I** | | | |
+| `food-log` / `exercises` / `macros` | **I** | | | Library + MovementDemo3D |
 | `account` | **I** | | | Export + delete (no secrets in export) |
 | `membership` | **I** | | | Purchases off |
 | `scanner` | **W** | honest empty | | |
@@ -38,12 +50,13 @@ Device legend: **PASS** · **FAIL** · **BLOCKED** · **NOT TESTED** · **PARTIA
 | Journey | Code | Device |
 | --- | --- | --- |
 | Home | **I** | **BLOCKED** |
-| Training / program | **I** | **BLOCKED** |
+| Training / program | **I** (templates + customize) | **BLOCKED** |
+| Exercise library + 3D demo | **I** | **BLOCKED** |
 | Active workout + rest | **I** | **BLOCKED** |
 | Set log / edit / offline | **I** (auto tests PASS) | **BLOCKED** |
 | Nutrition + ready meals | **I** | **BLOCKED** |
 | Custom meals | **I** (API PASS) | **BLOCKED** |
-| Yazan | **I**/**W** | **BLOCKED** |
+| Yazan contextual presence | **I**/**W** | **BLOCKED** |
 | Weekly check-in | **I** | **BLOCKED** |
 
 ---
