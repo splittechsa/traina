@@ -1,0 +1,59 @@
+
+> sahhti@0.1.0 test
+> npm run test -w @sahhti/domain && npm run test -w @sahhti/contracts && npm run test -w @sahhti/design-tokens && npm run test -w @sahhti/api
+
+
+> @sahhti/domain@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/packages/domain
+
+
+ Test Files  24 passed (24)
+      Tests  136 passed (136)
+   Start at  15:50:22
+   Duration  784ms (transform 64%, import 21%, tests 8%, worker 6%)
+
+    Isolate  24 workers spawned · ~160ms startup each (spawn + environment, per file)
+             at least ~267ms faster with isolate: false — reuses workers across files instead of one per file
+
+
+> @sahhti/contracts@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/packages/contracts
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  15:50:24
+   Duration  185ms (transform 59%, import 32%, worker 5%, tests 4%)
+
+
+> @sahhti/design-tokens@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/packages/design-tokens
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  15:50:25
+   Duration  152ms (transform 59%, import 27%, worker 8%, tests 5%)
+
+
+> @sahhti/api@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/services/api
+
+
+ Test Files  10 passed (10)
+      Tests  63 passed (63)
+   Start at  15:50:26
+   Duration  28.49s (tests 93%, import 3%, transform 3%)
+

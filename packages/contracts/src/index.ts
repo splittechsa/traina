@@ -189,6 +189,11 @@ export const customizeProgramSchema = z
             name_ar: z.string().trim().min(1).max(80),
             name_en: z.string().trim().min(1).max(80),
             exerciseIds: z.array(z.string().uuid()).min(1).max(20),
+            strengthOverrides: z.record(z.string().uuid(), z.object({
+              sets: z.number().int().min(1).max(20),
+              reps: z.number().int().min(1).max(100),
+              restSeconds: z.number().int().min(0).max(1800),
+            }).strict()).optional(),
           })
           .strict(),
       )

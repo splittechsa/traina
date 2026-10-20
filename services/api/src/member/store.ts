@@ -65,6 +65,7 @@ import {
   buildWeeklyHumanCoachPacket,
   buildYazanDailyBrief,
   planDocumentDay,
+  type ProgramDayDocument,
   planTemplateDay,
   recommendTemplates,
   scheduleWorkout,
@@ -430,6 +431,7 @@ export async function listMemberPrograms(db: Database, userId: string) {
       : publicTemplate(template).days.map((day) => ({
           ...day,
           exerciseIds: day.exerciseIds,
+          strengthOverrides: {} as NonNullable<ProgramDayDocument['strengthOverrides']>,
         }));
   let programVersion = 1;
   if (row !== undefined) {
@@ -449,6 +451,7 @@ export async function listMemberPrograms(db: Database, userId: string) {
           name_en: day.name_en,
           exerciseCount: day.exerciseIds.length,
           exerciseIds: [...day.exerciseIds],
+          strengthOverrides: day.strengthOverrides ?? {},
         }));
       } catch {
         /* keep catalog days */
@@ -2808,7 +2811,7 @@ export async function customizeMemberProgram(
   input: {
     name?: string;
     expectedVersion?: number;
-    days: { name_ar: string; name_en: string; exerciseIds: string[] }[];
+    days: ProgramDayDocument[];
   },
 ) {
   return db.transaction(async (tx) => {
@@ -2887,6 +2890,7 @@ export async function customizeMemberProgram(
         name_en: day.name_en,
         exerciseCount: day.exerciseIds.length,
         exerciseIds: day.exerciseIds,
+        strengthOverrides: day.strengthOverrides ?? {},
       })),
     };
   });
@@ -2964,7 +2968,7 @@ export async function startProgramDay(
     [programId],
   );
   let adaptation = null;
-  let document = {
+  let document: { templateId: string; days: ProgramDayDocument[] } = {
     templateId: program.template_id,
     days: (templateById(program.template_id)?.days ?? []).map((day) => ({
       name_ar: day.name_ar,
@@ -2984,6 +2988,7 @@ export async function startProgramDay(
           name_ar: day.name_ar,
           name_en: day.name_en,
           exerciseIds: [...day.exerciseIds],
+          strengthOverrides: day.strengthOverrides,
         })),
       };
     }

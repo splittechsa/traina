@@ -59,6 +59,7 @@ export type TemplateRecommendation = {
 const strengthPlan = (
   exerciseIds: readonly string[],
   adaptation: TrainingAdaptationOverlay | null = null,
+  overrides: Readonly<Record<string, StrengthSettings>> = {},
 ): PlannedExercise[] => {
   const volumeScaleBps = adaptation?.volumeScaleBps ?? 10_000;
   const restDelta = adaptation?.restSecondsDelta ?? 0;
@@ -68,9 +69,9 @@ const strengthPlan = (
     exerciseId,
     prescription: {
       kind: 'strength',
-      sets,
-      reps: 8,
-      restSeconds,
+      sets: overrides[exerciseId] ? Math.max(1, Math.round(overrides[exerciseId].sets * volumeScaleBps / 10_000)) : sets,
+      reps: overrides[exerciseId]?.reps ?? 8,
+      restSeconds: overrides[exerciseId] ? Math.max(0, overrides[exerciseId].restSeconds + restDelta) : restSeconds,
       loadGrams: null,
       rpeTenths: null,
     },
@@ -318,10 +319,13 @@ export function templateById(templateId: string): TrainingTemplate | null {
   return TRAINING_TEMPLATES.find((item) => item.id === templateId) ?? null;
 }
 
+export type StrengthSettings = { sets: number; reps: number; restSeconds: number };
+
 export type ProgramDayDocument = {
   name_ar: string;
   name_en: string;
   exerciseIds: readonly string[];
+  strengthOverrides?: Readonly<Record<string, StrengthSettings>>;
 };
 
 /** Plan a day from a member program document (customized days) or fall back to catalog. */
@@ -334,7 +338,7 @@ export function planDocumentDay(
   if (template === null) {
     throw new DomainError('UNKNOWN_TEMPLATE', 'Training template is not in the catalog');
   }
-  const day = document.days.length === 0 ? template.days[dayIndex] : document.days[dayIndex];
+  const day: ProgramDayDocument | undefined = document.days.length === 0 ? template.days[dayIndex] : document.days[dayIndex];
   if (day === undefined) {
     throw new DomainError('UNKNOWN_TEMPLATE_DAY', 'That day is not in this program');
   }
@@ -344,12 +348,26 @@ export function planDocumentDay(
   if (day.exerciseIds.length > 20) {
     throw new DomainError('INVALID_PROGRAM_DAY', 'A program day cannot exceed 20 exercises');
   }
+  if (day.strengthOverrides !== undefined) {
+    if (typeof day.strengthOverrides !== 'object' || day.strengthOverrides === null || Array.isArray(day.strengthOverrides) || (template.family !== 'strength' && Object.keys(day.strengthOverrides).length > 0)) {
+      throw new DomainError('INVALID_STRENGTH_OVERRIDE', 'Strength settings require a strength program');
+    }
+    for (const [exerciseId, settings] of Object.entries(day.strengthOverrides)) {
+      if (!day.exerciseIds.includes(exerciseId) || settings === null || typeof settings !== 'object' ||
+          Object.keys(settings).some(key => !['sets', 'reps', 'restSeconds'].includes(key)) ||
+          !Number.isInteger(settings.sets) || settings.sets < 1 || settings.sets > 20 ||
+          !Number.isInteger(settings.reps) || settings.reps < 1 || settings.reps > 100 ||
+          !Number.isInteger(settings.restSeconds) || settings.restSeconds < 0 || settings.restSeconds > 1800) {
+        throw new DomainError('INVALID_STRENGTH_OVERRIDE', 'Invalid exercise settings or exercise outside this day');
+      }
+    }
+  }
   const exercises =
     template.discipline === 'crossfit'
       ? crossfitPlan(day.exerciseIds)
       : template.discipline === 'calisthenics'
         ? calisthenicsPlan(day.exerciseIds)
-        : strengthPlan(day.exerciseIds, adaptation);
+        : strengthPlan(day.exerciseIds, adaptation, day.strengthOverrides);
   const loadHint =
     adaptation !== null && adaptation.loadIncrementPctMax > 0
       ? ` · +≤${adaptation.loadIncrementPctMax}% load hint`

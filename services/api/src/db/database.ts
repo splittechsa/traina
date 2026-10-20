@@ -284,15 +284,21 @@ export function seedsDirectory(): string {
   return resolve(migrationsDirectory(), '..', 'seeds');
 }
 
-export async function applyMigrationsTo(db: Database): Promise<{ applied: string[] }> {
+export async function applyMigrationsTo(
+  db: Database,
+  options: { through?: string } = {},
+): Promise<{ applied: string[] }> {
+  const dir = migrationsDirectory();
+  const available = (await readdir(dir)).filter(file => file.endsWith('.sql')).sort();
+  const last = options.through === undefined ? available.length - 1 : available.indexOf(options.through);
+  if (last < 0) throw new Error('UNKNOWN_MIGRATION_TARGET');
+  const files = available.slice(0, last + 1);
   await db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       filename text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     )
   `);
-  const dir = migrationsDirectory();
-  const files = (await readdir(dir)).filter((file) => file.endsWith('.sql')).sort();
   const applied: string[] = [];
   for (const file of files) {
     const existing = await db.query('SELECT 1 AS ok FROM schema_migrations WHERE filename = $1', [file]);

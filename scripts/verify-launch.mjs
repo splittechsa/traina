@@ -14,7 +14,7 @@ const checks = [
   ['mobile-tests', 'npm test -- --maxWorkers=1', resolve(root, 'apps/mobile')],
   ['mobile-lint', 'npm run lint', resolve(root, 'apps/mobile')],
   ['coach-build', 'npm run build', resolve(root, 'apps/coach-portal')],
-  ['http-smoke', 'node scripts/launch-http-smoke.mjs', root],
+  ['http-smoke', 'node scripts/launch-http-smoke.mjs '+JSON.stringify(resolve(output, 'http-smoke.json')), root],
 ];
 const results = [];
 for (const [id, command, cwd] of checks) {
