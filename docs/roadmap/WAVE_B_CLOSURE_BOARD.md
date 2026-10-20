@@ -12,3 +12,5 @@ All items await independent review; no merge is authorized by this report.
 | B-NATIVE | Android EAS build 57cea473-8e52-4183-bf15-20bd5d3f13f9 | uploaded and queued | cloud completion, installation and physical acceptance; iOS signing unavailable |
 
 Review sequence: PR52 → program → recovery → AI → staging. Reviewers must assess changes at exact head commits. Synthetic tests and green CI do not replace review. User declined additional GitHub workflow/project scopes; no further scope request is required for this stack.
+
+Published draft PRs: [53](https://github.com/splittechsa/traina/pull/53), [54](https://github.com/splittechsa/traina/pull/54), [55](https://github.com/splittechsa/traina/pull/55), [56](https://github.com/splittechsa/traina/pull/56). Review in this order after PR52. CI state is evidence at a timestamp, not approval.

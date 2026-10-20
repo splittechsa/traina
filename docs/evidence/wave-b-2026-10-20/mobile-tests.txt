@@ -13,4 +13,3 @@
 
     Isolate  33 workers spawned · ~107ms startup each (spawn + environment, per file)
              at least ~3.44s faster with isolate: false — reuses workers across files instead of one per file
-

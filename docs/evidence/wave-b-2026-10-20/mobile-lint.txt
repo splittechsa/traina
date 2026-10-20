@@ -18,4 +18,3 @@ C:\Users\Ahmed\Desktop\app\apps\mobile\src\ui\kit.tsx
 
 ✖ 5 problems (0 errors, 5 warnings)
   0 errors and 2 warnings potentially fixable with the `--fix` option.
-
