@@ -122,6 +122,22 @@ describe('durable offline synchronization', () => {
     expect(result.remaining).toEqual([]);
   });
 
+  it('recovers when create and edit reached the server but their local acknowledgement failed', async () => {
+    const result = await synchronizeOfflineSets(session('in_progress', [replace.set]), [create, replace], async () => {
+      throw new Error('No network write is needed for an acknowledged final state');
+    });
+    expect(result.remaining).toEqual([]);
+    expect(result.hasConflicts).toBe(false);
+  });
+
+  it('acknowledges exact saved sets after completion without mutating the terminal session', async () => {
+    const result = await synchronizeOfflineSets(session('completed', [set]), [create], async () => {
+      throw new Error('Completed sessions must not be mutated');
+    });
+    expect(result.remaining).toEqual([]);
+    expect(result.hasConflicts).toBe(false);
+  });
+
   it('keeps rejected writes and commands for other sessions', async () => {
     const other = { ...create, clientEventId: 'other', sessionId: 'session-2' };
     const result = await synchronizeOfflineSets(session('in_progress'), [create, other], async () => {

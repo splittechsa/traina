@@ -20,8 +20,24 @@ export function planOfflineSync(server: WorkoutSession, pending: readonly Pendin
   let session = server;
   const send: PendingSetCommand[] = [];
   const conflicts: OfflineSyncPlan['conflicts'] = [];
+  const latestBySet = new Map<string, PendingSetCommand>();
   for (const command of pending) {
-    if (command.sessionId !== server.id) {
+    if (command.sessionId === server.id) latestBySet.set(command.set.id, command);
+  }
+  const acknowledgedSets = new Set<string>();
+  for (const [setId, command] of latestBySet) {
+    const saved = server.sets.find(set => set.id === setId);
+    const desired = command.set;
+    if (saved !== undefined && saved.exerciseId === desired.exerciseId && saved.setIndex === desired.setIndex &&
+        saved.reps === desired.reps && saved.loadGrams === desired.loadGrams &&
+        saved.rpeTenths === desired.rpeTenths && Date.parse(saved.completedAt) === Date.parse(desired.completedAt)) {
+      // The server already contains the final desired state. A prior acknowledgement may
+      // have failed locally after both create and replace succeeded; do not replay the old create.
+      acknowledgedSets.add(setId);
+    }
+  }
+  for (const command of pending) {
+    if (command.sessionId !== server.id || acknowledgedSets.has(command.set.id)) {
       continue;
     }
     const kind = command.kind ?? 'log';
