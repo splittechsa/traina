@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import type { WorkoutSession, WorkoutSet } from '@sahhti/domain';
-import { parseScaledInteger } from '@sahhti/domain';
+import { parseScaledInteger, workoutElapsedSeconds } from '@sahhti/domain';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { formatCount, formatKg } from '../../src/format';
 import { label } from '../../src/i18n/labels';
@@ -13,7 +13,7 @@ import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
 import { Button, Screen, ScreenBody } from '../../src/ui/Screen';
 import { AppHeader, ErrorState, LoadingSkeleton, SurfaceCard } from '../../src/ui/kit';
-import { MovementDemo3D } from '../../src/training/MovementDemo3D';
+
 import { asLibraryList, type LibraryExercise } from '../../src/training/library';
 import { YazanCard, openYazanWithPrompt } from '../../src/ui/YazanCard';
 import { yazanTip } from '../../src/training/yazanPresence';
@@ -28,7 +28,7 @@ import { accountScope, accountResource } from '../../src/offline/resource';
 import { useSession } from '../../src/auth/SessionProvider';
 import { normalizeWorkoutNumber } from '../../src/training/numericInput';
 
-type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia'>;
+type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia' | 'reviewStatus' | 'primary_muscles' | 'instructions_ar' | 'instructions_en'>;
 type WorkoutProgress = {
   personalRecords: { exercise_id: string; load_grams: number; reps: number }[];
 };
@@ -37,6 +37,24 @@ function formatRest(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** Only this label ticks; the form and set table do not rerender each second. */
+function RestCountdown({ readState, paused, secondsAtChange, onExpire }: { readState: () => RestTimerState | null; paused: boolean; secondsAtChange: number; onExpire: () => void }) {
+  const theme = useTheme();
+  const [seconds, setSeconds] = useState(secondsAtChange);
+  const expired = useRef(onExpire);
+  useEffect(() => { expired.current = onExpire; }, [onExpire]);
+  const read = useRef(readState);
+  useEffect(() => { read.current = readState; }, [readState]);
+  useEffect(() => {
+    const state = read.current();
+    const tick = () => { const left = remainingRest(state, Date.now()); setSeconds(left); if (left === 0) expired.current(); };
+    tick();
+    if (state?.paused || !state) return;
+    const timer = setInterval(tick, 1000); return () => clearInterval(timer);
+  }, [paused, secondsAtChange]);
+  return <Text accessibilityLiveRegion="polite" style={{ color: theme.accent, fontFamily: fontFamily.bold, fontSize: 24, marginVertical: 2 }}>{formatRest(seconds)}</Text>;
 }
 
 export default function WorkoutScreen() {
@@ -138,17 +156,6 @@ export default function WorkoutScreen() {
     });
     return () => sub.remove();
   }, [flushPending, restPaused]);
-
-  const restRunning = rest > 0 && !restPaused;
-  useEffect(() => {
-    if (!restRunning) return;
-    const timer = setInterval(() => {
-      const left = remainingRest(restAnchor.current, Date.now());
-      setRest(left);
-      if (left === 0) restAnchor.current = null;
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [restRunning]);
 
   const currentSession = session.data?.session;
   const activeExercise =
@@ -391,13 +398,18 @@ export default function WorkoutScreen() {
   const targetReps = active?.prescription.kind === 'strength' ? active.prescription.reps : Number(reps) || 8;
   const previous = previousForActive;
 
+  const nextExercise = current.plannedExercises[activeIndex + 1];
+  const activeTargetMet = editingSetId === null && active?.prescription.kind === 'strength' && loggedForActive.length >= plannedSets;
   const footer =
     isScheduled ? (
-      <Button label={busy ? (isAr ? 'جارٍ البدء…' : 'Starting…') : text(locale, 'start')} disabled={busy} onPress={() => void start()} />
+      <Button testID="workout-start" label={busy ? (isAr ? 'جارٍ البدء…' : 'Starting…') : text(locale, 'start')} disabled={busy} onPress={() => void start()} />
     ) : isPaused ? (
       <Button label={text(locale, 'resume')} disabled={busy} onPress={() => void resume()} />
+    ) : isRunning && activeTargetMet ? (
+      <Button testID={nextExercise ? 'workout-next' : 'workout-finish'} label={nextExercise ? (isAr ? 'التمرين التالي' : 'Next exercise') : text(locale, 'finish')} onPress={() => { if (nextExercise) { skipRest(); setActiveExerciseId(nextExercise.exerciseId); } else { Alert.alert(text(locale, 'finishWorkoutTitle'), text(locale, 'finishWorkoutBody'), [{ text: text(locale, 'stayWorkout'), style: 'cancel' }, { text: text(locale, 'finish'), onPress: () => void complete() }]); } }} />
     ) : isRunning && active !== undefined ? (
       <Button
+        testID="workout-log-set"
         disabled={busy}
         label={
           busy
@@ -426,7 +438,7 @@ export default function WorkoutScreen() {
         }
       >
         <AppHeader
-          title={current.name}
+          title={isRunning || isPaused ? (isAr ? 'التمرين الحالي' : 'Current exercise') : current.name}
           subtitle={label(locale, 'session', current.status)}
           showBack
           confirmUnsaved={
@@ -441,7 +453,7 @@ export default function WorkoutScreen() {
           }
         />
 
-        <YazanCard
+        {(isScheduled || isDone) ? (<YazanCard
           compact
           body={yazanTip(locale, {
             surface: 'workout',
@@ -476,8 +488,10 @@ export default function WorkoutScreen() {
                 ]
               : []),
           ]}
-        />
+        />) : null}
 
+        {isScheduled ? <Text style={{ color: theme.textMuted, lineHeight: 22, marginBottom: 12 }}>{isAr ? 'راجع ترتيب التمارين، ثم ابدأ. يمكنك تعديل الوزن والتكرارات وتسجيل كل مجموعة أثناء الجلسة.' : 'Review your exercises, then start. Adjust weight and reps and record each set during the session.'}</Text> : null}
+        {(isScheduled || isDone) ? (
         <SurfaceCard tone="raised" style={{ marginBottom: spacing[3] }}>
           <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.label, marginBottom: 6 }}>
             {isDone ? (isAr ? 'جلسة مكتملة' : 'Session complete') : isRunning ? (isAr ? 'جلسة نشطة' : 'Active session') : isPaused ? (isAr ? 'متوقفة مؤقتاً' : 'Paused') : (isAr ? 'جاهز للبدء' : 'Ready to start')}
@@ -495,14 +509,16 @@ export default function WorkoutScreen() {
             ))}
           </View>
         </SurfaceCard>
+        ) : null}
 
         {rest > 0 && isRunning ? (
           <SurfaceCard style={{ marginBottom: spacing[3], borderColor: theme.accent, borderWidth: 1 }}>
             <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium }}>{text(locale, 'restTimer')}</Text>
-            <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, fontSize: 36, marginVertical: 4 }}>{formatRest(rest)}</Text>
+            <RestCountdown readState={() => restAnchor.current} paused={restPaused} secondsAtChange={rest} onExpire={() => { setRest(0); restAnchor.current = null; }} />
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable
                 accessibilityRole="button"
+                testID="workout-pause-rest"
                 onPress={toggleRest}
                 style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
               >
@@ -512,6 +528,7 @@ export default function WorkoutScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
+                testID="workout-skip-rest"
                 onPress={skipRest}
                 style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
               >
@@ -554,21 +571,10 @@ export default function WorkoutScreen() {
             <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.headline, marginBottom: 6 }}>
               {exerciseName(active.exerciseId)}
             </Text>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginBottom: 10, lineHeight: 20 }}>
-              {text(locale, 'techniqueHint')}
+            <Text style={{ color: theme.textMuted, marginBottom: 10 }}>
+              {isAr ? 'المجموعة' : 'Set'} {Math.min(loggedForActive.length + 1, plannedSets)} / {plannedSets} · {targetReps} {text(locale, 'reps')}
             </Text>
 
-            {demo?.demonstrationMedia != null ? (
-              <MovementDemo3D
-                compact
-                profile={demo.demonstrationMedia.profile ?? demo.movement_pattern ?? 'neutral'}
-                equipment={asLibraryList(demo.equipment)}
-              />
-            ) : (
-              <SurfaceCard tone="muted" style={{ marginBottom: spacing[3] }}>
-                <Text style={{ color: theme.textMuted }}>{text(locale, 'demoUnavailable')}</Text>
-              </SurfaceCard>
-            )}
 
             {previous !== undefined ? (
               <Text style={{ color: theme.textMuted, marginBottom: 10 }}>
@@ -579,6 +585,89 @@ export default function WorkoutScreen() {
               </Text>
             ) : null}
 
+            {isRunning ? (
+              <View style={{ gap: 10, marginBottom: spacing[3] }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {['5', '8', '10', '12'].map((value) => (
+                    <Pressable
+                      key={value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: reps === value }}
+                      onPress={() => { setReps(value); setInputDirty(true); }}
+                      style={{
+                        flex: 1,
+                        minHeight: 44,
+                        borderRadius: radius.md,
+                        backgroundColor: reps === value ? theme.accent : theme.surfaceMuted,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ color: reps === value ? theme.emphasisText : theme.text, fontFamily: fontFamily.bold }}>{value}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  testID="workout-reps"
+                  accessibilityLabel={text(locale, 'reps')}
+                  value={reps}
+                  onChangeText={value => { setReps(normalizeWorkoutNumber(value)); setInputDirty(true); }}
+                  keyboardType="number-pad"
+                  placeholder={text(locale, 'reps')}
+                  placeholderTextColor={theme.textMuted}
+                  style={{
+                    minHeight: 48,
+                    borderRadius: radius.md,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    paddingHorizontal: 14,
+                    color: theme.text,
+                    fontFamily: fontFamily.semibold,
+                    textAlign: isAr ? 'right' : 'left',
+                  }}
+                />
+                {active.prescription.kind === 'strength' ? (
+                  <>
+                    <TextInput
+                      testID="workout-load"
+                      accessibilityLabel={text(locale, 'load')}
+                      value={load}
+                      onChangeText={value => { setLoad(normalizeWorkoutNumber(value)); setInputDirty(true); }}
+                      keyboardType="decimal-pad"
+                      placeholder={`${text(locale, 'load')} (${text(locale, 'kilograms')})`}
+                      placeholderTextColor={theme.textMuted}
+                      style={{
+                        minHeight: 48,
+                        borderRadius: radius.md,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        paddingHorizontal: 14,
+                        color: theme.text,
+                        fontFamily: fontFamily.semibold,
+                        textAlign: isAr ? 'right' : 'left',
+                      }}
+                    />
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {[-5, -2.5, 2.5, 5].map((delta) => (
+                        <Pressable
+                          key={delta}
+                          accessibilityRole="button"
+                          onPress={() => {
+                            const loadNow = Number(load) || 0;
+                            const next = Math.max(0, loadNow + delta);
+                            setLoad(Number.isInteger(next) ? String(next) : next.toFixed(1));
+                            setInputDirty(true);
+                          }}
+                          style={{ flex: 1, minHeight: 40, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{delta > 0 ? `+${delta}` : delta}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            ) : null}
             <SurfaceCard style={{ marginBottom: spacing[3] }}>
               <View style={{ flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.border }}>
                 <Text style={{ flex: 1, color: theme.textMuted, fontFamily: fontFamily.semibold }}>{text(locale, 'setTableHeader')}</Text>
@@ -640,87 +729,10 @@ export default function WorkoutScreen() {
               })}
             </SurfaceCard>
 
-            {isRunning ? (
-              <View style={{ gap: 10, marginBottom: spacing[3] }}>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {['5', '8', '10', '12'].map((value) => (
-                    <Pressable
-                      key={value}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: reps === value }}
-                      onPress={() => { setReps(value); setInputDirty(true); }}
-                      style={{
-                        flex: 1,
-                        minHeight: 44,
-                        borderRadius: radius.md,
-                        backgroundColor: reps === value ? theme.accent : theme.surfaceMuted,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: reps === value ? theme.emphasisText : theme.text, fontFamily: fontFamily.bold }}>{value}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextInput
-                  accessibilityLabel={text(locale, 'reps')}
-                  value={reps}
-                  onChangeText={value => { setReps(normalizeWorkoutNumber(value)); setInputDirty(true); }}
-                  keyboardType="number-pad"
-                  placeholder={text(locale, 'reps')}
-                  placeholderTextColor={theme.textMuted}
-                  style={{
-                    minHeight: 48,
-                    borderRadius: radius.md,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    paddingHorizontal: 14,
-                    color: theme.text,
-                    fontFamily: fontFamily.semibold,
-                    textAlign: isAr ? 'right' : 'left',
-                  }}
-                />
-                {active.prescription.kind === 'strength' ? (
-                  <>
-                    <TextInput
-                      accessibilityLabel={text(locale, 'load')}
-                      value={load}
-                      onChangeText={value => { setLoad(normalizeWorkoutNumber(value)); setInputDirty(true); }}
-                      keyboardType="decimal-pad"
-                      placeholder={`${text(locale, 'load')} (${text(locale, 'kilograms')})`}
-                      placeholderTextColor={theme.textMuted}
-                      style={{
-                        minHeight: 48,
-                        borderRadius: radius.md,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        paddingHorizontal: 14,
-                        color: theme.text,
-                        fontFamily: fontFamily.semibold,
-                        textAlign: isAr ? 'right' : 'left',
-                      }}
-                    />
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {[-5, -2.5, 2.5, 5].map((delta) => (
-                        <Pressable
-                          key={delta}
-                          accessibilityRole="button"
-                          onPress={() => {
-                            const loadNow = Number(load) || 0;
-                            const next = Math.max(0, loadNow + delta);
-                            setLoad(Number.isInteger(next) ? String(next) : next.toFixed(1));
-                            setInputDirty(true);
-                          }}
-                          style={{ flex: 1, minHeight: 40, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{delta > 0 ? `+${delta}` : delta}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </>
-                ) : null}
-              </View>
-            ) : null}
+
+            <Button variant="secondary" label={isAr ? 'اسأل يزن عن هذا التمرين' : 'Ask Yazan about this exercise'} onPress={() => openYazanWithPrompt(isAr ? `كيف أنفّذ تمرين ${exerciseName(active.exerciseId)}؟ سجلت ${loggedForActive.length} مجموعات.` : `How do I perform ${exerciseName(active.exerciseId)}? I have logged ${loggedForActive.length} sets.`)} />
+            {demo?.reviewStatus === 'reviewed' ? asLibraryList(isAr ? demo.instructions_ar : demo.instructions_en).slice(0, 3).map((cue, index) => <Text key={index} style={{ color: theme.textMuted, lineHeight: 22, marginVertical: 4 }}>{index + 1}. {cue}</Text>) : null}
+            <Text style={{ color: theme.textMuted, marginVertical: 12 }}>{demo?.demonstrationMedia?.reviewStatus === 'reviewed' ? text(locale, 'techniqueHint') : (isAr ? 'العرض الحركي غير متاح حاليًا. راجع تعليمات التمرين أو اطلب مساعدة مدرب.' : 'Movement demonstration is unavailable. Check exercise instructions or ask a coach.')}</Text>
           </>
         ) : (
           <View style={{ gap: 10, marginBottom: spacing[3] }}>
@@ -752,10 +764,11 @@ export default function WorkoutScreen() {
             <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
               {isAr ? 'ملخص الجلسة' : 'Session summary'}
             </Text>
+            <Text style={{ color: theme.accent, marginBottom: 8 }}>{isAr ? 'أحسنت، تم حفظ جلستك' : 'Well done, your session is saved'} · {formatRest(workoutElapsedSeconds(current, current.completedAt!))}</Text>
             <Text style={{ color: theme.textMuted, lineHeight: 22 }}>
               {isAr
-                ? `${completedSets} مجموعات · ${current.plannedExercises.length} تمارين${volumeGrams > 0 ? ` · حجم ${formatKg(volumeGrams, locale)}` : ''}`
-                : `${completedSets} sets · ${current.plannedExercises.length} exercises${volumeGrams > 0 ? ` · volume ${formatKg(volumeGrams, locale)}` : ''}`}
+                ? `${completedSets} مجموعات · ${new Set(current.sets.map(set => set.exerciseId)).size} تمارين مسجّلة${volumeGrams > 0 ? ` · حجم ${formatKg(volumeGrams, locale)}` : ''}`
+                : `${completedSets} sets · ${new Set(current.sets.map(set => set.exerciseId)).size} exercises logged${volumeGrams > 0 ? ` · volume ${formatKg(volumeGrams, locale)}` : ''}`}
             </Text>
           </SurfaceCard>
         ) : null}

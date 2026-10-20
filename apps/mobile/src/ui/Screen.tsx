@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,14 +12,18 @@ import { text, type CopyKey } from '../i18n/copy';
 import { useKeyboardInset } from './keyboard';
 import { useTabBarInset } from './TabBar';
 import { tapImpact } from './haptics';
+import { perfMark } from '../performance/lab';
 
 export function Screen({ title, children }: { title?: string; children: ReactNode }) {
   const theme = useTheme();
   const { direction, locale } = useLocale();
   const insets = useSafeAreaInsets();
-  const inTabs = useSegments()[0] === '(tabs)';
+  const segments=useSegments();
+  const inTabs = segments[0] === '(tabs)';
+  useEffect(()=>{perfMark('screen.render',segments.join('/'));});
   return (
     <SafeAreaView
+      onLayout={()=>perfMark('screen.layout',segments.join('/'))}
       style={[
         styles.screen,
         { backgroundColor: theme.background, direction, paddingBottom: inTabs ? 0 : insets.bottom },
@@ -186,11 +190,13 @@ export function Button({
   onPress,
   disabled = false,
   variant = 'primary',
+  testID,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   variant?: 'primary' | 'secondary' | 'lime' | 'violet' | 'danger';
+  testID?: string;
 }) {
   const theme = useTheme();
   const { duration } = useMotion();
@@ -209,6 +215,7 @@ export function Button({
   return (
     <Animated.View style={animated}>
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       disabled={disabled}
       onPress={() => {

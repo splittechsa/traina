@@ -1,0 +1,17 @@
+{
+  "at": "2026-10-20T23:34:25.605Z",
+  "projectId": "solitary-pond-59179148",
+  "syntheticOnly": true,
+  "personas": [
+    {
+      "persona": "beginner",
+      "historySessions": 0,
+      "historySets": 0
+    },
+    {
+      "persona": "experienced",
+      "historySessions": 100,
+      "historySets": 300
+    }
+  ]
+}

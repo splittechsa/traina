@@ -1,4 +1,5 @@
 import { getApiBaseOverride, getTokens, replaceTokens, sessionEpoch } from './tokens';
+import { perfMark, safeResource } from '../performance/lab';
 
 export class ApiClientError extends Error {
   constructor(
@@ -83,6 +84,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}, 
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 12_000);
+  const started=performance.now();
+  let observedStatus=0;
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
@@ -91,10 +94,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}, 
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: controller.signal,
     });
+    observedStatus=response.status;
   } catch (caught) {
     const aborted = caught instanceof Error && caught.name === 'AbortError';
     throw new ApiClientError(0, aborted ? 'TIMEOUT' : 'OFFLINE', aborted ? 'Request timed out' : 'Network unavailable');
   } finally {
+    perfMark('api',safeResource(path),performance.now()-started,observedStatus);
     clearTimeout(timer);
   }
   if (options.auth !== false && requestEpoch !== sessionEpoch()) throw new ApiClientError(409, 'ACCOUNT_CHANGED', 'Account changed during request');

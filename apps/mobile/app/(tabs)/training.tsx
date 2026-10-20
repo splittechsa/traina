@@ -83,6 +83,7 @@ export default function TrainingScreen() {
   const [sets, setSets] = useState('3');
   const [reps, setReps] = useState('8');
   const [message, setMessage] = useState('');
+  const [visibleHistory, setVisibleHistory] = useState(12);
   const draftRecovery = useFormRecovery('workout-builder', { name, discipline, selected, format, minutes, rounds, progression, hold, sets, reps }, draft => { setName(draft.name); setDiscipline(draft.discipline); setSelected(draft.selected); setFormat(draft.format); setMinutes(draft.minutes); setRounds(draft.rounds); setProgression(draft.progression); setHold(draft.hold); setSets(draft.sets); setReps(draft.reps); setOpen(true); }, name !== '' || selected.length > 0 || minutes !== '12' || rounds !== '5' || sets !== '3' || reps !== '8' || hold !== '');
   const exercises = useQuery({
     queryKey: ['exercises'],
@@ -91,6 +92,7 @@ export default function TrainingScreen() {
   });
   const manufacturers = useQuery({
     queryKey: ['equipment-manufacturers'],
+    enabled: open,
     queryFn: () => apiRequest<{ manufacturers: EquipmentManufacturer[] }>('/v1/equipment/manufacturers'),
   });
   const sessions = useQuery({
@@ -181,7 +183,7 @@ export default function TrainingScreen() {
     }
   }
 
-  if (sessions.isPending || exercises.isPending) {
+  if (sessions.isPending) {
     return (
       <Screen>
         <AppHeader title={text(locale, 'training')} subtitle={locale === 'ar' ? 'نجهّز جلستك' : 'Preparing your session'} />
@@ -189,7 +191,7 @@ export default function TrainingScreen() {
       </Screen>
     );
   }
-  if (sessions.isError || exercises.isError) {
+  if (sessions.isError) {
     const offline = sessions.error instanceof ApiClientError && sessions.error.code === 'OFFLINE';
     return (
       <Screen>
@@ -200,12 +202,12 @@ export default function TrainingScreen() {
   }
 
   const library = exercises.data?.exercises ?? [];
-  const builderLibrary = filterExerciseLibrary(library, {
+  const builderLibrary = open ? filterExerciseLibrary(library, {
     query: '',
     discipline,
     environment,
     brand: equipmentBrand,
-  });
+  }) : [];
   const builderFamily = familyForDiscipline(discipline);
   return (
     <Screen>
@@ -357,7 +359,7 @@ export default function TrainingScreen() {
 
         <TrainingFamilyCards value={filter} onChange={setFilter} counts={sessionFamilyCounts} />
         {rest.length > 0 ? <SectionLabel>{text(locale, 'workoutHistory')}</SectionLabel> : null}
-        {rest.map((session) => (
+        {rest.slice(0, visibleHistory).map((session) => (
           <SurfaceCard key={session.id} padding={8} style={{ marginBottom: 10 }}>
             <MediaRow
               title={session.name}
@@ -368,6 +370,7 @@ export default function TrainingScreen() {
             />
           </SurfaceCard>
         ))}
+        {rest.length > visibleHistory ? <Button variant="secondary" label={locale === 'ar' ? 'عرض المزيد من الجلسات' : 'Show more sessions'} onPress={() => setVisibleHistory(value => value + 12)} /> : null}
         <SectionTitle title={text(locale, 'workoutLibrary')} action={locale === 'ar' ? 'عرض الكل' : 'See all'} onAction={() => router.push('/exercises')} />
         {library.slice(0, 5).map((exercise, index) => (
           <ExerciseCard

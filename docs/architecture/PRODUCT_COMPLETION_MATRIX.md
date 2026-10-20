@@ -1,3 +1,19 @@
+# Current experience transformation — 2026-10-21
+
+**Release NO-GO; transformation PARTIAL.** Actual physical iPhone Expo Go screenshots, bounded JS traces, before/after observations and synthetic set persistence checks now exist. The historical blanket hardware-blocked claim below is superseded for these specific journeys only. See [experience evidence](../evidence/experience-2026-10-21/REPORT.md).
+
+| Gate | Current evidence / remaining work |
+| --- | --- |
+| Storage / workout input | Implemented; 125 tests; physical scripted beginner and experienced journeys; review required |
+| Performance | Development-only observations; native FPS/memory/cold-start/release-mode/Android remain NOT_TESTED |
+| Exercise demonstrations | BLOCKED: licensed, technically reviewed realistic trainer/animation assets absent |
+| Native usability | PARTIAL: real screenshots and handlers; independent human tasks, English/RTL restart, accessibility, recordings and next-day return open |
+| Completion | Implemented set/volume/duration summary; native verification timed out, acceptance open |
+| Yazan | Context action retained; clinical/coaching quality acceptance open |
+| Release / merge | Required review, privacy, ENERGY_POLICY, billing and platform-policy gates remain intact; no merge authorized |
+
+## Historical evidence below
+
 # Traina production completion matrix — 2026-10-20
 
 **Release: NO-GO.** The authoritative requirement-level inventory is [LAUNCH_MATRIX.json](LAUNCH_MATRIX.json), with 447 entries extracted from directive sections 1–17, explicit approval gates and five end-to-end journeys. Each entry records implementation, gaps, UI/backend/database, integrations, security, tests, devices, dependencies, blockers and acceptance status.

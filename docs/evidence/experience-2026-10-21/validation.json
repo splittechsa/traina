@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-20T23:50:06.641Z",
+  "mobileTests": {
+    "files": 36,
+    "passed": 125
+  },
+  "typecheck": "PASS",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": 5
+  },
+  "iosHermesExport": {
+    "status": "PASS",
+    "modules": 2003,
+    "size": "6.1MB",
+    "note": "First attempt failed writing sandbox temp; retry with writable TEMP/TMP succeeded"
+  },
+  "completionJourney": {
+    "status": "BLOCKED",
+    "reason": "CDP runtime timed out before completion evidence; no successful completion assertion"
+  },
+  "cpuProfile": "UNSUPPORTED",
+  "nativeUiFps": "NOT_MEASURED",
+  "nativeMemory": "NOT_MEASURED",
+  "releaseLikeDevice": "NOT_TESTED"
+}

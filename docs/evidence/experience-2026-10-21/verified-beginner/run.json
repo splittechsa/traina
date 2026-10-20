@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-20T23:48:18.727Z",
+  "device": "physical iPhone via Expo Go",
+  "mode": "development",
+  "persona": "beginner",
+  "historySessions": 0,
+  "historySets": 0,
+  "syntheticOnly": true,
+  "status": "PASS",
+  "screenshots": [
+    "01-today.png",
+    "02-training.png",
+    "03-workout-overview.png",
+    "04-current-exercise.png",
+    "05-logged-rest.png",
+    "06-warm-training.png"
+  ],
+  "nativeUiFps": "NOT_MEASURED",
+  "releaseLike": "NOT_TESTED",
+  "scope": "Scripted real React Native navigation and instrumented input handlers; not independent human usability testing"
+}

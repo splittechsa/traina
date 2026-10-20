@@ -1,4 +1,7 @@
-import { Stack } from 'expo-router';
+import { Stack, router, type Href } from 'expo-router';
+import { Profiler, useEffect, useRef } from 'react';
+import { View } from 'react-native';
+import { attachPerformanceLab, lab, perfMark, invokeControl, requireSynthetic } from '../src/performance/lab';
 import { useFonts } from 'expo-font';
 import {
   IBMPlexSansArabic_400Regular,
@@ -31,17 +34,25 @@ function Navigation() {
   const { tokens } = useSession();
   const { reduce } = useMotion();
   return (
-    <Stack key={tokens?.userId ?? 'signed-out'}
+    <Profiler id="navigation" onRender={(_id,phase,duration)=>perfMark('react.commit',phase,duration)}><Stack key={tokens?.userId ?? 'signed-out'}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.background },
         animation: reduce ? 'none' : 'fade',
       }}
-    />
+    /></Profiler>
   );
 }
 
 export default function RootLayout() {
+  const captureView=useRef<View>(null);
+  useEffect(()=>{
+    attachPerformanceLab();const current=lab();if(!current)return;
+    current.capture=async()=>{requireSynthetic();const {captureRef}=await import('react-native-view-shot');return captureRef(captureView,{format:'png',result:'base64',quality:1});};
+    current.refresh=async()=>{requireSynthetic();await queryClient.invalidateQueries();};
+    current.navigate=path=>{requireSynthetic();router.replace(path as Href);};
+    current.press=id=>invokeControl(id,'onPress');current.input=(id,value)=>invokeControl(id,'onChangeText',value);
+  },[]);
   const [loaded, error] = useFonts({
     IBMPlexSansArabic_400Regular,
     IBMPlexSansArabic_500Medium,
@@ -52,7 +63,7 @@ export default function RootLayout() {
     return null;
   }
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }}><View ref={captureView} collapsable={false} style={{flex:1}}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <LocaleProvider>
@@ -62,6 +73,6 @@ export default function RootLayout() {
           </LocaleProvider>
         </ThemeProvider>
       </QueryClientProvider>
-    </GestureHandlerRootView>
+    </View></GestureHandlerRootView>
   );
 }

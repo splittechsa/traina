@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import type { PendingSetCommand } from './queue';
+import { perfMark } from '../performance/lab';
 
 const DATABASE = 'sahhti-offline.db';
 let operations: Promise<void> = Promise.resolve();
@@ -7,12 +8,22 @@ function serialize<T>(operation: () => Promise<T>): Promise<T> {
   const result = operations.then(operation); operations = result.then(() => undefined, () => undefined); return result;
 }
 function requireOwner(owner: string): void { if (!owner || !owner.includes('|')) throw new Error('OFFLINE_ACCOUNT_UNVERIFIED'); }
-async function database() {
-  const db = await SQLite.openDatabaseAsync(DATABASE);
-  // Legacy pending_sets lacks an owner: retain it for recovery, never attach it to the current login.
-  await db.execAsync(`CREATE TABLE IF NOT EXISTS pending_sets_scoped (account_id TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY (account_id, id));
-    CREATE TABLE IF NOT EXISTS account_snapshots (account_id TEXT NOT NULL, key TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY (account_id, key));`);
-  return db;
+let connection: Promise<SQLite.SQLiteDatabase> | undefined;
+function database(): Promise<SQLite.SQLiteDatabase> {
+  if (!connection) {
+    connection = (async () => {
+      const started = performance.now();
+      const db = await SQLite.openDatabaseAsync(DATABASE);
+      try {
+        // Legacy unscoped rows remain recoverable, never attached to a login.
+        await db.execAsync(`CREATE TABLE IF NOT EXISTS pending_sets_scoped (account_id TEXT NOT NULL, id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY (account_id, id));
+          CREATE TABLE IF NOT EXISTS account_snapshots (account_id TEXT NOT NULL, key TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY (account_id, key));`);
+        perfMark('sqlite.open', 'open + schema', performance.now() - started);
+        return db;
+      } catch (error) { await db.closeAsync().catch(() => undefined); throw error; }
+    })().catch(error => { connection = undefined; throw error; });
+  }
+  return connection;
 }
 export function readPendingSets(owner: string): Promise<PendingSetCommand[]> {
   requireOwner(owner);

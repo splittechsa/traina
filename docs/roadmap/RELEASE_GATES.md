@@ -1,3 +1,19 @@
+# Current device and experience gates — 2026-10-21
+
+**Release NO-GO; transformation PARTIAL.** Actual physical iPhone Expo Go screenshots, bounded JS traces, before/after observations and synthetic set persistence checks now exist. The historical blanket hardware-blocked claim below is superseded for these specific journeys only. See [experience evidence](../evidence/experience-2026-10-21/REPORT.md).
+
+| Gate | Current evidence / remaining work |
+| --- | --- |
+| Storage / workout input | Implemented; 125 tests; physical scripted beginner and experienced journeys; review required |
+| Performance | Development-only observations; native FPS/memory/cold-start/release-mode/Android remain NOT_TESTED |
+| Exercise demonstrations | BLOCKED: licensed, technically reviewed realistic trainer/animation assets absent |
+| Native usability | PARTIAL: real screenshots and handlers; independent human tasks, English/RTL restart, accessibility, recordings and next-day return open |
+| Completion | Implemented set/volume/duration summary; native verification timed out, acceptance open |
+| Yazan | Context action retained; clinical/coaching quality acceptance open |
+| Release / merge | Required review, privacy, ENERGY_POLICY, billing and platform-policy gates remain intact; no merge authorized |
+
+## Historical evidence below
+
 > **2026-10-20 current audit:** NO-GO. [Readiness report](../architecture/FINAL_PRODUCT_READINESS_REPORT.md) and [authoritative inventory](../architecture/LAUNCH_MATRIX.json) supersede unsupported completion claims below. Fresh GitHub verification confirms #43–#45 merged and #46–#49 open. Draft #50 contains the published hardening changes. The user declined workflow/read:project scopes; workflow edits remain local and board access is skipped. Physical-device evidence remains BLOCKED. Production Neon has 0001–0030; local 0031 is not deployed. Historical entries are retained for traceability.
 
 # Release gates

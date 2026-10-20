@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { attachPerformanceLab, lab, synthetic } from '../performance/lab';
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
 import { replaceTokens, setApiBaseOverride, setTokenMemory, setTokenPersistor, type StoredTokens } from '../api/tokens';
@@ -49,6 +50,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [ready, setReady] = useState(false);
   const [tokens, setTokens] = useState<StoredTokens | null>(null);
+  const previous=useRef<StoredTokens|null|undefined>(undefined);
+  useEffect(()=>{
+    attachPerformanceLab();const current=lab();if(!current)return;
+    current.enter=async next=>{
+      const verified=await verifyLocalAccount(next);
+      if(previous.current===undefined)previous.current=tokens;
+      await transitionSession(()=>queryClient.clear(),replaceTokens,verified);synthetic(true);
+    };
+    current.leave=async()=>{
+      if(previous.current===undefined)return;const restore=previous.current;
+      await transitionSession(()=>queryClient.clear(),replaceTokens,restore);previous.current=undefined;synthetic(false);
+    };
+  },[queryClient,tokens]);
 
   useEffect(() => {
     setTokenPersistor(async (next) => {
