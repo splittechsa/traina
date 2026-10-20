@@ -1502,6 +1502,50 @@ describe('persisted product', () => {
     expect(['First edit', 'Second edit']).toContain(saved.rows[0]?.name);
   });
 
+
+  it('manages owned program copies, immutable history, restoration, activation and archive', async () => {
+    const owner = await tokenFor('lifecycle-' + randomUUID() + '@sahhti.test');
+    const other = await tokenFor('lifecycle-other-' + randomUUID() + '@sahhti.test');
+    const call = (method: 'GET' | 'POST' | 'PUT', path: string, payload?: unknown, token = owner) => app.inject({ method, url: '/v1/training/programs' + path, headers: { authorization: 'Bearer ' + token }, payload });
+    const original = (await call('POST', '', { templateId: 'push_pull_legs' })).json().program;
+    const action = (id: string, body: unknown, token = owner) => call('POST', '/' + id + '/actions', body, token);
+    expect((await action(original.id, { action: 'duplicate', expectedVersion: 1, name: 'Forbidden' }, other)).statusCode).toBe(404);
+    expect((await call('GET', '/' + original.id + '/history', undefined, other)).statusCode).toBe(404);
+    const copyResponse = await action(original.id, { action: 'duplicate', expectedVersion: 1, name: 'My copy' });
+    expect(copyResponse.statusCode).toBe(200);
+    const copy = copyResponse.json().program;
+    const days = original.days.map((day: { name_ar: string; name_en: string; exerciseIds: string[] }) => ({ name_ar: day.name_ar, name_en: day.name_en, exerciseIds: day.exerciseIds }));
+    days[0].strengthOverrides = { [days[0].exerciseIds[0]]: { sets: 6, reps: 11, restSeconds: 75 } };
+    expect((await call('PUT', '/' + copy.id, { expectedVersion: 1, name: 'Customized copy', days })).statusCode).toBe(200);
+    expect((await action(copy.id, { action: 'rename', expectedVersion: 1, name: 'Stale' })).statusCode).toBe(409);
+    expect((await action(copy.id, { action: 'activate', expectedVersion: 2 })).statusCode).toBe(200);
+    const started = await call('POST', '/' + copy.id + '/start-day', { dayIndex: 0, startNow: true });
+    expect(started.statusCode).toBe(200);
+    expect(started.json().session.plannedExercises[0].prescription).toMatchObject({ sets: 6, reps: 11, restSeconds: 75 });
+    const oldHistory = (await call('GET', '/' + copy.id + '/history')).json().versions;
+    const restored = await action(copy.id, { action: 'restore', expectedVersion: 2, version: 1 });
+    expect(restored.statusCode).toBe(200); expect(restored.json().program.version).toBe(3);
+    const newHistory = (await call('GET', '/' + copy.id + '/history')).json().versions;
+    expect(newHistory.slice(1)).toEqual(oldHistory);
+    expect(newHistory[0].document).toMatchObject({ restoredFromVersion: 1, programName: 'My copy' });
+    const restarted = await call('POST', '/' + copy.id + '/start-day', { dayIndex: 0 });
+    expect(restarted.json().session.plannedExercises[0].prescription).toMatchObject({ sets: 3, reps: 8, restSeconds: 90 });
+    const historicalWorkout = await app.inject({ method: 'GET', url: '/v1/training/sessions/' + started.json().session.id, headers: { authorization: 'Bearer ' + owner } });
+    expect(historicalWorkout.json().session.plannedExercises[0].prescription.sets).toBe(6);
+    const rename = await action(copy.id, { action: 'rename', expectedVersion: 3, name: 'Renamed' });
+    expect(rename.json().program.version).toBe(4);
+    expect((await action(copy.id, { action: 'restore', expectedVersion: 4, version: 900 })).statusCode).toBe(404);
+    expect((await call('GET', '/' + copy.id)).json().program).toMatchObject({ name: 'Renamed', version: 4 });
+    expect((await action(copy.id, { action: 'archive', expectedVersion: 4 })).statusCode).toBe(200);
+    expect((await action(copy.id, { action: 'activate', expectedVersion: 4 })).statusCode).toBe(409);
+    expect((await call('POST', '/' + copy.id + '/start-day', { dayIndex: 0 })).statusCode).toBe(404);
+    expect((await call('GET', '/' + copy.id + '/history')).json().versions).toHaveLength(4);
+    const activations = await Promise.all([action(original.id, { action: 'activate', expectedVersion: 1 }), call('POST', '', { templateId: 'gym_full_body' })]);
+    expect(activations.map(row => row.statusCode)).toEqual([200, 200]);
+    const library = (await call('GET', '')).json().library;
+    expect(library.filter((row: { active: boolean }) => row.active)).toHaveLength(1);
+  });
+
   it('projects free entitlements from the server without client unlock flags', async () => {
     const token = await tokenFor(`entitlements-${randomUUID()}@sahhti.test`);
     const denied = await app.inject({ method: 'GET', url: '/v1/member/entitlements' });

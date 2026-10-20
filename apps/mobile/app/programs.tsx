@@ -41,6 +41,7 @@ type Template = {
 };
 
 type ProgramsResponse = {
+  library: { id: string; name: string; version: number; active: boolean; archivedAt: string | null }[];
   active: {
     id: string;
     templateId: string | null;
@@ -177,6 +178,12 @@ export default function ProgramsScreen() {
           ]}
         />
 
+        <SectionLabel>{isAr ? 'برامجي المحفوظة' : 'My saved programs'}</SectionLabel>
+        {(programs.data.library ?? []).map(item => <SurfaceCard key={item.id} style={{ marginBottom: 8 }}>
+          <Text style={{ color: theme.text, fontFamily: fontFamily.bold }}>{item.name}</Text>
+          <Text style={{ color: theme.textMuted }}>{item.archivedAt ? (isAr ? 'مؤرشف' : 'Archived') : item.active ? (isAr ? 'نشط' : 'Active') : (isAr ? 'محفوظ' : 'Saved')} · {item.version}</Text>
+          <Button label={isAr ? 'إدارة والإصدارات' : 'Manage and history'} variant="secondary" onPress={() => router.push({ pathname: '/program-manage', params: { id: item.id } })} />
+        </SurfaceCard>)}
         {active !== null ? (
           <SurfaceCard style={{ marginBottom: 14 }}>
             <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12, marginBottom: 4 }}>

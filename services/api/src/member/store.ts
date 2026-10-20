@@ -459,6 +459,8 @@ export async function listMemberPrograms(db: Database, userId: string) {
     }
   }
   return {
+    library: (await db.query<{ id: string; name: string; active: boolean; archived_at: string | null; version: number }>(
+      'SELECT p.id, p.name, p.active, p.archived_at, (SELECT max(v.version) FROM program_versions v WHERE v.program_id = p.id) AS version FROM programs p WHERE p.user_id = $1 ORDER BY p.created_at DESC, p.id', [userId])).rows.map(p => ({ id: p.id, name: p.name, active: p.active, archivedAt: p.archived_at, version: Number(p.version) })),
     templates: catalogTemplates().map((item) => ({
       ...publicTemplate(item),
       recommended: recommendedIds.has(item.id),
@@ -2775,12 +2777,89 @@ export async function saveMealPlanDay(
   });
 }
 
+export async function memberProgramDetail(db: Database, userId: string, programId: string) {
+  const rows = await db.query<{ id: string; name: string; discipline: string; active: boolean; archived_at: string | null; version: number; template: unknown }>(
+    'SELECT p.id, p.name, p.discipline, p.active, p.archived_at, v.version, v.template FROM programs p JOIN LATERAL (SELECT version, template FROM program_versions WHERE program_id = p.id ORDER BY version DESC LIMIT 1) v ON true WHERE p.id = $1 AND p.user_id = $2', [programId, userId]);
+  const row = rows.rows[0];
+  if (!row) throw new ApiError(404, 'PROGRAM_NOT_FOUND', 'Program is not on this account');
+  const doc = parseProgramVersionDocument(row.template);
+  return { program: { id: row.id, name: row.name, discipline: row.discipline, active: row.active, archivedAt: row.archived_at, version: Number(row.version), days: doc.days } };
+}
+
+export async function memberProgramHistory(db: Database, userId: string, programId: string, before?: number) {
+  const owned = await db.query('SELECT id FROM programs WHERE id = $1 AND user_id = $2', [programId, userId]);
+  if (!owned.rows.length) throw new ApiError(404, 'PROGRAM_NOT_FOUND', 'Program is not on this account');
+  const rows = await db.query<{ version: number; source: string; template: unknown; created_at: string }>(
+    'SELECT version, source, template, created_at FROM program_versions WHERE program_id = $1 AND ($2::integer IS NULL OR version < $2) ORDER BY version DESC LIMIT 51', [programId, before ?? null]);
+  return { versions: rows.rows.slice(0, 50).map(row => ({ version: Number(row.version), source: row.source, document: row.template, createdAt: row.created_at })),
+    nextBefore: rows.rows.length > 50 ? Number(rows.rows[49]!.version) : null };
+}
+
+type ProgramAction = { action: 'duplicate' | 'rename' | 'restore' | 'activate' | 'archive'; expectedVersion: number; name?: string; version?: number };
+export async function manageMemberProgram(db: Database, userId: string, programId: string, input: ProgramAction) {
+  return db.transaction(async tx => {
+    // Serialize activation changes per member, then lock the program, always in that order.
+    await tx.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    const owned = await tx.query<{ id: string; template_id: string; name: string; discipline: string; archived_at: string | null }>(
+      'SELECT id, template_id, name, discipline, archived_at FROM programs WHERE id = $1 AND user_id = $2 FOR UPDATE', [programId, userId]);
+    const program = owned.rows[0];
+    if (!program) throw new ApiError(404, 'PROGRAM_NOT_FOUND', 'Program is not on this account');
+    if (program.archived_at !== null) throw new ApiError(409, 'PROGRAM_ARCHIVED', 'Archived programs cannot be changed');
+    const rows = await tx.query<{ version: number; template: unknown }>('SELECT version, template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1', [programId]);
+    const latest = rows.rows[0];
+    if (!latest || Number(latest.version) !== input.expectedVersion) throw new ApiError(409, 'PROGRAM_VERSION_CONFLICT', 'Reload the program before changing it');
+    let id = programId, version = Number(latest.version);
+    if (input.action === 'activate') {
+      await tx.query('UPDATE programs SET active = false WHERE user_id = $1 AND active = true', [userId]);
+      await tx.query('UPDATE programs SET active = true WHERE id = $1', [programId]);
+    } else if (input.action === 'archive') {
+      await tx.query('UPDATE programs SET active = false, archived_at = now() WHERE id = $1', [programId]);
+    } else {
+      let raw = latest.template;
+      if (input.action === 'restore') {
+        const historical = await tx.query<{ template: unknown }>('SELECT template FROM program_versions WHERE program_id = $1 AND version = $2', [programId, input.version]);
+        if (!historical.rows[0]) throw new ApiError(404, 'PROGRAM_VERSION_NOT_FOUND', 'Version is not in this program');
+        raw = historical.rows[0].template;
+      }
+      const document = parseProgramVersionDocument(raw);
+      // A restored or copied document must still refer to exercises accessible to this member.
+      for (let i = 0; i < document.days.length; i++) {
+        planDocumentDay(document, i, document.adaptation ?? null);
+        for (const exerciseId of document.days[i]!.exerciseIds) {
+          const found = await tx.query('SELECT id FROM exercises WHERE id = $1 AND (owner_user_id IS NULL OR owner_user_id = $2)', [exerciseId, userId]);
+          if (!found.rows.length) throw new ApiError(404, 'EXERCISE_NOT_FOUND', 'Exercise is no longer accessible');
+        }
+      }
+      let name = input.name ?? program.name;
+      if (input.action === 'restore') {
+        const saved = raw as { programName?: unknown };
+        if (typeof saved.programName === 'string') name = saved.programName;
+      }
+      if (input.action === 'duplicate') {
+        id = randomUUID(); version = 1;
+        await tx.query('INSERT INTO programs (id, user_id, discipline, name, template_id, active) VALUES ($1, $2, $3, $4, $5, false)', [id, userId, program.discipline, name, program.template_id]);
+      } else {
+        version++;
+        await tx.query('UPDATE programs SET name = $1 WHERE id = $2', [name, id]);
+      }
+      await tx.query(
+        "INSERT INTO program_versions (id, program_id, version, source, template) VALUES ($1, $2, $3, 'member_customize', $4::jsonb)",
+        [randomUUID(), id, version, JSON.stringify({ ...document, programName: name, memberAction: input.action,
+          ...(input.action === 'restore' ? { restoredFromVersion: input.version } : {}),
+          ...(input.action === 'duplicate' ? { copiedFromProgram: programId, copiedFromVersion: Number(latest.version) } : {}) })]);
+    }
+    await tx.query('INSERT INTO audit_logs (actor_user_id, action, resource_type, resource_id) VALUES ($1, $2, $3, $4)', [userId, 'program.' + input.action, 'program', id]);
+    return { id, version, action: input.action };
+  });
+}
+
 export async function activateMemberProgram(db: Database, userId: string, templateId: string) {
   const template = templateById(templateId);
   if (template === null) {
     throw new ApiError(404, 'UNKNOWN_TEMPLATE', 'Training template is not in the catalog');
   }
   return db.transaction(async (tx) => {
+    await tx.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
     await tx.query(`UPDATE programs SET active = false WHERE user_id = $1 AND active = true`, [userId]);
     const programId = randomUUID();
     const versionId = randomUUID();
@@ -2792,7 +2871,7 @@ export async function activateMemberProgram(db: Database, userId: string, templa
     await tx.query(
       `INSERT INTO program_versions (id, program_id, version, source, template)
        VALUES ($1, $2, 1, 'explicit', $3::jsonb)`,
-      [versionId, programId, JSON.stringify({ templateId: template.id, days: template.days })],
+      [versionId, programId, JSON.stringify({ templateId: template.id, days: template.days, programName: template.name_en })],
     );
     return {
       id: programId,
@@ -2816,7 +2895,7 @@ export async function customizeMemberProgram(
 ) {
   return db.transaction(async (tx) => {
     const owned = await tx.query<{ id: string; template_id: string | null; name: string }>(
-      `SELECT id, template_id, name FROM programs WHERE id = $1 AND user_id = $2 AND active = true FOR UPDATE`,
+      `SELECT id, template_id, name FROM programs WHERE id = $1 AND user_id = $2 AND archived_at IS NULL FOR UPDATE`,
       [programId, userId],
     );
     const program = owned.rows[0];
@@ -2861,6 +2940,8 @@ export async function customizeMemberProgram(
     }
     const nextVersion = currentVersion + 1;
     const document = {
+      programName: input.name?.trim() || program.name,
+      memberAction: 'edit',
       templateId: program.template_id,
       days: input.days,
       adaptation,
@@ -2952,19 +3033,15 @@ export async function startProgramDay(
   input: { dayIndex: number; startNow?: boolean; locale?: 'ar' | 'en' },
 ) {
   const owned = await db.query<{ id: string; template_id: string | null }>(
-    `SELECT id, template_id FROM programs WHERE id = $1 AND user_id = $2`,
+    `SELECT id, template_id FROM programs WHERE id = $1 AND user_id = $2 AND active = true AND archived_at IS NULL`,
     [programId, userId],
   );
   const program = owned.rows[0];
   if (program === undefined || program.template_id === null) {
     throw new ApiError(404, 'PROGRAM_NOT_FOUND', 'Program is not on this account');
   }
-  const version = await db.query<{ id: string }>(
-    `SELECT id FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
-    [programId],
-  );
-  const latestDoc = await db.query<{ template: unknown }>(
-    `SELECT template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
+  const latestDoc = await db.query<{ id: string; template: unknown }>(
+    `SELECT id, template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
     [programId],
   );
   let adaptation = null;
@@ -2992,8 +3069,8 @@ export async function startProgramDay(
         })),
       };
     }
-  } catch {
-    adaptation = null;
+  } catch (error) {
+    throw asApi(error);
   }
   let planned: ReturnType<typeof planTemplateDay>;
   try {
@@ -3009,7 +3086,7 @@ export async function startProgramDay(
     discipline: planned.discipline,
     scheduledFor: new Date().toISOString(),
     exercises: planned.exercises,
-    programVersionId: version.rows[0]?.id ?? null,
+    programVersionId: latestDoc.rows[0]?.id ?? null,
   });
   if (input.startNow === true) {
     return mutateSession(db, userId, session.id, { type: 'start', at: new Date().toISOString() });

@@ -506,3 +506,12 @@ export const simulateSchema = z
   })
   .strict();
 
+
+export const programActionSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('duplicate'), expectedVersion: z.number().int().positive(), name: z.string().trim().min(1).max(80) }).strict(),
+  z.object({ action: z.literal('rename'), expectedVersion: z.number().int().positive(), name: z.string().trim().min(1).max(80) }).strict(),
+  z.object({ action: z.literal('restore'), expectedVersion: z.number().int().positive(), version: z.number().int().positive() }).strict(),
+  z.object({ action: z.literal('activate'), expectedVersion: z.number().int().positive() }).strict(),
+  z.object({ action: z.literal('archive'), expectedVersion: z.number().int().positive() }).strict(),
+]);
+export const programHistoryQuerySchema = z.object({ before: z.coerce.number().int().positive().optional() }).strict();
