@@ -531,6 +531,8 @@ describe('persisted product', () => {
       expect.objectContaining({ id: 'bro_split' }),
       expect.objectContaining({ id: 'arnold_split' }),
       expect.objectContaining({ id: 'calisthenics_ppl' }),
+      expect.objectContaining({ id: 'calisthenics_intermediate' }),
+      expect.objectContaining({ id: 'calisthenics_skills' }),
       expect.objectContaining({ id: 'crossfit_three' }),
     ]));
     const activated = await app.inject({
@@ -541,6 +543,38 @@ describe('persisted product', () => {
     });
     expect(activated.statusCode).toBe(200);
     expect(activated.json().program.templateId).toBe('push_pull_legs');
+    const pushDay = activated.json().program.days[0];
+    expect(pushDay.exerciseIds.length).toBeGreaterThanOrEqual(3);
+    const swapped = [...pushDay.exerciseIds];
+    swapped[0] = pushDay.exerciseIds[1];
+    swapped[1] = pushDay.exerciseIds[0];
+    const customized = await app.inject({
+      method: 'PUT',
+      url: `/v1/training/programs/${activated.json().program.id}`,
+      headers: { authorization: `Bearer ${progressToken}` },
+      payload: {
+        name: 'My PPL',
+        days: [
+          { name_ar: pushDay.name_ar, name_en: pushDay.name_en, exerciseIds: swapped },
+          ...activated.json().program.days.slice(1).map((day: { name_ar: string; name_en: string; exerciseIds: string[] }) => ({
+            name_ar: day.name_ar,
+            name_en: day.name_en,
+            exerciseIds: day.exerciseIds,
+          })),
+        ],
+      },
+    });
+    expect(customized.statusCode).toBe(200);
+    expect(customized.json().program.name).toBe('My PPL');
+    expect(customized.json().program.days[0].exerciseIds[0]).toBe(swapped[0]);
+    const substitutions = await app.inject({
+      method: 'GET',
+      url: `/v1/exercises/${swapped[0]}/substitutions`,
+      headers: { authorization: `Bearer ${progressToken}` },
+    });
+    expect(substitutions.statusCode).toBe(200);
+    expect(substitutions.json().exerciseId).toBe(swapped[0]);
+    expect(Array.isArray(substitutions.json().alternatives)).toBe(true);
     const started = await app.inject({
       method: 'POST',
       url: `/v1/training/programs/${activated.json().program.id}/start-day`,
@@ -550,6 +584,7 @@ describe('persisted product', () => {
     expect(started.statusCode).toBe(200);
     expect(started.json().session.status).toBe('in_progress');
     expect(started.json().session.plannedExercises.length).toBeGreaterThanOrEqual(3);
+    expect(started.json().session.plannedExercises[0].exerciseId).toBe(swapped[0]);
     const startedAgain = await app.inject({
       method: 'POST',
       url: `/v1/training/programs/${activated.json().program.id}/start-day`,
@@ -1426,6 +1461,40 @@ describe('persisted product', () => {
     expect(push.json()).toEqual(
       expect.objectContaining({ registered: true, deliveryConfigured: false }),
     );
+  });
+
+  it('serializes program edits and rejects cross-member and invalid exercise changes atomically', async () => {
+    const owner = await tokenFor('program-owner-' + randomUUID() + '@sahhti.test');
+    const other = await tokenFor('program-other-' + randomUUID() + '@sahhti.test');
+    const activated = await app.inject({ method: 'POST', url: '/v1/training/programs',
+      headers: { authorization: 'Bearer ' + owner }, payload: { templateId: 'push_pull_legs' } });
+    expect(activated.statusCode).toBe(200);
+    const program = activated.json().program;
+    const days = program.days.map((day: { name_ar: string; name_en: string; exerciseIds: string[] }) => ({
+      name_ar: day.name_ar, name_en: day.name_en, exerciseIds: day.exerciseIds,
+    }));
+    const edit = (token: string, name: string, nextDays = days) => app.inject({
+      method: 'PUT', url: '/v1/training/programs/' + program.id,
+      headers: { authorization: 'Bearer ' + token }, payload: { name, days: nextDays },
+    });
+    const denied = await edit(other, 'Forbidden');
+    expect(denied.statusCode).toBe(404);
+    const edits = await Promise.all([edit(owner, 'First edit'), edit(owner, 'Second edit')]);
+    expect(edits.map(response => response.statusCode)).toEqual([200, 200]);
+    expect(edits.map(response => response.json().program.version).sort()).toEqual([2, 3]);
+    const stale = await app.inject({ method: 'PUT', url: '/v1/training/programs/' + program.id,
+      headers: { authorization: 'Bearer ' + owner }, payload: { name: 'Stale edit', expectedVersion: 1, days } });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error.code).toBe('PROGRAM_VERSION_CONFLICT');
+    const invalid = await edit(owner, 'Must roll back', [days[0], {
+      ...days[0], exerciseIds: [randomUUID()],
+    }]);
+    expect(invalid.statusCode).toBe(404);
+    const versions = await database.query<{ version: number }>(
+      'SELECT version FROM program_versions WHERE program_id = $1 ORDER BY version', [program.id]);
+    expect(versions.rows.map(row => Number(row.version))).toEqual([1, 2, 3]);
+    const saved = await database.query<{ name: string }>('SELECT name FROM programs WHERE id = $1', [program.id]);
+    expect(['First edit', 'Second edit']).toContain(saved.rows[0]?.name);
   });
 
   it('projects free entitlements from the server without client unlock flags', async () => {

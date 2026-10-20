@@ -29,6 +29,7 @@ import {
   sessionTimeSchema,
   simulateSchema,
   startProgramDaySchema,
+  customizeProgramSchema,
   verifySchema,
   weightSchema,
   waterLogSchema,
@@ -59,6 +60,8 @@ import {
 } from '../identity/accounts.js';
 import {
   activateMemberProgram,
+  customizeMemberProgram,
+  exerciseSubstitutionsFor,
   answerCoach,
   attributeReferral,
   blockMember,
@@ -480,6 +483,20 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
         locale,
       }),
     };
+  });
+
+  app.put('/v1/training/programs/:id', async (request, reply) => {
+    const body = parse(customizeProgramSchema, request.body, reply);
+    if (body === undefined) return;
+    const params = request.params as { id: string };
+    return {
+      program: await customizeMemberProgram(dbOf(options), actorOf(request.claims).userId, params.id, body),
+    };
+  });
+
+  app.get('/v1/exercises/:id/substitutions', async (request) => {
+    const params = request.params as { id: string };
+    return exerciseSubstitutionsFor(dbOf(options), actorOf(request.claims).userId, params.id);
   });
 
   app.get('/v1/nutrition/ready-meals', async () => listReadyMeals());

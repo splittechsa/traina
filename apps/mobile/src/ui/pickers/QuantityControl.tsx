@@ -81,7 +81,7 @@ export function QuantityControl({ value, onChange, min, max, step, unit, presets
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const latest = useRef(value);
-  latest.current = value;
+  useEffect(() => { latest.current = value; }, [value]);
 
   function stepBy(direction: 1 | -1, multiplier: number) {
     const next = clamp(roundToStep(latest.current + direction * step * multiplier, step), min, max);

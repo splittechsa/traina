@@ -20,8 +20,24 @@ export function planOfflineSync(server: WorkoutSession, pending: readonly Pendin
   let session = server;
   const send: PendingSetCommand[] = [];
   const conflicts: OfflineSyncPlan['conflicts'] = [];
+  const latestBySet = new Map<string, PendingSetCommand>();
   for (const command of pending) {
-    if (command.sessionId !== server.id) {
+    if (command.sessionId === server.id) latestBySet.set(command.set.id, command);
+  }
+  const acknowledgedSets = new Set<string>();
+  for (const [setId, command] of latestBySet) {
+    const saved = server.sets.find(set => set.id === setId);
+    const desired = command.set;
+    if (saved !== undefined && saved.exerciseId === desired.exerciseId && saved.setIndex === desired.setIndex &&
+        saved.reps === desired.reps && saved.loadGrams === desired.loadGrams &&
+        saved.rpeTenths === desired.rpeTenths && Date.parse(saved.completedAt) === Date.parse(desired.completedAt)) {
+      // The server already contains the final desired state. A prior acknowledgement may
+      // have failed locally after both create and replace succeeded; do not replay the old create.
+      acknowledgedSets.add(setId);
+    }
+  }
+  for (const command of pending) {
+    if (command.sessionId !== server.id || acknowledgedSets.has(command.set.id)) {
       continue;
     }
     const kind = command.kind ?? 'log';
@@ -47,4 +63,30 @@ export function planOfflineSync(server: WorkoutSession, pending: readonly Pendin
     conflicts.push({ clientEventId: command.clientEventId, reason });
   }
   return { send, conflicts, session };
+}
+
+/** Keep conflicts and failed writes until the server acknowledges them. */
+export async function synchronizeOfflineSets(
+  server: WorkoutSession,
+  pending: readonly PendingSetCommand[],
+  send: (command: PendingSetCommand) => Promise<void>,
+): Promise<{ remaining: PendingSetCommand[]; hasConflicts: boolean }> {
+  const plan = planOfflineSync(server, pending);
+  const conflicts = new Set(plan.conflicts.map(item => item.clientEventId));
+  const remaining = pending.filter(item => item.sessionId !== server.id || conflicts.has(item.clientEventId));
+  let failed = false;
+  for (const command of plan.send) {
+    if (failed || conflicts.size > 0) {
+      remaining.push(command);
+      continue;
+    }
+    try {
+      await send(command);
+    } catch {
+      // Preserve ordering: later writes may depend on the failed create or edit.
+      failed = true;
+      remaining.push(command);
+    }
+  }
+  return { remaining, hasConflicts: conflicts.size > 0 };
 }

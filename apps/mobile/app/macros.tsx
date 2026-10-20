@@ -2,7 +2,7 @@
 // (wheel for numbers, chips for choices) instead of a column of text fields; the result
 // recomputes live at the top. Saved on-device as a personal estimate (see targets.ts for why
 // this is not written to the API as an authoritative target).
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -107,18 +107,17 @@ export default function MacroCalculatorScreen() {
   const [draft, setDraft] = useState(0);
 
   // Prefill once: a previously saved estimate wins; otherwise the latest logged weight.
-  useEffect(() => {
-    if (prefilled || !saved.ready) return;
+  if (!prefilled && saved.ready && (saved.value !== null || progress.isFetched)) {
     if (saved.value !== null) {
       setInput(saved.value.input);
       setPrefilled(true);
-      return;
+    } else {
+      const weights = progress.data?.weights ?? [];
+      const latest = weights[weights.length - 1];
+      if (latest !== undefined) setInput((current) => ({ ...current, weightKg: Math.round(Number(latest.weight_grams) / 100) / 10 }));
+      setPrefilled(true);
     }
-    const weights = progress.data?.weights ?? [];
-    const latest = weights[weights.length - 1];
-    if (latest !== undefined) setInput((current) => ({ ...current, weightKg: Math.round(Number(latest.weight_grams) / 100) / 10 }));
-    if (progress.isFetched) setPrefilled(true);
-  }, [prefilled, saved.ready, saved.value, progress.data, progress.isFetched]);
+  }
 
   const suggested = steps.status === 'ready' && steps.historySupported ? activityFromSteps(steps.week.slice(0, -1)) : null;
   const result = useMemo(() => {

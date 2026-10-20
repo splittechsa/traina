@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkoutSession } from '@sahhti/domain';
-import { planOfflineSync } from './queue';
+import { planOfflineSync, synchronizeOfflineSets } from './queue';
 
 const set = {
   id: '20000000-0000-4000-8000-000000000010',
@@ -88,4 +88,62 @@ describe('offline set queue', () => {
     expect(plan.session.sets).toHaveLength(1);
     expect(plan.session.sets[0]?.reps).toBe(8);
   });
+});
+
+
+describe('durable offline synchronization', () => {
+  const create = { clientEventId: 'create', sessionId: 'session-1', kind: 'log' as const, set };
+  const replace = { clientEventId: 'replace', sessionId: 'session-1', kind: 'replace' as const, set: { ...set, reps: 8 } };
+
+  it('retains an unacknowledged create and its dependent edit after a failed write', async () => {
+    const sent: string[] = [];
+    const result = await synchronizeOfflineSets(session('in_progress'), [create, replace], async command => {
+      sent.push(command.clientEventId);
+      throw new Error('network lost after send');
+    });
+    expect(sent).toEqual(['create']);
+    expect(result.remaining).toEqual([create, replace]);
+  });
+
+  it('keeps terminal-session conflicts instead of silently deleting logged work', async () => {
+    let sent = false;
+    const result = await synchronizeOfflineSets(session('completed'), [create], async () => { sent = true; });
+    expect(sent).toBe(false);
+    expect(result.hasConflicts).toBe(true);
+    expect(result.remaining).toEqual([create]);
+  });
+
+  it('uses confirmed server replay to recover a lost response without duplicating a set', async () => {
+    const sent: string[] = [];
+    const result = await synchronizeOfflineSets(session('in_progress', [set]), [create, replace], async command => {
+      sent.push(command.clientEventId);
+    });
+    expect(sent).toEqual(['replace']);
+    expect(result.remaining).toEqual([]);
+  });
+
+  it('recovers when create and edit reached the server but their local acknowledgement failed', async () => {
+    const result = await synchronizeOfflineSets(session('in_progress', [replace.set]), [create, replace], async () => {
+      throw new Error('No network write is needed for an acknowledged final state');
+    });
+    expect(result.remaining).toEqual([]);
+    expect(result.hasConflicts).toBe(false);
+  });
+
+  it('acknowledges exact saved sets after completion without mutating the terminal session', async () => {
+    const result = await synchronizeOfflineSets(session('completed', [set]), [create], async () => {
+      throw new Error('Completed sessions must not be mutated');
+    });
+    expect(result.remaining).toEqual([]);
+    expect(result.hasConflicts).toBe(false);
+  });
+
+  it('keeps rejected writes and commands for other sessions', async () => {
+    const other = { ...create, clientEventId: 'other', sessionId: 'session-2' };
+    const result = await synchronizeOfflineSets(session('in_progress'), [create, other], async () => {
+      throw new Error('409 payload conflict');
+    });
+    expect(result.remaining).toEqual([other, create]);
+  });
+
 });

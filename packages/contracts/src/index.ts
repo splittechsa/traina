@@ -178,6 +178,25 @@ export const startProgramDaySchema = z
   })
   .strict();
 
+export const customizeProgramSchema = z
+  .object({
+    expectedVersion: z.number().int().positive().optional(),
+    name: z.string().trim().min(1).max(80).optional(),
+    days: z
+      .array(
+        z
+          .object({
+            name_ar: z.string().trim().min(1).max(80),
+            name_en: z.string().trim().min(1).max(80),
+            exerciseIds: z.array(z.string().uuid()).min(1).max(20),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(14),
+  })
+  .strict();
+
 export const scheduleSessionSchema = z
   .object({
     name: z.string().min(1).max(80),

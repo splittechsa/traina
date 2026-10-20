@@ -10,6 +10,8 @@ import { fontFamily, radius, spacing, typeScale } from '../src/theme/tokens';
 import { useTheme } from '../src/theme/ThemeProvider';
 import { Button, Screen, ScreenBody } from '../src/ui/Screen';
 import { AppHeader, EmptyState, LoadingSkeleton, SurfaceCard } from '../src/ui/kit';
+import { YazanCard, openYazanWithPrompt } from '../src/ui/YazanCard';
+import { yazanTip } from '../src/training/yazanPresence';
 
 type Score = 1 | 2 | 3 | 4 | 5;
 
@@ -284,6 +286,26 @@ export default function WeeklyCheckinScreen() {
           title={text(locale, 'weeklyCheckin')}
           subtitle={weekOf}
           showBack
+        />
+
+        <YazanCard
+          compact
+          body={yazanTip(locale, {
+            surface: 'weekly',
+            sessionsCompleted: packet?.adherence.sessionsCompleted ?? 0,
+            mealDaysLogged: packet?.adherence.mealDaysLogged ?? 0,
+          })}
+          actions={[
+            {
+              label: text(locale, 'askCoach'),
+              onPress: () =>
+                openYazanWithPrompt(
+                  locale === 'ar'
+                    ? 'ساعدني أفهم أسبوعي قبل التشيك-إن: التدريب والتغذية والالتزام'
+                    : 'Help me understand my week before check-in: training, nutrition, and adherence',
+                ),
+            },
+          ]}
         />
 
         {preview.isPending || status.isPending ? <LoadingSkeleton /> : null}
