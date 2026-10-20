@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { buildApp } from '../services/api/dist/app.js';
 import { applyMigrationsTo, createPgliteDatabase, seedDevelopment } from '../services/api/dist/db/database.js';
 
@@ -81,7 +81,7 @@ try {
   if (app) await app.close();
   await db.close();
   const output = process.argv[2] ?? 'docs/evidence/launch-2026-10-20/http-smoke.json';
-  await mkdir(new URL('../docs/evidence/launch-2026-10-20/', import.meta.url), { recursive: true });
+  await mkdir(dirname(output), { recursive: true });
   await writeFile(output, JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify(evidence));
 }

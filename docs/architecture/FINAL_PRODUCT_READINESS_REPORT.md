@@ -4,10 +4,16 @@ Date: 2026-10-20 (Asia/Riyadh). Recommendation: **NO-GO for commercial launch**.
 
 This report records an implementation and verification pass. The requested whole-platform completion remains unfinished. The 447-row [launch inventory](LAUNCH_MATRIX.json) separates targeted checks from requirements that remain NOT_TESTED. It is not a claim of exhaustive acceptance audit.
 
+## Wave A follow-up
+
+Current branch: release/wave-a-data-integrity, stacked on docs/launch-evidence-2026-10-20. Added strength sets/reps/rest through mobile drafts, contracts, version persistence, recovery preview and actual workout prescription. Added populated synthetic 0030→0031 upgrade, failed-transaction rollback and cold-copy backup restore tests. These do not establish staging PostgreSQL or production disaster recovery.
+
+Fresh evidence: docs/evidence/wave-a-2026-10-20. All eight checks pass: build, typecheck, 136 domain + 3 contracts + 1 tokens + 63 API tests, mobile typecheck, 107 mobile tests, mobile lint (five warnings), coach build and actual HTTP smoke. This is 310 passing tests with synthetic scope. Code commits: 6ecb5e4 and 139f0f0. Earlier evidence below remains historical. See [closure board](../roadmap/LAUNCH_CLOSURE_BOARD.md) for owners, dependencies and exact commands/missing runners. Duplication/history/restore, complete navigation guards and account-isolated offline cold-start/conflict UI remain implementation gaps. No native screenshots or independent review were produced.
+
 ## Repository and external state
 
 - Repository: splittechsa/traina. Code branch: release/member-reliability-2026-10-20, HEAD 40633ae. Started at acb049d with 22 modified/untracked paths; that work was retained in the reviewed commit sequence. Application changes are committed and published as draft PR #50, stacked on PR #49.
-- Fresh GitHub verification and fetch confirmed origin/master at 99063d5. PR #43 merged at a2d7011, #44 at 72ae927 and #45 at 99063d5. PR #46, #47, #48 and #49 remain OPEN. PR #49 has successful API checks and failed mobile checks caused by the two stale inset assertions corrected in PR #50. PR #48 has a separate failing design-token color assertion and requires reconciliation.
+- Fresh GitHub verification and fetch confirmed origin/master at 99063d5. PR #43 merged at a2d7011, #44 at 72ae927 and #45 at 99063d5. PR #46, #47, #48 and #49 remain OPEN. PR #49 has successful API checks and failed mobile checks caused by the two stale inset assertions corrected in PR #50. PR #48 token assertion was reconciled in df23745; fresh GitHub API/mobile checks pass. It remains open and unmerged.
 - Backup branch backup/dirty-tree-2026-10-17 still resolves to 0a45fdd5cfbca68defae8f20154479e7acae6037. It was not changed.
 - GitHub CLI authentication is now verified as splittechsa. Draft PR #50: https://github.com/splittechsa/traina/pull/50. No PR was merged. The supplied project board requires read:project; the user declined that additional scope, so board inspection is skipped. Workflow scope was also declined: CI workflow changes remain only on the local release/launch-hardening-2026-10-20 branch, not in PR #50.
 - Neon configuration matches project fragrant-fog-72018396, branch production. Read-only schema metadata inspection succeeded: 92 public tables, migrations 0001–0030 applied. No production customer rows were read. No production writes, migrations, deployment, payment activation or store submission were performed.

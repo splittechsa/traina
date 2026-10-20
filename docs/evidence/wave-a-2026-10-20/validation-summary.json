@@ -1,0 +1,63 @@
+{
+  "at": "2026-10-20T12:51:20.159Z",
+  "node": "v26.3.1",
+  "scope": "Local synthetic checks; no physical device, production write or remote CI verification",
+  "results": [
+    {
+      "id": "build",
+      "command": "npm run build",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 5611
+    },
+    {
+      "id": "typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 5045
+    },
+    {
+      "id": "backend-tests",
+      "command": "npm test",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 33211
+    },
+    {
+      "id": "mobile-typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 5658
+    },
+    {
+      "id": "mobile-tests",
+      "command": "npm test -- --maxWorkers=1",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 6292
+    },
+    {
+      "id": "mobile-lint",
+      "command": "npm run lint",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 5975
+    },
+    {
+      "id": "coach-build",
+      "command": "npm run build",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 2514
+    },
+    {
+      "id": "http-smoke",
+      "command": "node scripts/launch-http-smoke.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 4947
+    }
+  ]
+}
