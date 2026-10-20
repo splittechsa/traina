@@ -1,0 +1,15 @@
+
+> @sahhti/mobile@0.1.0 test
+> vitest run --maxWorkers=1
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/apps/mobile
+
+
+ Test Files  33 passed (33)
+      Tests  118 passed (118)
+   Start at  21:37:58
+   Duration  6.82s (import 45%, tests 28%, transform 22%, worker 4%)
+
+    Isolate  33 workers spawned · ~107ms startup each (spawn + environment, per file)
+             at least ~3.44s faster with isolate: false — reuses workers across files instead of one per file

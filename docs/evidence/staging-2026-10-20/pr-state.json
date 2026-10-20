@@ -1,0 +1,205 @@
+{
+  "at": "2026-10-20T18:52:14.300Z",
+  "prs": [
+    {
+      "baseRefName": "release/wave-a-data-integrity",
+      "headRefName": "release/wave-b-program-management",
+      "headRefOid": "0e556ec4a26228dab6ea0c6aa343e59288640ec8",
+      "number": 53,
+      "reviews": [],
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478391461/job/118820240355",
+          "name": "api",
+          "startedAt": "2026-10-20T18:51:29Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-20T18:52:03Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478347673/job/118820086518",
+          "name": "api",
+          "startedAt": "2026-10-20T18:51:12Z",
+          "status": "COMPLETED",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478391461/job/118820239887",
+          "name": "mobile",
+          "startedAt": "2026-10-20T18:51:29Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-20T18:51:42Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478347673/job/118820086761",
+          "name": "mobile",
+          "startedAt": "2026-10-20T18:51:11Z",
+          "status": "COMPLETED",
+          "workflowName": "ci"
+        }
+      ],
+      "url": "https://github.com/splittechsa/traina/pull/53"
+    },
+    {
+      "baseRefName": "release/wave-b-program-management",
+      "headRefName": "release/wave-b-recovery",
+      "headRefOid": "f8ee9fbc1be4ef7520f694b7e87de7072a2594e4",
+      "number": 54,
+      "reviews": [],
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478399103/job/118820267706",
+          "name": "api",
+          "startedAt": "2026-10-20T18:51:32Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478347124/job/118820085001",
+          "name": "api",
+          "startedAt": "2026-10-20T18:51:11Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478399103/job/118820267224",
+          "name": "mobile",
+          "startedAt": "2026-10-20T18:51:32Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-20T18:51:59Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478347124/job/118820084466",
+          "name": "mobile",
+          "startedAt": "2026-10-20T18:51:11Z",
+          "status": "COMPLETED",
+          "workflowName": "ci"
+        }
+      ],
+      "url": "https://github.com/splittechsa/traina/pull/54"
+    },
+    {
+      "baseRefName": "release/wave-b-recovery",
+      "headRefName": "release/wave-b-yazan-evaluation",
+      "headRefOid": "f4e4bd1974cbb859a6888a576d46564da836a044",
+      "number": 55,
+      "reviews": [],
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478405734/job/118820291385",
+          "name": "api",
+          "startedAt": "2026-10-20T18:51:35Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-20T18:51:57Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478347240/job/118820085126",
+          "name": "api",
+          "startedAt": "2026-10-20T18:51:11Z",
+          "status": "COMPLETED",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478405734/job/118820292078",
+          "name": "mobile",
+          "startedAt": "2026-10-20T18:51:35Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-20T18:52:05Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478347240/job/118820085787",
+          "name": "mobile",
+          "startedAt": "2026-10-20T18:51:11Z",
+          "status": "COMPLETED",
+          "workflowName": "ci"
+        }
+      ],
+      "url": "https://github.com/splittechsa/traina/pull/55"
+    },
+    {
+      "baseRefName": "release/wave-b-yazan-evaluation",
+      "headRefName": "release/vercel-staging",
+      "headRefOid": "24351ca4200f1a2b271e644954c1698768ff8b26",
+      "number": 56,
+      "reviews": [],
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478413027/job/118820318149",
+          "name": "api",
+          "startedAt": "2026-10-20T18:51:38Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-20T18:51:44Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478348195/job/118820089800",
+          "name": "api",
+          "startedAt": "2026-10-20T18:51:11Z",
+          "status": "COMPLETED",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478413027/job/118820317531",
+          "name": "mobile",
+          "startedAt": "2026-10-20T18:51:38Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "ci"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-20T18:51:50Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39478348195/job/118820089183",
+          "name": "mobile",
+          "startedAt": "2026-10-20T18:51:11Z",
+          "status": "COMPLETED",
+          "workflowName": "ci"
+        }
+      ],
+      "url": "https://github.com/splittechsa/traina/pull/56"
+    }
+  ]
+}

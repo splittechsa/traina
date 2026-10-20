@@ -1,0 +1,7 @@
+{
+  "android": {"id":"57cea473-8e52-4183-bf15-20bd5d3f13f9","status":"IN_QUEUE","url":"https://expo.dev/accounts/splittech/projects/sahhti/builds/57cea473-8e52-4183-bf15-20bd5d3f13f9","artifact":null},
+  "ios": {"status":"BLOCKED","reason":"No credentials suitable for internal distribution available to noninteractive EAS CLI; interactive Apple signing setup required."},
+  "physicalDeviceAcceptance":"NOT_TESTED",
+  "apiUrl":"https://traina-staging-api.vercel.app",
+  "profiles":["development","preview"]
+}

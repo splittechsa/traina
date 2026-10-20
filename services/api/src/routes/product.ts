@@ -45,7 +45,7 @@ import type { CoachingRuleVersion, OnboardingInput } from '@sahhti/domain';
 import type { Database } from '../db/database.js';
 import { ApiError } from '../identity/accounts.js';
 import { emailProvider } from '../identity/mail.js';
-import { createThrottle } from '../identity/throttle.js';
+import { allowAuthAttempt } from '../identity/shared-throttle.js';
 import {
   deleteAccount,
   loginAccount,
@@ -193,11 +193,6 @@ function coachOf(options: ProductOptions): CoachRuntime {
 
 
 
-const loginThrottle = createThrottle(8, 15 * 60 * 1000);
-const registerThrottle = createThrottle(5, 60 * 60 * 1000);
-const resendThrottle = createThrottle(5, 15 * 60 * 1000);
-const recoverThrottle = createThrottle(5, 15 * 60 * 1000);
-
 function clientKey(request: { ip: string }, email?: string): string {
   return `${request.ip}:${email ?? ''}`;
 }
@@ -260,7 +255,7 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   app.post('/v1/auth/register', async (request, reply) => {
     const body = parse(registerSchema, request.body, reply);
     if (body === undefined) return;
-    if (!registerThrottle(clientKey(request, body.email), Date.now())) {
+    if (!(await allowAuthAttempt(dbOf(options), 'register', clientKey(request, body.email), 5, 3600000))) {
       return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: 'Too many registration attempts' } });
     }
     await registerAccount(dbOf(options), body);
@@ -280,7 +275,7 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   app.post('/v1/auth/verify/resend', async (request, reply) => {
     const body = parse(resendSchema, request.body, reply);
     if (body === undefined) return;
-    if (!resendThrottle(clientKey(request, body.email), Date.now())) {
+    if (!(await allowAuthAttempt(dbOf(options), 'resend', clientKey(request, body.email), 5, 900000))) {
       return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: 'Too many verification requests' } });
     }
     await resendVerification(dbOf(options), body.email);
@@ -298,7 +293,7 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
         },
       });
     }
-    if (!loginThrottle(clientKey(request, body.email), Date.now())) {
+    if (!(await allowAuthAttempt(dbOf(options), 'login', clientKey(request, body.email), 8, 900000))) {
       return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: 'Too many sign-in attempts' } });
     }
     return loginAccount(dbOf(options), options.tokenSecret, body);
@@ -321,7 +316,7 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
   app.post('/v1/auth/recover', async (request, reply) => {
     const body = parse(recoverSchema, request.body, reply);
     if (body === undefined) return;
-    if (!recoverThrottle(clientKey(request, body.email), Date.now())) {
+    if (!(await allowAuthAttempt(dbOf(options), 'recover', clientKey(request, body.email), 5, 900000))) {
       return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: 'Too many reset requests' } });
     }
     await requestPasswordReset(dbOf(options), body.email);

@@ -22,3 +22,5 @@ android/app/build/
 *.pem
 *.p12
 *.mobileprovision
+.vercel
+.env*

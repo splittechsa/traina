@@ -166,7 +166,7 @@ export function driverConnectionString(connectionString: string): string {
 
 let neonSocketReady = false;
 
-function neonPool(connectionString: string): PgPool {
+function neonPool(connectionString: string, maxConnections = 10): PgPool {
   if (!neonSocketReady) {
     neonConfig.webSocketConstructor = ws;
     neonConfig.useSecureWebSocket = true;
@@ -174,7 +174,7 @@ function neonPool(connectionString: string): PgPool {
   }
   return new NeonPool({
     connectionString,
-    max: 10,
+    max: maxConnections,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 15_000,
     allowExitOnIdle: true,
@@ -187,7 +187,8 @@ type PgPool = PgQueryable & {
   on: (event: 'error', listener: (error: unknown) => void) => void;
 };
 
-export function createPgDatabase(connectionString: string): Database {
+export function createPgDatabase(connectionString: string, options: { maxConnections?: number } = {}): Database {
+  const maxConnections = options.maxConnections ?? 10;
   const tls = databaseTlsMode(connectionString);
   if (process.env.NODE_ENV === 'production' && tls !== 'required') {
     throw new Error('Production PostgreSQL requires sslmode=require');
@@ -196,7 +197,7 @@ export function createPgDatabase(connectionString: string): Database {
   const connection = driverConnectionString(connectionString);
   const pool: PgPool =
     transport === 'websocket'
-      ? neonPool(connection)
+      ? neonPool(connection, maxConnections)
       : new pg.Pool({
           connectionString: connection,
           max: 10,

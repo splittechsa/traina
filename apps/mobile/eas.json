@@ -12,7 +12,7 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_STAGING_OR_LAN"
+        "EXPO_PUBLIC_API_URL": "https://traina-staging-api.vercel.app"
       }
     },
     "preview": {
@@ -22,7 +22,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_STAGING_OR_LAN"
+        "EXPO_PUBLIC_API_URL": "https://traina-staging-api.vercel.app"
       }
     },
     "production": {
