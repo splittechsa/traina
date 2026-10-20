@@ -48,3 +48,29 @@ export function planOfflineSync(server: WorkoutSession, pending: readonly Pendin
   }
   return { send, conflicts, session };
 }
+
+/** Keep conflicts and failed writes until the server acknowledges them. */
+export async function synchronizeOfflineSets(
+  server: WorkoutSession,
+  pending: readonly PendingSetCommand[],
+  send: (command: PendingSetCommand) => Promise<void>,
+): Promise<{ remaining: PendingSetCommand[]; hasConflicts: boolean }> {
+  const plan = planOfflineSync(server, pending);
+  const conflicts = new Set(plan.conflicts.map(item => item.clientEventId));
+  const remaining = pending.filter(item => item.sessionId !== server.id || conflicts.has(item.clientEventId));
+  let failed = false;
+  for (const command of plan.send) {
+    if (failed || conflicts.size > 0) {
+      remaining.push(command);
+      continue;
+    }
+    try {
+      await send(command);
+    } catch {
+      // Preserve ordering: later writes may depend on the failed create or edit.
+      failed = true;
+      remaining.push(command);
+    }
+  }
+  return { remaining, hasConflicts: conflicts.size > 0 };
+}

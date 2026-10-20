@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, Text, TextInput, View, Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import type { WorkoutSession } from '@sahhti/domain';
 import { parseScaledInteger } from '@sahhti/domain';
@@ -14,12 +14,15 @@ import { Button, Screen, ScreenBody } from '../../src/ui/Screen';
 import { AppHeader, ErrorState, LoadingSkeleton, SurfaceCard } from '../../src/ui/kit';
 import { MovementDemo3D } from '../../src/training/MovementDemo3D';
 import { asLibraryList, type LibraryExercise } from '../../src/training/library';
+import { YazanCard, openYazanWithPrompt } from '../../src/ui/YazanCard';
+import { yazanTip } from '../../src/training/yazanPresence';
 import { fontFamily, radius, spacing, typeScale } from '../../src/theme/tokens';
 import { useTheme } from '../../src/theme/ThemeProvider';
 import { useMotion } from '../../src/theme/motion';
 import { tapSuccess } from '../../src/ui/haptics';
-import { planOfflineSync, type PendingSetCommand } from '../../src/offline/queue';
-import { readPendingSets, writePendingSets } from '../../src/offline/sqlite';
+import { planOfflineSync, synchronizeOfflineSets, type PendingSetCommand } from '../../src/offline/queue';
+import { acknowledgePendingSets, enqueuePendingSet, readPendingSets } from '../../src/offline/sqlite';
+import { pauseRestTimer, remainingRest, resumeRestTimer, startRestTimer, type RestTimerState } from '../../src/training/restTimer';
 import { readJson, writeJson } from '../../src/storage/local';
 
 type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia'>;
@@ -48,12 +51,16 @@ export default function WorkoutScreen() {
   const [restPaused, setRestPaused] = useState(false);
   const [activeExerciseId, setActiveExerciseId] = useState('');
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
-  const restAnchor = useRef<{ endsAt: number } | null>(null);
+  const restAnchor = useRef<RestTimerState | null>(null);
 
   const session = useQuery({
     queryKey: ['session', id],
     enabled: typeof id === 'string',
-    queryFn: () => apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`),
+    queryFn: async () => {
+      const fresh = await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
+      const pending = await readPendingSets();
+      return { session: planOfflineSync(fresh.session, pending).session };
+    },
   });
   const exerciseLibrary = useQuery({
     queryKey: ['exercises'],
@@ -64,32 +71,36 @@ export default function WorkoutScreen() {
     queryFn: () => apiRequest<WorkoutProgress>('/v1/progress'),
   });
 
-  const flushPending = useCallback(async () => {
-    if (typeof id !== 'string' || session.data === undefined) return;
-    const pending = await readPendingSets();
-    const mine = pending.filter((command) => command.sessionId === id);
-    if (mine.length === 0) return;
-    const others = pending.filter((command) => command.sessionId !== id);
-    const plan = planOfflineSync(session.data.session, mine);
-    const remaining = [...others];
-    for (const command of plan.send) {
-      try {
+  const syncing = useRef(false);
+  const flushPending = useCallback(async (): Promise<boolean> => {
+    if (typeof id !== 'string' || syncing.current) return false;
+    syncing.current = true;
+    try {
+      const pending = await readPendingSets();
+      if (!pending.some(command => command.sessionId === id)) return true;
+      // The query cache may include optimistic offline sets. Only server state can prove a replay.
+      const fresh = await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
+      const result = await synchronizeOfflineSets(fresh.session, pending, async command => {
         if (command.kind === 'replace') {
           await apiRequest(`/v1/training/sessions/${command.sessionId}/sets/${command.set.id}`, {
-            method: 'PUT',
-            body: command.set,
+            method: 'PUT', body: command.set,
           });
         } else {
           await apiRequest(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set });
         }
-      } catch (caught) {
-        if (caught instanceof ApiClientError && caught.status === 409) continue;
-        remaining.push(command);
-      }
+      });
+      await acknowledgePendingSets(pending, result.remaining);
+      const remaining = await readPendingSets();
+      if (result.hasConflicts) setNotice(text(locale, 'conflict'));
+      await client.invalidateQueries({ queryKey: ['session', id] });
+      return !remaining.some(command => command.sessionId === id);
+    } catch {
+      // Keep the durable queue intact on connection or storage failures.
+      return false;
+    } finally {
+      syncing.current = false;
     }
-    await writePendingSets(remaining);
-    await client.invalidateQueries({ queryKey: ['session', id] });
-  }, [client, id, session.data]);
+  }, [client, id, locale]);
 
   useFocusEffect(
     useCallback(() => {
@@ -101,7 +112,7 @@ export default function WorkoutScreen() {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         if (restAnchor.current !== null && !restPaused) {
-          const left = Math.max(0, Math.ceil((restAnchor.current.endsAt - Date.now()) / 1000));
+          const left = remainingRest(restAnchor.current, Date.now());
           setRest(left);
         }
         void flushPending();
@@ -110,19 +121,16 @@ export default function WorkoutScreen() {
     return () => sub.remove();
   }, [flushPending, restPaused]);
 
+  const restRunning = rest > 0 && !restPaused;
   useEffect(() => {
-    if (rest <= 0 || restPaused) return;
+    if (!restRunning) return;
     const timer = setInterval(() => {
-      setRest((current) => {
-        if (current <= 1) {
-          restAnchor.current = null;
-          return 0;
-        }
-        return current - 1;
-      });
+      const left = remainingRest(restAnchor.current, Date.now());
+      setRest(left);
+      if (left === 0) restAnchor.current = null;
     }, 1000);
     return () => clearInterval(timer);
-  }, [rest, restPaused]);
+  }, [restRunning]);
 
   const currentSession = session.data?.session;
   const activeExercise =
@@ -135,8 +143,11 @@ export default function WorkoutScreen() {
       ? undefined
       : progress.data?.personalRecords.find((record) => record.exercise_id === activeExercise.exerciseId);
 
-  useEffect(() => {
-    if (activeExercise?.prescription.kind === 'strength') {
+  const [prefilledExercise, setPrefilledExercise] = useState('');
+  if (activeExercise !== undefined && activeExercise.exerciseId !== prefilledExercise) {
+    setPrefilledExercise(activeExercise.exerciseId);
+    setLoad('');
+    if (activeExercise.prescription.kind === 'strength') {
       setReps(String(activeExercise.prescription.reps));
       if (activeExercise.prescription.loadGrams !== null && activeExercise.prescription.loadGrams > 0) {
         setLoad(String(activeExercise.prescription.loadGrams / 1000));
@@ -144,29 +155,45 @@ export default function WorkoutScreen() {
         setLoad(String(previousForActive.load_grams / 1000));
       }
     }
-  }, [activeExercise?.exerciseId, activeExercise?.prescription, previousForActive]);
+  }
 
   function startRest(seconds: number) {
-    const duration = Math.max(0, seconds);
-    const endsAt = Date.now() + duration * 1000;
-    setRest(duration);
+    const state = startRestTimer(seconds, Date.now());
+    setRest(remainingRest(state, Date.now()));
     setRestPaused(false);
-    restAnchor.current = { endsAt };
-    if (typeof id === 'string') {
-      void writeJson(`sahhti.rest.${id}`, { endsAt, paused: false });
-    }
+    restAnchor.current = state;
+    if (typeof id === 'string') void writeJson(`sahhti.rest.${id}`, state);
+  }
+
+  function toggleRest() {
+    const state = restPaused
+      ? resumeRestTimer(restAnchor.current, Date.now())
+      : pauseRestTimer(restAnchor.current, Date.now());
+    restAnchor.current = state;
+    setRest(remainingRest(state, Date.now()));
+    setRestPaused(state.paused === true);
+    if (typeof id === 'string') void writeJson(`sahhti.rest.${id}`, state);
+  }
+
+  function skipRest() {
+    setRest(0);
+    restAnchor.current = null;
+    setRestPaused(false);
+    if (typeof id === 'string') void writeJson(`sahhti.rest.${id}`, null);
   }
 
   useEffect(() => {
     if (typeof id !== 'string') return;
-    void readJson<{ endsAt: number; paused?: boolean } | null>(`sahhti.rest.${id}`, null).then((saved) => {
-      if (saved === null || !Number.isFinite(saved.endsAt)) return;
-      const left = Math.max(0, Math.ceil((saved.endsAt - Date.now()) / 1000));
+    let cancelled = false;
+    void readJson<RestTimerState | null>(`sahhti.rest.${id}`, null).then(saved => {
+      if (cancelled || saved === null || restAnchor.current !== null) return;
+      const left = remainingRest(saved, Date.now());
       if (left <= 0) return;
-      restAnchor.current = { endsAt: saved.endsAt };
+      restAnchor.current = saved;
       setRest(left);
       setRestPaused(saved.paused === true);
     });
+    return () => { cancelled = true; };
   }, [id]);
 
   async function start() {
@@ -190,6 +217,10 @@ export default function WorkoutScreen() {
 
   async function complete() {
     if (typeof id !== 'string') return;
+    if (!(await flushPending())) {
+      setNotice(isAr ? 'لم تُحفظ كل المجموعات بعد. اتصل بالإنترنت وأعد المحاولة قبل إنهاء التمرين.' : 'Some sets are still unsaved. Reconnect and retry before finishing.');
+      return;
+    }
     await apiRequest(`/v1/training/sessions/${id}/complete`, { method: 'POST', body: { at: new Date().toISOString() } });
     await client.invalidateQueries({ queryKey: ['session', id] });
     await client.invalidateQueries({ queryKey: ['sessions'] });
@@ -247,14 +278,13 @@ export default function WorkoutScreen() {
           return;
         }
         const pending = await readPendingSets();
-        const others = pending.filter((item) => item.sessionId !== id);
         const mine = pending.filter((item) => item.sessionId === id);
         const plan = planOfflineSync(session.data.session, [...mine, replaceCommand]);
         if (plan.conflicts.some((conflict) => conflict.clientEventId === replaceCommand.clientEventId)) {
           setNotice(text(locale, 'conflict'));
           return;
         }
-        await writePendingSets([...others, ...plan.send]);
+        await enqueuePendingSet(replaceCommand);
         client.setQueryData(['session', id], { session: plan.session });
         setEditingSetId(null);
         setNotice(text(locale, 'queued'));
@@ -292,13 +322,12 @@ export default function WorkoutScreen() {
         return;
       }
       const pending = await readPendingSets();
-      const others = pending.filter((item) => item.sessionId !== id);
       const plan = planOfflineSync(session.data.session, [...pending.filter((item) => item.sessionId === id), command]);
       if (plan.conflicts.some((conflict) => conflict.clientEventId === command.clientEventId)) {
         setNotice(text(locale, 'conflict'));
         return;
       }
-      await writePendingSets([...others, ...plan.send]);
+      await enqueuePendingSet(command);
       client.setQueryData(['session', id], { session: plan.session });
       setNotice(text(locale, 'queued'));
       if (planned.prescription.kind === 'strength') {
@@ -399,6 +428,43 @@ export default function WorkoutScreen() {
           }
         />
 
+        <YazanCard
+          compact
+          body={yazanTip(locale, {
+            surface: 'workout',
+            exerciseName: active === undefined ? current.name : exerciseName(active.exerciseId),
+            setCount: loggedForActive.length,
+          })}
+          actions={[
+            {
+              label: text(locale, 'explainWorkout'),
+              onPress: () =>
+                openYazanWithPrompt(
+                  isAr
+                    ? `اشرح لي جلسة ${current.name} ولماذا هذه التمارين بهذا الترتيب`
+                    : `Explain the ${current.name} session and why these exercises are in this order`,
+                ),
+            },
+            ...(active !== undefined
+              ? [
+                  {
+                    label: text(locale, 'whyThisExercise'),
+                    onPress: () =>
+                      openYazanWithPrompt(
+                        isAr
+                          ? `لماذا تمرين ${exerciseName(active.exerciseId)}؟ وما العضلات المستهدفة ونصائح الفورم؟`
+                          : `Why ${exerciseName(active.exerciseId)}? What muscles does it target and what form cues matter?`,
+                      ),
+                  },
+                  {
+                    label: text(locale, 'replaceExercise'),
+                    onPress: () => router.push('/programs'),
+                  },
+                ]
+              : []),
+          ]}
+        />
+
         <SurfaceCard tone="raised" style={{ marginBottom: spacing[3] }}>
           <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.label, marginBottom: 6 }}>
             {isDone ? (isAr ? 'جلسة مكتملة' : 'Session complete') : isRunning ? (isAr ? 'جلسة نشطة' : 'Active session') : isPaused ? (isAr ? 'متوقفة مؤقتاً' : 'Paused') : (isAr ? 'جاهز للبدء' : 'Ready to start')}
@@ -424,14 +490,7 @@ export default function WorkoutScreen() {
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => {
-                  if (restPaused) {
-                    restAnchor.current = { endsAt: Date.now() + rest * 1000 };
-                    setRestPaused(false);
-                  } else {
-                    setRestPaused(true);
-                  }
-                }}
+                onPress={toggleRest}
                 style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
               >
                 <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>
@@ -440,7 +499,7 @@ export default function WorkoutScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => { setRest(0); restAnchor.current = null; setRestPaused(false); }}
+                onPress={skipRest}
                 style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
               >
                 <Text style={{ color: theme.emphasisText, fontFamily: fontFamily.semibold }}>{text(locale, 'skipRest')}</Text>

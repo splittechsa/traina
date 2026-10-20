@@ -104,7 +104,7 @@ export function WheelColumn({
   useEffect(() => {
     if (index === settledIndex.current) return;
     settledIndex.current = index;
-    lastTick.value = index;
+    lastTick.set(index);
     ref.current?.scrollTo({ y: index * itemHeight, animated: !reduce });
   }, [index, itemHeight, lastTick, reduce]);
 
@@ -156,8 +156,8 @@ export function WheelColumn({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
       const next = Math.min(count - 1, Math.max(0, Math.round(event.contentOffset.y / itemHeight)));
-      if (next !== lastTick.value) {
-        lastTick.value = next;
+      if (next !== lastTick.get()) {
+        lastTick.set(next);
         scheduleOnRN(tick);
       }
     },
