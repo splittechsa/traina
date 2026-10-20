@@ -1,0 +1,20 @@
+
+> @sahhti/mobile@0.1.0 lint
+> expo lint
+
+env: load .env
+env: export EXPO_PUBLIC_API_URL
+
+C:\Users\Ahmed\Desktop\app\apps\mobile\src\onboarding\save-flow.test.tsx
+   24:17  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  113:17  warning  A `require()` style import is forbidden   @typescript-eslint/no-require-imports
+  137:1   warning  Import in body of module; reorder to top  import/first
+
+C:\Users\Ahmed\Desktop\app\apps\mobile\src\ui\home-screen.test.tsx
+  179:1  warning  Import in body of module; reorder to top  import/first
+
+C:\Users\Ahmed\Desktop\app\apps\mobile\src\ui\kit.tsx
+  64:23  warning  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+✖ 5 problems (0 errors, 5 warnings)
+  0 errors and 2 warnings potentially fixable with the `--fix` option.

@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-20T19:59:25.814Z",
+  "environment": "isolated staging",
+  "api": {
+    "url": "https://traina-staging-api.vercel.app",
+    "id": "dpl_CqtGd6Wrxc2NKCRErhqgc4ggeCNS"
+  },
+  "admin": {
+    "url": "https://traina-staging-admin.vercel.app",
+    "id": "dpl_AiW1nYVsRUfDZU6fywYKeRHMMaGi"
+  },
+  "website": {
+    "url": "https://traina-staging-www.vercel.app",
+    "id": "dpl_8CXUvzDdFCJWwfK95vjTATkdJdYF"
+  },
+  "nodeFunctionCookies": "HttpOnly; Secure; SameSite=Strict",
+  "productionCustomerDataCopied": false,
+  "paymentsEnabled": false,
+  "browserCapture": "BLOCKED: CUA kernel assets could not be initialized",
+  "physicalIphone": "NOT_TESTED"
+}

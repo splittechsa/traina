@@ -36,14 +36,20 @@ async function refreshAccess(): Promise<boolean> {
     return false;
   }
   const refreshEpoch = sessionEpoch();
-  const response = await fetch(`${apiBaseUrl()}/v1/auth/refresh`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'accept-language': localeHeader },
-    body: JSON.stringify({ refreshToken: tokens.refreshToken }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12_000);
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'accept-language': localeHeader },
+      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+      signal: controller.signal,
+    });
+  } finally { clearTimeout(timer); }
   if (sessionEpoch() !== refreshEpoch) return false;
   if (!response.ok) {
-    await replaceTokens(null);
+    if (response.status === 401 || response.status === 403) await replaceTokens(null);
     return false;
   }
   const body = (await response.json()) as { accessToken: string; refreshToken: string };

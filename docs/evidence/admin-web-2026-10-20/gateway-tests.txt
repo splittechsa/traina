@@ -1,0 +1,13 @@
+✔ rejects foreign-origin mutations and arbitrary upstream access (1.2798ms)
+✔ login returns no tokens, sets secure HTTP-only cookies, and enforces admin role (24.7172ms)
+✔ logout clears cookies even when upstream is unavailable (0.3615ms)
+✔ refresh rotates only server cookies and forwards bounded routes (0.5317ms)
+✔ can renew after the short-lived access cookie expires (0.5017ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 96.8647

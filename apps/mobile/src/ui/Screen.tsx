@@ -70,6 +70,7 @@ export function ScreenBody({
           flexGrow: 1,
         }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         showsVerticalScrollIndicator={false}
         refreshControl={refreshControl}
         onContentSizeChange={onContentSizeChange}

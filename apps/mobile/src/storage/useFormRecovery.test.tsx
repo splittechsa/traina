@@ -6,7 +6,7 @@ import { requestNavigation } from './navigationDrafts';
 const state = vi.hoisted(() => ({ owner: 'account-a', data: new Map<string, unknown>(), alert: vi.fn(), dispatch: vi.fn(), remove: null as null | ((input: { data: { action: { type: string } } }) => void), background: null as null | ((next: string) => void) }));
 vi.mock('react-native', () => ({ Alert: { alert: state.alert }, AppState: { addEventListener: (_event: string, callback: (next: string) => void) => { state.background = callback; return { remove: () => undefined }; } } }));
 vi.mock('expo-router', () => ({ useNavigation: () => ({ dispatch: state.dispatch }) }));
-vi.mock('@react-navigation/native', () => ({ useIsFocused: () => true, usePreventRemove: (blocked: boolean, callback: typeof state.remove) => { state.remove = blocked ? callback : null; } }));
+vi.mock('expo-router/react-navigation', () => ({ useIsFocused: () => true, usePreventRemove: (blocked: boolean, callback: typeof state.remove) => { state.remove = blocked ? callback : null; } }));
 vi.mock('../auth/SessionProvider', () => ({ useSession: () => ({ tokens: { userId: state.owner } }) }));
 vi.mock('../i18n/LocaleProvider', () => ({ useLocale: () => ({ locale: 'en' }) }));
 vi.mock('../offline/resource', () => ({ accountScope: () => 'https://test|' + state.owner }));

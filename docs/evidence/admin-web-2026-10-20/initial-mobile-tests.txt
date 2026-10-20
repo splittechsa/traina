@@ -1,0 +1,37 @@
+
+> @sahhti/mobile@0.1.0 test
+> vitest run --maxWorkers=1
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/apps/mobile
+
+ ❯ src/theme/tokens.test.ts (3 tests | 1 failed) 6ms
+   ❯ Traina identity tokens (3)
+     × reserves gold for earned emphasis instead of primary actions 4ms
+
+ Test Files  1 failed | 33 passed (34)
+      Tests  1 failed | 120 passed (121)
+   Start at  22:45:55
+   Duration  6.40s (tests 35%, import 32%, transform 28%, worker 5%)
+
+    Isolate  34 workers spawned · ~104ms startup each (spawn + environment, per file)
+             at least ~3.43s faster with isolate: false — reuses workers across files instead of one per file
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/theme/tokens.test.ts > Traina identity tokens > reserves gold for earned emphasis instead of primary actions
+AssertionError: expected '#28543D' to be '#315C49' // Object.is equality
+
+Expected: "#315C49"
+Received: "#28543D"
+
+ ❯ src/theme/tokens.test.ts:17:26
+     15|
+     16|   it('reserves gold for earned emphasis instead of primary actions', (…
+     17|     expect(light.accent).toBe(brand.green);
+       |                          ^
+     18|     expect(light.gold).toBe(brand.gold);
+     19|     expect(light.accent).not.toBe(light.gold);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

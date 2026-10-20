@@ -1,0 +1,63 @@
+{
+  "at": "2026-10-20T19:46:46.925Z",
+  "node": "v26.3.1",
+  "scope": "Local synthetic checks; no physical device, production write or remote CI verification",
+  "results": [
+    {
+      "id": "build",
+      "command": "npm run build",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 6771
+    },
+    {
+      "id": "typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 5030
+    },
+    {
+      "id": "backend-tests",
+      "command": "npm test",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 32109
+    },
+    {
+      "id": "mobile-typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 2,
+      "status": "FAILED",
+      "durationMs": 5676
+    },
+    {
+      "id": "mobile-tests",
+      "command": "npm test -- --maxWorkers=1",
+      "exitCode": 1,
+      "status": "FAILED",
+      "durationMs": 7403
+    },
+    {
+      "id": "mobile-lint",
+      "command": "npm run lint",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 36520
+    },
+    {
+      "id": "coach-build",
+      "command": "npm run build",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 3577
+    },
+    {
+      "id": "http-smoke",
+      "command": "node scripts/launch-http-smoke.mjs \"C:\\\\Users\\\\Ahmed\\\\Desktop\\\\app\\\\docs\\\\evidence\\\\admin-web-2026-10-20\\\\http-smoke.json\"",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 5241
+    }
+  ]
+}

@@ -1,15 +1,33 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from './client';
-import { setApiBaseOverride, setTokenMemory, setTokenPersistor } from './tokens';
+import { getTokens, setApiBaseOverride, setTokenMemory, setTokenPersistor } from './tokens';
 
 afterEach(() => {
   setApiBaseOverride(null);
   setTokenMemory(null);
   setTokenPersistor(async () => undefined);
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('apiRequest token refresh', () => {
+  it('bounds a stalled refresh and preserves offline credentials on temporary failure', async () => {
+    vi.useFakeTimers();
+    setTokenMemory({ accessToken: 'expired', refreshToken: 'refresh', userId: 'account-a' });
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/v1/auth/refresh')) return new Promise<Response>((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(new Error('aborted'))));
+      return new Response('{}', { status: 401 });
+    }));
+    const request = apiRequest('/v1/me'); const rejected = expect(request).rejects.toMatchObject({ status: 401 });
+    await vi.advanceTimersByTimeAsync(12001); await rejected;
+    expect(getTokens()?.userId).toBe('account-a');
+  });
+  it('does not erase durable account identity when refresh service returns 503', async () => {
+    setTokenMemory({ accessToken: 'expired', refreshToken: 'refresh', userId: 'account-a' });
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response('{}', { status: url.endsWith('/refresh') ? 503 : 401 })));
+    await expect(apiRequest('/v1/me')).rejects.toMatchObject({ status: 401 });
+    expect(getTokens()?.userId).toBe('account-a');
+  });
   it('rejects a late account A response after switching to B', async () => {
     setTokenMemory({ accessToken: 'a', refreshToken: 'ra', userId: 'account-a' });
     let finish!: (response: Response) => void;

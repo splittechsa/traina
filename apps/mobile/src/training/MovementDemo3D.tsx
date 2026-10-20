@@ -1,5 +1,6 @@
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { AppState, Pressable, Text, View } from 'react-native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { GLView } from 'expo-gl';
 import { SymbolView } from 'expo-symbols';
 import * as THREE from 'three';
@@ -181,7 +182,15 @@ function applyPose(rig: DemoRig, pose: JointPose, yawOffset: number): void {
 function mountProp(rig: DemoRig, kind: EquipmentProp): void {
   while (rig.prop.children.length > 0) {
     const child = rig.prop.children[0];
-    if (child) rig.prop.remove(child);
+    if (child) {
+      child.traverse(object => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          (Array.isArray(object.material) ? object.material : [object.material]).forEach(material => material.dispose());
+        }
+      });
+      rig.prop.remove(child);
+    }
   }
   if (kind === 'barbell') rig.prop.add(makeBarbell());
   if (kind === 'dumbbell') rig.prop.add(makeDumbbells());
@@ -201,9 +210,13 @@ export function MovementDemo3D({
   const theme = useTheme();
   const { locale } = useLocale();
   const { reduce } = useMotion();
-  const [paused, setPaused] = useState(reduce);
+  const [paused, setPaused] = useState(true);
+  const [activated, setActivated] = useState(false);
+  const [foreground, setForeground] = useState(AppState.currentState === 'active');
+  const focused = useIsFocused();
+  const stopped = paused || reduce || !foreground || !focused;
   const [useFallback, setUseFallback] = useState(false);
-  const pausedRef = useRef(paused);
+  const pausedRef = useRef(stopped);
   const mountedRef = useRef(true);
   const profileRef = useRef(resolveMovementProfile(profile));
   const propRef = useRef(resolveEquipmentProp(equipment));
@@ -214,9 +227,13 @@ export function MovementDemo3D({
 
   const resumeRef = useRef<(() => void) | null>(null);
   useEffect(() => {
-    pausedRef.current = paused;
-    if (!paused) resumeRef.current?.();
-  }, [paused]);
+    const listener = AppState.addEventListener('change', state => setForeground(state === 'active'));
+    return () => listener.remove();
+  }, []);
+  useEffect(() => {
+    pausedRef.current = stopped;
+    if (!stopped) resumeRef.current?.();
+  }, [stopped]);
 
   useEffect(() => {
     profileRef.current = resolveMovementProfile(profile);
@@ -228,15 +245,19 @@ export function MovementDemo3D({
   }, [equipment, profile]);
 
   useEffect(
-    () => () => {
-      mountedRef.current = false;
-      disposeRef.current?.();
+    () => {
+      mountedRef.current = true;
+      return () => {
+        mountedRef.current = false;
+        disposeRef.current?.();
+        resumeRef.current = null;
+      };
     },
     [],
   );
 
   const renderSilhouette = () => (
-    <MovementSilhouette profile={resolvedProfile} prop={resolvedProp} paused={paused} />
+    <MovementSilhouette profile={resolvedProfile} prop={resolvedProp} paused={stopped} />
   );
 
   return (
@@ -252,7 +273,7 @@ export function MovementDemo3D({
       }}
     >
       <DemoBoundary fallback={renderSilhouette()}>
-        {useFallback ? (
+        {useFallback || !activated ? (
           renderSilhouette()
         ) : (
           <GLView
@@ -366,8 +387,11 @@ export function MovementDemo3D({
         </View>
         <Pressable
           accessibilityRole="button"
+          disabled={reduce}
+          accessibilityState={{ disabled: reduce }}
+          accessibilityHint={reduce ? (locale === 'ar' ? 'الحركة متوقفة حسب إعداد تقليل الحركة في جهازك' : 'Animation is disabled by your Reduce Motion setting') : undefined}
           accessibilityLabel={paused ? (locale === 'ar' ? 'تشغيل' : 'Play') : (locale === 'ar' ? 'إيقاف مؤقت' : 'Pause')}
-          onPress={() => setPaused((value) => !value)}
+          onPress={() => { setActivated(true); setPaused((value) => !value); }}
           style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,249,239,0.14)', alignItems: 'center', justifyContent: 'center' }}
         >
           <SymbolView

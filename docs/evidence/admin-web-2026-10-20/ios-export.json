@@ -1,0 +1,158 @@
+{
+  "at": "2026-10-20T19:59:25.810Z",
+  "status": "PASS",
+  "command": "expo export --platform ios",
+  "modules": 1999,
+  "metadata": {
+    "version": 0,
+    "bundler": "metro",
+    "fileMetadata": {
+      "ios": {
+        "bundle": "_expo/static/js/ios/index-2647d9a069b00509eda1c1e798c66f2d.hbc",
+        "assets": [
+          {
+            "path": "assets\\0a328cd9c1afd0afe8e3b1ec5165b1b4",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\7d40544b395c5949f4646f5e150fe020",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\a132ecc4ba5c1517ff83c0fb321bc7fc",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\0ea69b5077e7c4696db85dbcba75b0e1",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\2d0a9133e39524f138be6d4db9f4851f",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\3cd68ccdb8938e3711da2e8831b85493",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\61ca7e64b7d605716c57706cef640b9a",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\aff2c65b39a296d4f7e96d0f58169170",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\d8e7601e3df962f83c62371ac14964d8",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\0747a1317bbe9c6fc340b889ef8ab3ae",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\d84e297c3b3e49a614248143d53e40ca",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\1190ab078c57159f4245a328118fcd9a",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\78c625386b4d0690b421eb0fc78f7b9c",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\dad2fa9f4394a630f0f9a0d6dabd44bc",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\f3a81967828232c893d547162e922764",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\d62ddc38b69aff346c20a28774933d6a",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\d1ea1496f9057eb392d5bbf3732a61b7",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\19eeb73b9593a38f8e9f418337fc7d10",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\ab19f4cbc543357183a20571f68380a3",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\d8b800c443b8972542883e0b9de2bdc6",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\412dd9275b6b48ad28f5e3d81bb1f626",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\017bc6ba3fc25503e5eb5e53826d48a8",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\20e71bdf79e3a97bf55fd9e164041578",
+            "ext": "png"
+          },
+          {
+            "path": "assets\\6dd529f5ac3fac565a09723d0bf274a7",
+            "ext": "jpg"
+          },
+          {
+            "path": "assets\\a727572914ebbc3f636da7ae419be44d",
+            "ext": "jpg"
+          },
+          {
+            "path": "assets\\511bc2fa293ca80b5347b2c1d4b9ce9c",
+            "ext": "jpg"
+          },
+          {
+            "path": "assets\\86873041a15f5a8c6162246eb6ffd2b8",
+            "ext": "jpg"
+          },
+          {
+            "path": "assets\\8aa8d6c40769a3d3baa27464a19ea50f",
+            "ext": "jpg"
+          },
+          {
+            "path": "assets\\05287ff85e3898cad7f75a0d2feca90c",
+            "ext": "ttf"
+          },
+          {
+            "path": "assets\\5ce2a364d467e8bedde3d4404fcfb3c5",
+            "ext": "ttf"
+          },
+          {
+            "path": "assets\\ef8d0db460ac27257564b5079bdba9b0",
+            "ext": "ttf"
+          },
+          {
+            "path": "assets\\ba73b8c18f3ecabea995bfe7535607e1",
+            "ext": "ttf"
+          },
+          {
+            "path": "assets\\daa38886b4ccd0f6e51cf6d2f5c6fb92",
+            "ext": "ttf"
+          },
+          {
+            "path": "assets\\719a0ad23789571b3e5f40f95e50c791",
+            "ext": "ttf"
+          },
+          {
+            "path": "assets\\db14cbdd87f0e4ad48c703f5313038f3",
+            "ext": "ttf"
+          }
+        ]
+      }
+    }
+  },
+  "physicalDeviceRender": "NOT_TESTED"
+}

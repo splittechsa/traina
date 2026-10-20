@@ -88,7 +88,7 @@ export function BottomTabBar({ state, descriptors, navigation }: TabBarProps) {
             }}
             style={styles.item}
           >
-            <View style={[styles.iconWrap, { backgroundColor: focused ? theme.accent : 'transparent' }]}>
+            <View style={[styles.iconWrap, { backgroundColor: focused ? theme.emphasis : 'transparent' }]}>
               <SymbolView name={icon} size={20} tintColor={focused ? theme.emphasisText : theme.textMuted} />
             </View>
             <Text
@@ -113,19 +113,19 @@ export function BottomTabBar({ state, descriptors, navigation }: TabBarProps) {
 const styles = StyleSheet.create({
   bar: {
     position: 'absolute',
-    left: spacing[3],
-    right: spacing[3],
+    left: 20,
+    right: 20,
     bottom: spacing[2],
     zIndex: 10,
     flexDirection: 'row',
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.lg,
-    paddingTop: 9,
+    borderRadius: radius.hero,
+    paddingTop: 8,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 1,
     shadowRadius: 22,
     elevation: 12,
   },
-  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 52, paddingHorizontal: 2 },
-  iconWrap: { width: 46, height: 28, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, minHeight: 48, paddingHorizontal: 2 },
+  iconWrap: { width: 48, height: 30, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
 });

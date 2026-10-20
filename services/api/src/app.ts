@@ -19,6 +19,7 @@ import { pingDatabase, sanitizeDatabaseError, type Database } from './db/databas
 import { ApiError, assertLiveSession, loadActor } from './identity/accounts.js';
 import type { CoachRuntime } from './coach/provider.js';
 import { registerProductRoutes } from './routes/product.js';
+import { registerAdminRoutes } from './routes/admin.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -50,6 +51,7 @@ const PUBLIC_PATHS = new Set([
   '/v1/auth/recover',
   '/v1/auth/reset',
   '/v1/dev/mailbox',
+  '/v1/public/interest',
 ]);
 
 function sendError(reply: FastifyReply, status: number, code: string, message?: string) {
@@ -244,6 +246,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     exposeDevTokens: options.mailbox === 'outbox' && process.env.NODE_ENV !== 'production',
   });
 
+  registerAdminRoutes(app, database);
   return app;
 }
 

@@ -216,6 +216,7 @@ export default function HomeScreen() {
         </Pressable>
 
         <YazanCard
+          compact
           body={yazanTip(locale, {
             surface: 'home',
             hasResume: resumeSession !== undefined,
