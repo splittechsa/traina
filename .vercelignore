@@ -1,0 +1,13 @@
+.env
+.env.*
+**/.env
+**/.env.*
+apps/mobile
+apps/coach-portal
+apps/www
+work
+outputs
+docs
+.git
+node_modules
+**/node_modules

@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app.js';
 import { applyMigrationsTo, createPgliteDatabase, seedDevelopment, type Database } from './db/database.js';
 import { insertLedgerStatement } from './ledger-sql.js';
+import { allowAuthAttempt } from './identity/shared-throttle.js';
 import { insertLedgerLines } from './member/store.js';
 
 const secret = 'session-secret-value';
@@ -65,6 +66,16 @@ describe('persisted product', () => {
     expect(login.statusCode).toBe(200);
     return login.json().accessToken as string;
   }
+
+  it('shares atomic authentication limits across concurrent serverless requests', async () => {
+    const scope = 'synthetic-' + randomUUID(); const key = 'Synthetic.Member@traina.test';
+    const attempts = await Promise.all(Array.from({ length: 12 }, () => allowAuthAttempt(database, scope, key, 3, 1000, 2000)));
+    expect(attempts.filter(Boolean)).toHaveLength(3);
+    expect(await allowAuthAttempt(database, scope, key.toLowerCase(), 3, 1000, 2500)).toBe(false);
+    expect(await allowAuthAttempt(database, scope, key, 3, 1000, 4000)).toBe(true);
+    const stored = await database.query<{ key_hash: string }>('SELECT key_hash FROM auth_rate_limits');
+    expect(stored.rows.every(row => /^[a-f0-9]{64}$/.test(row.key_hash))).toBe(true);
+  });
 
   it('refuses development seeds without an explicit confirmation', async () => {
     await expect(seedDevelopment(database, 'production')).rejects.toThrow('SEED_REFUSED');
