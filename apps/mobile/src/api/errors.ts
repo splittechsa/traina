@@ -1,6 +1,8 @@
 import type { Locale } from '../format';
 
 const messages: Record<string, Record<Locale, string>> = {
+  INVALID_SESSION_STATE: { ar: 'تغيّرت حالة الجلسة. حدّثها ثم حاول مجددًا.', en: 'The workout state changed. Refresh it and try again.' },
+  INVALID_SESSION_TIME: { ar: 'وقت الجهاز لا يتوافق مع وقت الجلسة. تحقق من ضبط الوقت تلقائيًا ثم أعد المحاولة.', en: 'The device time differs from the workout time. Enable automatic time and retry.' },
   OFFLINE: {
     ar: 'تعذر الوصول إلى الخادم. تحقق من الاتصال ثم أعد المحاولة.',
     en: 'The server could not be reached. Check the connection and try again.',

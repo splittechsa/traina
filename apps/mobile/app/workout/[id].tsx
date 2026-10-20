@@ -6,6 +6,8 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import type { WorkoutSession, WorkoutSet } from '@sahhti/domain';
 import { parseScaledInteger, workoutElapsedSeconds } from '@sahhti/domain';
+import { completionTimestamp, finishWithReconciliation } from '../../src/training/completeWorkout';
+import { messageFor } from '../../src/api/errors';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { formatCount, formatKg } from '../../src/format';
 import { label } from '../../src/i18n/labels';
@@ -227,7 +229,7 @@ export default function WorkoutScreen() {
     if (actionInFlight.current) return;
     actionInFlight.current = true; setBusy(true);
     try { await action(); }
-    catch { setNotice(text(locale, 'error')); }
+    catch (error) { setNotice(error instanceof ApiClientError ? messageFor(error.code, locale, text(locale, 'error')) : text(locale, 'error')); }
     finally { actionInFlight.current = false; setBusy(false); }
   }
 
@@ -263,7 +265,13 @@ export default function WorkoutScreen() {
       setNotice(isAr ? 'لم تُحفظ كل المجموعات بعد. اتصل بالإنترنت وأعد المحاولة قبل إنهاء التمرين.' : 'Some sets are still unsaved. Reconnect and retry before finishing.');
       return;
     }
-    await apiRequest(`/v1/training/sessions/${id}/complete`, { method: 'POST', body: { at: new Date().toISOString() } });
+    const finished = await finishWithReconciliation(
+      () => apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}/complete`, { method: 'POST', body: { at: completionTimestamp(session.data!.session, Date.now()) } }),
+      () => apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`),
+    );
+    if (accountScope() !== owner) return;
+    client.setQueryData(['session', id, owner], finished);
+    skipRest(); setNotice('');
     await client.invalidateQueries({ queryKey: ['session', id] });
     await client.invalidateQueries({ queryKey: ['sessions'] });
     await client.invalidateQueries({ queryKey: ['home'] });
@@ -799,6 +807,7 @@ export default function WorkoutScreen() {
         {isRunning ? <Button label={text(locale, 'pause')} disabled={busy} variant="secondary" onPress={() => void pause()} /> : null}
         {(isRunning || isPaused) ? (
           <Button
+            disabled={busy}
             label={text(locale, 'finish')}
             variant="secondary"
             onPress={() =>

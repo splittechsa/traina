@@ -270,6 +270,10 @@ async function sessionOwned(db: Database, userId: string, sessionId: string): Pr
      FROM workout_sets WHERE session_id = $1 ORDER BY set_index, completed_at`,
     [sessionId],
   );
+  return workoutFromRows(row, sets.rows);
+}
+
+function workoutFromRows(row: Record<string, unknown>, sets: Record<string, unknown>[]): WorkoutSession {
   return {
     id: String(row.id),
     userId: String(row.user_id),
@@ -277,7 +281,7 @@ async function sessionOwned(db: Database, userId: string, sessionId: string): Pr
     discipline: String(row.discipline) as WorkoutSession['discipline'],
     status: String(row.status) as WorkoutSession['status'],
     plannedExercises: asJson(row.planned_exercises),
-    sets: sets.rows.map((set) => ({
+    sets: sets.map((set) => ({
       id: String(set.id),
       exerciseId: String(set.exercise_id),
       setIndex: Number(set.set_index),
@@ -3120,6 +3124,8 @@ async function mutateSessionWithin(
 ): Promise<WorkoutSession> {
   const current = await sessionOwned(db, userId, sessionId);
   try {
+    // Completion is replay-safe: preserve the first committed timestamp and records.
+    if (command.type === 'complete' && current.status === 'completed') return current;
     if (command.type === 'start') {
       const next = startWorkout(current, command.at);
       await writeSession(db, next);
@@ -3197,15 +3203,16 @@ async function mutateSessionWithin(
 }
 
 async function completedSessions(db: Database, userId: string): Promise<WorkoutSession[]> {
-  const rows = await db.query<{ id: string }>(
-    `SELECT id FROM workout_sessions WHERE user_id = $1 AND status = 'completed'`,
-    [userId],
-  );
-  const sessions: WorkoutSession[] = [];
-  for (const row of rows.rows) {
-    sessions.push(await sessionOwned(db, userId, row.id));
-  }
-  return sessions;
+  const rows = await db.query<Record<string, unknown>>(
+    `SELECT id, user_id, name, discipline, status, planned_exercises, scheduled_for, started_at, completed_at, pauses
+     FROM workout_sessions WHERE user_id = $1 AND status = 'completed' ORDER BY id`, [userId]);
+  const sets = await db.query<Record<string, unknown>>(
+    `SELECT s.id, s.session_id, s.exercise_id, s.set_index, s.reps, s.load_grams, s.rpe_tenths, s.completed_at
+     FROM workout_sets s JOIN workout_sessions w ON w.id = s.session_id
+     WHERE w.user_id = $1 AND w.status = 'completed' ORDER BY s.set_index, s.completed_at, s.id`, [userId]);
+  const grouped = new Map<string, Record<string, unknown>[]>();
+  for (const set of sets.rows) { const key = String(set.session_id); const group = grouped.get(key) ?? []; group.push(set); grouped.set(key, group); }
+  return rows.rows.map(row => workoutFromRows(row, grouped.get(String(row.id)) ?? []));
 }
 
 export async function listSessions(db: Database, userId: string) {

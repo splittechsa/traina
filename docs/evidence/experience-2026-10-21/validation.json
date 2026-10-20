@@ -1,8 +1,8 @@
 {
   "at": "2026-10-20T23:50:06.641Z",
   "mobileTests": {
-    "files": 36,
-    "passed": 125
+    "files": 37,
+    "passed": 130
   },
   "typecheck": "PASS",
   "lint": {
@@ -22,5 +22,17 @@
   "cpuProfile": "UNSUPPORTED",
   "nativeUiFps": "NOT_MEASURED",
   "nativeMemory": "NOT_MEASURED",
-  "releaseLikeDevice": "NOT_TESTED"
+  "releaseLikeDevice": "NOT_TESTED",
+  "completionFollowUp": {
+    "reported": "Error after finish confirmation; completed state captured",
+    "originalHttpCode": "NOT_CAPTURED",
+    "regressions": [
+      "concurrent replay",
+      "server-clock lower bound",
+      "ambiguous response reconciliation",
+      "100-session round-trip budget"
+    ],
+    "apiFullSuitePassedBeforeAddedBudgetTest": 72,
+    "apiProductTestsAfterBudgetAddition": 27
+  }
 }
