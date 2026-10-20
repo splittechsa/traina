@@ -58,6 +58,10 @@ const messages: Record<string, Record<Locale, string>> = {
     en: 'Yazan could not finish that reply. Try again in a moment.',
   },
 
+  PROGRAM_VERSION_CONFLICT: {
+    ar: 'تغيّر البرنامج منذ فتحه. ارجع وافتحه مجدداً قبل الحفظ.',
+    en: 'Your program changed since you opened it. Go back and reopen it before saving.',
+  },
   VALIDATION: {
     ar: 'البيانات المدخلة غير مكتملة أو غير صالحة.',
     en: 'The entered details are incomplete or invalid.',

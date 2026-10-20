@@ -21,6 +21,7 @@ import {
   assertMeasurementMm,
   assertWaterServing,
   catalogTemplates,
+  describeTemplateAudience,
   isActivityKind,
   isMealSlot,
   assertDiaryCopy,
@@ -63,10 +64,12 @@ import {
   assertNutritionPhase,
   buildWeeklyHumanCoachPacket,
   buildYazanDailyBrief,
+  planDocumentDay,
   planTemplateDay,
   recommendTemplates,
   scheduleWorkout,
   startWorkout,
+  suggestExerciseSubstitutions,
   templateById,
   workoutElapsedSeconds,
   summarizeDiary,
@@ -345,6 +348,7 @@ export async function scheduleMemberWorkout(
 }
 
 function publicTemplate(template: NonNullable<ReturnType<typeof templateById>>) {
+  const audience = describeTemplateAudience(template.id);
   return {
     id: template.id,
     family: template.family,
@@ -356,10 +360,12 @@ function publicTemplate(template: NonNullable<ReturnType<typeof templateById>>) 
     name_en: template.name_en,
     summary_ar: template.summary_ar,
     summary_en: template.summary_en,
+    audience,
     days: template.days.map((day) => ({
       name_ar: day.name_ar,
       name_en: day.name_en,
       exerciseCount: day.exerciseIds.length,
+      exerciseIds: [...day.exerciseIds],
     })),
   };
 }
@@ -418,6 +424,37 @@ export async function listMemberPrograms(db: Database, userId: string) {
       energy = null;
     }
   }
+  let activeDays =
+    template === null
+      ? []
+      : publicTemplate(template).days.map((day) => ({
+          ...day,
+          exerciseIds: day.exerciseIds,
+        }));
+  let programVersion = 1;
+  if (row !== undefined) {
+    const versionRow = await db.query<{ version: number; template: unknown }>(
+      `SELECT version, template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
+      [row.id],
+    );
+    const latest = versionRow.rows[0];
+    if (latest !== undefined) {
+      programVersion = Number(latest.version);
+      try {
+        const parsed = parseProgramVersionDocument(
+          latest.template ?? { templateId: row.template_id, days: template?.days ?? [] },
+        );
+        activeDays = parsed.days.map((day) => ({
+          name_ar: day.name_ar,
+          name_en: day.name_en,
+          exerciseCount: day.exerciseIds.length,
+          exerciseIds: [...day.exerciseIds],
+        }));
+      } catch {
+        /* keep catalog days */
+      }
+    }
+  }
   return {
     templates: catalogTemplates().map((item) => ({
       ...publicTemplate(item),
@@ -433,7 +470,8 @@ export async function listMemberPrograms(db: Database, userId: string) {
             templateId: row.template_id,
             name: row.name,
             discipline: row.discipline,
-            days: template === null ? [] : publicTemplate(template).days,
+            version: programVersion,
+            days: activeDays,
             nutritionPhase: row.nutrition_phase,
             nutritionPace: row.nutrition_pace,
             horizonWeeks: row.horizon_weeks === null ? null : Number(row.horizon_weeks),
@@ -2763,6 +2801,125 @@ export async function activateMemberProgram(db: Database, userId: string, templa
   });
 }
 
+export async function customizeMemberProgram(
+  db: Database,
+  userId: string,
+  programId: string,
+  input: {
+    name?: string;
+    expectedVersion?: number;
+    days: { name_ar: string; name_en: string; exerciseIds: string[] }[];
+  },
+) {
+  return db.transaction(async (tx) => {
+    const owned = await tx.query<{ id: string; template_id: string | null; name: string }>(
+      `SELECT id, template_id, name FROM programs WHERE id = $1 AND user_id = $2 AND active = true FOR UPDATE`,
+      [programId, userId],
+    );
+    const program = owned.rows[0];
+    if (program === undefined || program.template_id === null) {
+      throw new ApiError(404, 'PROGRAM_NOT_FOUND', 'Program is not on this account');
+    }
+    if (!Array.isArray(input.days) || input.days.length < 1 || input.days.length > 14) {
+      throw new ApiError(422, 'INVALID_PROGRAM_DAYS', 'Provide between 1 and 14 program days');
+    }
+    for (const day of input.days) {
+      if (day.exerciseIds.length < 1 || day.exerciseIds.length > 20) {
+        throw new ApiError(422, 'INVALID_PROGRAM_DAY', 'Each day needs 1–20 exercises');
+      }
+      for (const exerciseId of day.exerciseIds) {
+        const found = await tx.query(
+          `SELECT id FROM exercises WHERE id = $1 AND (owner_user_id IS NULL OR owner_user_id = $2)`,
+          [exerciseId, userId],
+        );
+        if (found.rows[0] === undefined) {
+          throw new ApiError(404, 'EXERCISE_NOT_FOUND', 'An exercise in the plan was not found');
+        }
+      }
+    }
+    const latest = await tx.query<{ version: number; template: unknown }>(
+      `SELECT version, template FROM program_versions WHERE program_id = $1 ORDER BY version DESC LIMIT 1`,
+      [programId],
+    );
+    const currentVersion = Number(latest.rows[0]?.version ?? 0);
+    if (input.expectedVersion !== undefined && input.expectedVersion !== currentVersion) {
+      throw new ApiError(409, 'PROGRAM_VERSION_CONFLICT', 'The program has changed. Reload before saving.');
+    }
+    let adaptation = null;
+    let sourceRecommendationId = null;
+    try {
+      const parsed = parseProgramVersionDocument(
+        latest.rows[0]?.template ?? { templateId: program.template_id, days: input.days },
+      );
+      adaptation = parsed.adaptation ?? null;
+      sourceRecommendationId = parsed.sourceRecommendationId ?? null;
+    } catch (error) {
+      throw asApi(error);
+    }
+    const nextVersion = currentVersion + 1;
+    const document = {
+      templateId: program.template_id,
+      days: input.days,
+      adaptation,
+      sourceRecommendationId,
+    };
+    try {
+      for (let dayIndex = 0; dayIndex < document.days.length; dayIndex += 1) {
+        planDocumentDay(document, dayIndex, adaptation);
+      }
+    } catch (error) {
+      throw asApi(error);
+    }
+    const name = input.name?.trim().length ? input.name.trim().slice(0, 80) : program.name;
+    await tx.query(`UPDATE programs SET name = $1 WHERE id = $2 AND user_id = $3`, [name, programId, userId]);
+    await tx.query(
+      `INSERT INTO program_versions (id, program_id, version, source, template)
+       VALUES ($1, $2, $3, 'member_customize', $4::jsonb)`,
+      [randomUUID(), programId, nextVersion, JSON.stringify(document)],
+    );
+    return {
+      id: programId,
+      templateId: program.template_id,
+      name,
+      version: nextVersion,
+      days: input.days.map((day) => ({
+        name_ar: day.name_ar,
+        name_en: day.name_en,
+        exerciseCount: day.exerciseIds.length,
+        exerciseIds: day.exerciseIds,
+      })),
+    };
+  });
+}
+
+export async function exerciseSubstitutionsFor(
+  db: Database,
+  userId: string,
+  exerciseId: string,
+) {
+  const library = await listExercises(db, userId);
+  const ranked = suggestExerciseSubstitutions(
+    exerciseId,
+    library.map((row) => ({
+      id: String(row.id),
+      primaryMuscles: Array.isArray(row.primary_muscles) ? row.primary_muscles.map(String) : [],
+      equipment: Array.isArray(row.equipment) ? row.equipment.map(String) : [],
+      difficulty: String(row.difficulty ?? 'beginner'),
+    })),
+  );
+  const byId = new Map(library.map((row) => [String(row.id), row]));
+  return {
+    exerciseId,
+    alternatives: ranked
+      .map((item) => {
+        const row = byId.get(item.id);
+        if (row === undefined) return null;
+        return { ...row, score: item.score };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null),
+  };
+}
+
 export async function abandonOpenWorkouts(db: Database, userId: string) {
   const open = await db.query<{ id: string }>(
     `SELECT id FROM workout_sessions
@@ -2807,17 +2964,35 @@ export async function startProgramDay(
     [programId],
   );
   let adaptation = null;
+  let document = {
+    templateId: program.template_id,
+    days: (templateById(program.template_id)?.days ?? []).map((day) => ({
+      name_ar: day.name_ar,
+      name_en: day.name_en,
+      exerciseIds: [...day.exerciseIds],
+    })),
+  };
   try {
     const parsed = parseProgramVersionDocument(
-      latestDoc.rows[0]?.template ?? { templateId: program.template_id, days: [] },
+      latestDoc.rows[0]?.template ?? { templateId: program.template_id, days: document.days },
     );
     adaptation = parsed.adaptation ?? null;
+    if (parsed.days.length > 0) {
+      document = {
+        templateId: parsed.templateId,
+        days: parsed.days.map((day) => ({
+          name_ar: day.name_ar,
+          name_en: day.name_en,
+          exerciseIds: [...day.exerciseIds],
+        })),
+      };
+    }
   } catch {
     adaptation = null;
   }
   let planned: ReturnType<typeof planTemplateDay>;
   try {
-    planned = planTemplateDay(program.template_id, input.dayIndex, adaptation);
+    planned = planDocumentDay(document, input.dayIndex, adaptation);
   } catch (error) {
     throw asApi(error);
   }
@@ -3459,7 +3634,7 @@ const exerciseSelect = `id, name_ar, name_en, primary_muscles, secondary_muscles
             demo_type, demo_profile, demo_model_uri, demo_license_spdx,
             demo_attribution, demo_review_status`;
 
-function mapExerciseRow(row: Record<string, unknown>) {
+function mapExerciseRow<T extends Record<string, unknown>>(row: T) {
   return {
     ...row,
     demonstrationMedia:

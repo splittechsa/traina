@@ -19,6 +19,8 @@ import { LOCAL_KEYS, useLocalValue } from '../../src/storage/local';
 import type { MacroTargets } from '../../src/nutrition/targets';
 import { logReadyMeal } from '../../src/nutrition/logFood';
 import { stableRecordKey } from '../../src/lists/keys';
+import { YazanCard, openYazanWithPrompt } from '../../src/ui/YazanCard';
+import { yazanTip } from '../../src/training/yazanPresence';
 
 type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 type Entry = {
@@ -104,7 +106,7 @@ export default function NutritionScreen() {
   });
 
   const ar = locale === 'ar';
-  const entries = diary.data?.entries ?? [];
+  const entries = useMemo(() => diary.data?.entries ?? [], [diary.data]);
   const bySlot = useMemo(() => {
     const map: Record<MealSlot | 'other', Entry[]> = {
       breakfast: [],
@@ -232,6 +234,28 @@ export default function NutritionScreen() {
         <AppHeader
           title={text(locale, 'nutrition')}
           subtitle={ar ? 'ماذا آكل؟ ماذا سجلت؟ ماذا بقي؟' : 'What to eat · what I logged · what remains'}
+        />
+        <YazanCard
+          compact
+          body={yazanTip(locale, {
+            surface: 'nutrition',
+            entryCount: diary.data.summary.entryCount,
+          })}
+          actions={[
+            {
+              label: ar ? 'سجّل وجبة' : 'Log a meal',
+              onPress: () => router.push('/food-log'),
+            },
+            {
+              label: text(locale, 'askCoach'),
+              onPress: () =>
+                openYazanWithPrompt(
+                  ar
+                    ? 'لاحظت نقص في تسجيل الوجبات. كيف أحافظ على المسار بدون تعقيد؟'
+                    : 'I am missing meal logs. How do I stay on track without overcomplicating it?',
+                ),
+            },
+          ]}
         />
         <DateSelector days={days} selected={day} onSelect={setDay} labelFor={(value) => formatRiyadhWeekday(value, locale)} />
         <View style={{ height: spacing[2] }} />

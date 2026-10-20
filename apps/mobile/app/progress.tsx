@@ -11,6 +11,8 @@ import { text } from '../src/i18n/copy';
 import { Button, Screen, ScreenBody } from '../src/ui/Screen';
 import { AppHeader, ErrorState, LoadingSkeleton, Sparkline, WeekBars } from '../src/ui/kit';
 import { stableRecordKey } from '../src/lists/keys';
+import { YazanCard, openYazanWithPrompt } from '../src/ui/YazanCard';
+import { yazanTip } from '../src/training/yazanPresence';
 
 type Progress = {
   weights: { id: string; weight_grams: number; recorded_on: string }[];
@@ -175,6 +177,30 @@ export default function ProgressScreen() {
       <ScreenBody>
         <View style={{ paddingHorizontal: 18 }}>
           <AppHeader title={text(locale, 'progress')} subtitle={isAr ? 'ما أُنجز فعلياً' : 'What you have actually completed'} showBack />
+
+          <YazanCard
+            compact
+            body={yazanTip(locale, {
+              surface: 'progress',
+              completedWorkouts: data.completedWorkouts,
+              weightLogged: data.weights.length > 0,
+            })}
+            actions={[
+              {
+                label: text(locale, 'askCoach'),
+                onPress: () =>
+                  openYazanWithPrompt(
+                    isAr
+                      ? 'اشرح لي تقدمي بناءً على الجلسات والوزن، وشجّعني بصدق'
+                      : 'Explain my progress from sessions and weight, and encourage me honestly',
+                  ),
+              },
+              {
+                label: text(locale, 'explorePrograms'),
+                onPress: () => router.push('/programs'),
+              },
+            ]}
+          />
 
           <View style={{ flexDirection: 'row', marginTop: 6, marginBottom: 18 }}>
             <View style={{ flex: 1 }}>

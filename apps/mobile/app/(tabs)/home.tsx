@@ -26,6 +26,8 @@ import {
 } from '../../src/ui/kit';
 import { StepsCard } from '../../src/activity/StepsCard';
 import { HeroPanel } from '../../src/ui/visual';
+import { YazanCard, openYazanWithPrompt } from '../../src/ui/YazanCard';
+import { yazanTip } from '../../src/training/yazanPresence';
 
 type HomeResponse =
   | { onboarded: false; dashboard: null }
@@ -211,6 +213,37 @@ export default function HomeScreen() {
             </View>
           </HeroPanel>
         </Pressable>
+
+        <YazanCard
+          body={yazanTip(locale, {
+            surface: 'home',
+            hasResume: resumeSession !== undefined,
+            hasTodayWorkout: today !== null,
+            mealLogged: logged,
+            weekCompleted: weekAdherence?.completed ?? 0,
+            weekPlanned: weekAdherence?.planned ?? 0,
+            completedWorkouts: progress.data?.completedWorkouts ?? 0,
+          })}
+          actions={[
+            {
+              label: resumeSession !== undefined ? text(locale, 'resumeWorkout') : text(locale, 'start'),
+              onPress: workoutAction,
+            },
+            {
+              label: text(locale, 'suggestPlan'),
+              onPress: () =>
+                openYazanWithPrompt(
+                  isAr
+                    ? 'اقترح لي خطة تدريب حسب هدفي وأيامي ومعداتي'
+                    : 'Suggest a training plan based on my goal, days, and equipment',
+                ),
+            },
+            {
+              label: text(locale, 'explorePrograms'),
+              onPress: () => router.push('/programs'),
+            },
+          ]}
+        />
 
         <View style={styles.quickGrid}>
           {actions.map(([actionLabel, icon, onPress]) => (

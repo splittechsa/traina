@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView as RNScrollView, Text, TextInput, View, type ScrollView } from 'react-native';
 import { SymbolView } from 'expo-symbols';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { messageFor } from '../../src/api/errors';
@@ -46,8 +46,16 @@ export default function CoachScreen() {
   const client = useQueryClient();
   const { reduce } = useMotion();
   const scroll = useRef<ScrollView>(null);
-  const [message, setMessage] = useState('');
+  const params = useLocalSearchParams<{ seed?: string }>();
+  const seed = typeof params.seed === 'string' ? params.seed : '';
+  const [message, setMessage] = useState(seed);
   const [lastTool, setLastTool] = useState<string | null>(null);
+
+  const [previousSeed, setPreviousSeed] = useState(seed);
+  if (seed !== previousSeed) {
+    setPreviousSeed(seed);
+    if (seed.trim().length > 0) setMessage(seed);
+  }
   const history = useQuery({
     queryKey: ['coach-messages'],
     queryFn: () => apiRequest<History>('/v1/coach/messages'),

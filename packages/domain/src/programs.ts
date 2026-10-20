@@ -245,6 +245,41 @@ export const TRAINING_TEMPLATES: readonly TrainingTemplate[] = [
     ],
   },
   {
+    id: 'calisthenics_intermediate',
+    family: 'calisthenics',
+    split: 'upper_lower',
+    daysPerWeek: 4,
+    discipline: 'calisthenics',
+    environment: 'home',
+    name_ar: 'كاليثنكس متوسط',
+    name_en: 'Calisthenics intermediate',
+    summary_ar: 'أربعة أيام: علوي/سفلي مع حجم أعلى للممارس المتوسط.',
+    summary_en: 'Four days: upper/lower with more volume for intermediate trainees.',
+    days: [
+      { name_ar: 'علوي أ', name_en: 'Upper A', exerciseIds: [id('09'), id('06'), id('15'), id('18')] },
+      { name_ar: 'سفلي أ', name_en: 'Lower A', exerciseIds: [id('08'), id('12'), id('11'), id('10')] },
+      { name_ar: 'علوي ب', name_en: 'Upper B', exerciseIds: [id('17'), id('16'), id('09'), id('06')] },
+      { name_ar: 'سفلي ب', name_en: 'Lower B', exerciseIds: [id('12'), id('08'), id('11'), id('10')] },
+    ],
+  },
+  {
+    id: 'calisthenics_skills',
+    family: 'calisthenics',
+    split: 'full_body',
+    daysPerWeek: 3,
+    discipline: 'calisthenics',
+    environment: 'home',
+    name_ar: 'كاليثنكس مهارة وقوة',
+    name_en: 'Calisthenics strength skills',
+    summary_ar: 'ثلاثة أيام تركز على الثبات والتحكم والمهارات الأساسية.',
+    summary_en: 'Three days focused on holds, control, and foundational skills.',
+    days: [
+      { name_ar: 'ثبات ودفع', name_en: 'Brace and push', exerciseIds: [id('10'), id('09'), id('15'), id('17')] },
+      { name_ar: 'سحب وثبات', name_en: 'Pull and brace', exerciseIds: [id('06'), id('18'), id('16'), id('10')] },
+      { name_ar: 'أرجل وتحكم', name_en: 'Legs and control', exerciseIds: [id('08'), id('12'), id('11'), id('10')] },
+    ],
+  },
+  {
     id: 'conditioning_engine',
     family: 'crossfit',
     split: 'engine',
@@ -283,18 +318,31 @@ export function templateById(templateId: string): TrainingTemplate | null {
   return TRAINING_TEMPLATES.find((item) => item.id === templateId) ?? null;
 }
 
-export function planTemplateDay(
-  templateId: string,
+export type ProgramDayDocument = {
+  name_ar: string;
+  name_en: string;
+  exerciseIds: readonly string[];
+};
+
+/** Plan a day from a member program document (customized days) or fall back to catalog. */
+export function planDocumentDay(
+  document: { templateId: string; days: readonly ProgramDayDocument[] },
   dayIndex: number,
   adaptation: TrainingAdaptationOverlay | null = null,
 ): { name: string; name_ar: string; name_en: string; discipline: Discipline; exercises: PlannedExercise[] } {
-  const template = templateById(templateId);
+  const template = templateById(document.templateId);
   if (template === null) {
     throw new DomainError('UNKNOWN_TEMPLATE', 'Training template is not in the catalog');
   }
-  const day = template.days[dayIndex];
+  const day = document.days.length === 0 ? template.days[dayIndex] : document.days[dayIndex];
   if (day === undefined) {
     throw new DomainError('UNKNOWN_TEMPLATE_DAY', 'That day is not in this program');
+  }
+  if (!Array.isArray(day.exerciseIds) || day.exerciseIds.length === 0) {
+    throw new DomainError('INVALID_PROGRAM_DAY', 'A program day needs at least one exercise');
+  }
+  if (day.exerciseIds.length > 20) {
+    throw new DomainError('INVALID_PROGRAM_DAY', 'A program day cannot exceed 20 exercises');
   }
   const exercises =
     template.discipline === 'crossfit'
@@ -312,6 +360,106 @@ export function planTemplateDay(
     name_en: `${template.name_en} · ${day.name_en}${loadHint}`,
     discipline: template.discipline,
     exercises,
+  };
+}
+
+export function planTemplateDay(
+  templateId: string,
+  dayIndex: number,
+  adaptation: TrainingAdaptationOverlay | null = null,
+): { name: string; name_ar: string; name_en: string; discipline: Discipline; exercises: PlannedExercise[] } {
+  const template = templateById(templateId);
+  if (template === null) {
+    throw new DomainError('UNKNOWN_TEMPLATE', 'Training template is not in the catalog');
+  }
+  return planDocumentDay({ templateId, days: template.days }, dayIndex, adaptation);
+}
+
+export type SubstitutionCandidate = {
+  id: string;
+  primaryMuscles: readonly string[];
+  equipment: readonly string[];
+  difficulty: string;
+};
+
+/** Rank substitute exercises by shared primary muscle, then equipment, then difficulty. */
+export function suggestExerciseSubstitutions(
+  currentId: string,
+  library: readonly SubstitutionCandidate[],
+  limit = 8,
+): readonly { id: string; score: number }[] {
+  const current = library.find((item) => item.id === currentId);
+  if (current === undefined) {
+    return [];
+  }
+  const muscleSet = new Set(current.primaryMuscles.map((item) => item.toLowerCase()));
+  const equipmentSet = new Set(current.equipment.map((item) => item.toLowerCase()));
+  const ranked = library
+    .filter((item) => item.id !== currentId)
+    .map((item) => {
+      let muscleHits = 0;
+      for (const muscle of item.primaryMuscles) {
+        if (muscleSet.has(muscle.toLowerCase())) muscleHits += 1;
+      }
+      if (muscleHits === 0) {
+        return { id: item.id, score: 0 };
+      }
+      let score = muscleHits * 40;
+      for (const piece of item.equipment) {
+        if (equipmentSet.has(piece.toLowerCase())) score += 12;
+      }
+      if (item.difficulty === current.difficulty) score += 8;
+      return { id: item.id, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id));
+  return ranked.slice(0, Math.max(1, Math.min(20, limit)));
+}
+
+export function describeTemplateAudience(templateId: string): {
+  goal_ar: string;
+  goal_en: string;
+  experience_ar: string;
+  experience_en: string;
+  durationMin: number;
+  equipment_ar: string;
+  equipment_en: string;
+} | null {
+  const template = templateById(templateId);
+  if (template === null) return null;
+  if (template.family === 'crossfit') {
+    return {
+      goal_ar: 'لياقة عامة وتحمل وظيفي',
+      goal_en: 'General fitness and conditioning',
+      experience_ar: 'مبتدئ إلى متوسط',
+      experience_en: 'Beginner to intermediate',
+      durationMin: 45,
+      equipment_ar: 'نادي أو أجهزة مركّبة',
+      equipment_en: 'Gym or mixed equipment',
+    };
+  }
+  if (template.family === 'calisthenics') {
+    const intermediate = template.id.includes('intermediate') || template.id.includes('ppl');
+    const skills = template.id.includes('skills');
+    return {
+      goal_ar: skills ? 'مهارة وقوة بوزن الجسم' : 'قوة بوزن الجسم ومهارة',
+      goal_en: skills ? 'Bodyweight skill and strength' : 'Bodyweight strength and skill',
+      experience_ar: skills || intermediate ? 'متوسط' : 'مبتدئ',
+      experience_en: skills || intermediate ? 'Intermediate' : 'Beginner',
+      durationMin: skills ? 35 : 40,
+      equipment_ar: 'منزل / وزن الجسم',
+      equipment_en: 'Home / bodyweight',
+    };
+  }
+  const advanced = template.split === 'arnold' || template.split === 'bro' || template.daysPerWeek >= 6;
+  return {
+    goal_ar: 'تضخيم وقوة في النادي',
+    goal_en: 'Hypertrophy and strength in the gym',
+    experience_ar: advanced ? 'متوسط إلى متقدم' : 'مبتدئ إلى متوسط',
+    experience_en: advanced ? 'Intermediate to advanced' : 'Beginner to intermediate',
+    durationMin: 55,
+    equipment_ar: 'نادي: بار وأجهزة وأوزان',
+    equipment_en: 'Gym: barbell, machines, free weights',
   };
 }
 

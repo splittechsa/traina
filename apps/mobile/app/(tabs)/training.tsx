@@ -27,6 +27,8 @@ import {
   type TrainingEnvironment,
 } from '../../src/training/library';
 import { EnvironmentCards, EquipmentBrandCards, TrainingFamilyCards, familyForDiscipline, type TrainingFamily } from '../../src/training/filterCards';
+import { yazanTip } from '../../src/training/yazanPresence';
+import { YazanCard, openYazanWithPrompt } from '../../src/ui/YazanCard';
 
 // Every discipline gets a deliberate photo instead of every history row reusing the same
 // running shot regardless of what was actually trained.
@@ -215,6 +217,38 @@ export default function TrainingScreen() {
           subtitle={activePlan === null ? text(locale, 'noActivePlanHint') : text(locale, 'hasActivePlanHint')}
         />
 
+        <YazanCard
+          body={yazanTip(locale, {
+            surface: 'training',
+            hasActivePlan: activePlan !== null,
+            hasResume: inProgress !== null,
+            todayCount,
+          })}
+          actions={[
+            {
+              label: text(locale, 'explorePrograms'),
+              onPress: () => router.push('/programs'),
+            },
+            {
+              label: text(locale, 'suggestPlan'),
+              onPress: () =>
+                openYazanWithPrompt(
+                  locale === 'ar'
+                    ? 'اقترح لي خطة تدريب حسب هدفي وأيامي ومعداتي'
+                    : 'Suggest a training plan based on my goal, days, and equipment',
+                ),
+            },
+            ...(activePlan !== null
+              ? [
+                  {
+                    label: text(locale, 'customizePlan'),
+                    onPress: () => router.push({ pathname: '/program-edit', params: { id: activePlan.id } }),
+                  },
+                ]
+              : []),
+          ]}
+        />
+
         <SurfaceCard style={{ marginBottom: 12 }}>
           <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontSize: 12, marginBottom: 4 }}>
             {text(locale, 'myActivePlan')}
@@ -222,6 +256,20 @@ export default function TrainingScreen() {
           <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 18 }}>
             {activePlan?.name ?? (locale === 'ar' ? 'لا توجد خطة نشطة' : 'No active plan')}
           </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+            <Button
+              label={text(locale, 'explorePrograms')}
+              variant="secondary"
+              onPress={() => router.push('/programs')}
+            />
+            {activePlan !== null ? (
+              <Button
+                label={text(locale, 'customizePlan')}
+                variant="secondary"
+                onPress={() => router.push({ pathname: '/program-edit', params: { id: activePlan.id } })}
+              />
+            ) : null}
+          </View>
         </SurfaceCard>
 
         {inProgress !== null ? (
