@@ -5,6 +5,7 @@ export type PendingSetCommand = {
   sessionId: string;
   set: WorkoutSet;
   /** Default `log` for backward-compatible queued creates. */
+  baseSet?: WorkoutSet;
   kind?: 'log' | 'replace';
 };
 
@@ -41,6 +42,11 @@ export function planOfflineSync(server: WorkoutSession, pending: readonly Pendin
       continue;
     }
     const kind = command.kind ?? 'log';
+    const existing = session.sets.find(set => set.id === command.set.id);
+    const same = (a: WorkoutSet, b: WorkoutSet) => a.id === b.id && a.exerciseId === b.exerciseId && a.setIndex === b.setIndex && a.reps === b.reps && a.loadGrams === b.loadGrams && a.rpeTenths === b.rpeTenths && Date.parse(a.completedAt) === Date.parse(b.completedAt);
+    if (kind === 'replace' && session.status === 'in_progress' && existing && !same(existing, command.set) && (!command.baseSet || !same(existing, command.baseSet))) {
+      conflicts.push({ clientEventId: command.clientEventId, reason: 'payload_conflict' }); continue;
+    }
     const resolution = kind === 'replace' ? applyOfflineReplace(session, command.set) : applyOfflineSet(session, command.set);
     if (resolution.disposition === 'applied') {
       session = resolution.session;

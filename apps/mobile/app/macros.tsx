@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 // Calorie & macro calculator. Inputs are tappable tiles that open the right native control
 // (wheel for numbers, chips for choices) instead of a column of text fields; the result
 // recomputes live at the top. Saved on-device as a personal estimate (see targets.ts for why
@@ -102,6 +103,7 @@ export default function MacroCalculatorScreen() {
   const { state: steps } = useSteps(7);
 
   const [input, setInput] = useState<TargetInput>({ sex: 'male', ageYears: 28, heightCm: 172, weightKg: 75, activity: 'moderate', goal: 'maintain' });
+  const [initialInput, setInitialInput] = useState('');
   const [prefilled, setPrefilled] = useState(false);
   const [field, setField] = useState<Field>(null);
   const [draft, setDraft] = useState(0);
@@ -119,6 +121,8 @@ export default function MacroCalculatorScreen() {
     }
   }
 
+  if (prefilled && initialInput === '') setInitialInput(JSON.stringify(input));
+  const recovery = useFormRecovery('macro-estimate', { input, field, draft }, value => { setInput(value.input); setField(value.field); setDraft(value.draft); }, prefilled && initialInput !== '' && JSON.stringify(input) !== initialInput, prefilled);
   const suggested = steps.status === 'ready' && steps.historySupported ? activityFromSteps(steps.week.slice(0, -1)) : null;
   const result = useMemo(() => {
     try {
@@ -241,9 +245,7 @@ export default function MacroCalculatorScreen() {
           disabled={result === null}
           onPress={() => {
             if (result === null) return;
-            void saved.save(result);
-            tapSuccess(reduce);
-            router.back();
+            void saved.save(result).then(() => recovery.clear()).then(() => { tapSuccess(reduce); router.back(); });
           }}
         />
         <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, fontSize: typeScale.label, marginTop: spacing[3], lineHeight: 20 }}>

@@ -53,6 +53,8 @@ vi.mock('expo-secure-store', () => ({
   deleteItemAsync: async () => undefined,
 }));
 
+vi.mock('../offline/resource', () => ({ accountScope: () => 'https://synthetic|onboarding-account' }));
+
 vi.mock('expo-symbols', () => ({
   SymbolView: 'SymbolView',
 }));

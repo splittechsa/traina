@@ -1,3 +1,4 @@
+import { useFormRecovery } from '../src/storage/useFormRecovery';
 import type { ProgramDayDocument } from '@sahhti/domain';
 import { editedProgramDays, strengthDraftValues, strengthInputKey, type StrengthInputs } from '../src/training/programDraft';
 import { useMemo, useState } from 'react';
@@ -74,6 +75,8 @@ export default function ProgramEditScreen() {
     setInitialDraft(JSON.stringify({ name: active.name, days: initialDays }));
   }
 
+  const recovery = useFormRecovery('program:' + id, { name, days, strengthInputs, draftVersion }, draft => { setName(draft.name); setDays(draft.days); setStrengthInputs(draft.strengthInputs); setDraftVersion(draft.draftVersion); }, initialDraft !== '' && (JSON.stringify({ name, days }) !== initialDraft || Object.keys(strengthInputs).length > 0), initializedProgramId !== null);
+
   const currentExerciseId =
     replaceAt === null ? null : days[replaceAt.day]?.exerciseIds[replaceAt.exercise] ?? null;
 
@@ -95,6 +98,7 @@ export default function ProgramEditScreen() {
       });
     },
     onSuccess: async () => {
+      await recovery.clear();
       setMessage('');
       await client.invalidateQueries({ queryKey: ['training-programs'] });
       await client.invalidateQueries({ queryKey: ['program-detail'] });
@@ -206,11 +210,6 @@ export default function ProgramEditScreen() {
           title={text(locale, 'customizePlan')}
           subtitle={isAr ? 'استبدل · رتّب · احفظ نسختك' : 'Swap · reorder · save your version'}
           showBack
-          confirmUnsaved={(JSON.stringify({ name, days }) !== initialDraft || Object.keys(strengthInputs).length > 0) ? {
-            title: isAr ? 'تغييرات غير محفوظة' : 'Unsaved changes',
-            body: isAr ? 'هل تريد المغادرة بدون حفظ تعديلات البرنامج؟' : 'Leave without saving your program edits?',
-            leave: isAr ? 'مغادرة' : 'Leave', stay: isAr ? 'متابعة التعديل' : 'Keep editing',
-          } : undefined}
         />
 
         <YazanCard

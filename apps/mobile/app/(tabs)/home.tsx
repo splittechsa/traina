@@ -1,3 +1,4 @@
+import { accountResource } from '../../src/offline/resource';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { router } from 'expo-router';
@@ -40,18 +41,18 @@ export default function HomeScreen() {
   const { locale } = useLocale();
   const { tokens } = useSession();
   const theme = useTheme();
-  const home = useQuery({ queryKey: ['home', locale], queryFn: () => apiRequest<HomeResponse>('/v1/home') });
+  const home = useQuery({ queryKey: ['home', locale], queryFn: () => accountResource<HomeResponse>('/v1/home') });
   const me = useQuery({
     queryKey: ['me', tokens?.accessToken],
     enabled: tokens !== null,
-    queryFn: () => apiRequest<Me>('/v1/me'),
+    queryFn: () => accountResource<Me>('/v1/me'),
   });
   const progress = useQuery({ queryKey: ['progress'], queryFn: () => apiRequest<Progress>('/v1/progress') });
   const sessions = useQuery({
     queryKey: ['sessions'],
     enabled: tokens !== null,
     queryFn: () =>
-      apiRequest<{ sessions: { id: string; name: string; status: string }[] }>('/v1/training/sessions'),
+      accountResource<{ sessions: { id: string; name: string; status: string }[] }>('/v1/training/sessions'),
   });
   const coachingSignals = useQuery({
     queryKey: ['home-coaching-signals'],

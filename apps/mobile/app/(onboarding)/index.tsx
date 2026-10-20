@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'r
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import * as SecureStore from 'expo-secure-store';
+import { readJson, writeJson, removeKey } from '../../src/storage/local';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { ACTIVITY_LEVELS, ENVIRONMENTS, EXPERIENCES, GOALS, SPORTS, disciplineForSports, goalsForSports, type Goal, type Sport } from '@sahhti/domain';
@@ -143,9 +143,9 @@ export default function OnboardingScreen() {
   });
 
   useEffect(() => {
-    void SecureStore.getItemAsync(DRAFT_KEY)
+    void readJson<OnboardingDraft | null>(DRAFT_KEY, null)
       .then((raw) => {
-        const draft = parseOnboardingDraft(raw);
+        const draft = parseOnboardingDraft(raw === null ? null : JSON.stringify(raw));
         if (draft === null) {
           return;
         }
@@ -182,7 +182,7 @@ export default function OnboardingScreen() {
       return;
     }
     if (serverComplete) {
-      void SecureStore.deleteItemAsync(DRAFT_KEY);
+      void removeKey(DRAFT_KEY);
       return;
     }
     const draft: OnboardingDraft = {
@@ -202,7 +202,7 @@ export default function OnboardingScreen() {
       when,
       diet,
     };
-    void SecureStore.setItemAsync(DRAFT_KEY, JSON.stringify(draft));
+    void writeJson(DRAFT_KEY, draft).catch(() => undefined);
   }, [hydrated, serverComplete, step, storyIndex, displayName, ageYears, heightCm, weightKg, experience, goal, sports, sessionsPerWeek, environment, activity, when, diet]);
 
   if (!hydrated || (tokens !== null && me.isPending)) {
@@ -276,7 +276,7 @@ export default function OnboardingScreen() {
         throw new ApiClientError(500, 'INTERNAL', text(locale, 'error'));
       }
       queryClient.setQueryData<Me>(meKey, fresh);
-      await SecureStore.deleteItemAsync(DRAFT_KEY);
+      await removeKey(DRAFT_KEY);
     } catch (caught) {
       const field = caught instanceof ApiClientError && caught.code === 'ONBOARDING_INVALID' ? onboardingFailure(caught.message) : 'other';
       if (field === 'age' || field === 'height' || field === 'weight') {

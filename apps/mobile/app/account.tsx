@@ -93,6 +93,7 @@ export default function AccountScreen() {
           ) : null}
         </View>
         <SettingsGroup>
+          <SettingsRow icon={{ ios: 'person.fill', android: 'person', web: 'person' }} title={locale === 'ar' ? 'تعديل الملف' : 'Edit profile'} onPress={() => router.push('/profile-edit')} />
           <SettingsRow
             icon={{ ios: 'gearshape.fill', android: 'settings', web: 'settings' }}
             title={text(locale, 'settings')}

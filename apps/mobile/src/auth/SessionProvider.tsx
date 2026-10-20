@@ -2,8 +2,10 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
 import { replaceTokens, setApiBaseOverride, setTokenMemory, setTokenPersistor, type StoredTokens } from '../api/tokens';
+import { verifyLocalAccount } from './verifiedAccount';
 import { transitionSession } from './sessionTransition';
 
+const SESSION = 'sahhti.verifiedSession.v1';
 const ACCESS = 'sahhti.access';
 const REFRESH = 'sahhti.refresh';
 export const API_URL_KEY = 'sahhti.apiBase';
@@ -18,6 +20,11 @@ type SessionValue = {
 const SessionContext = createContext<SessionValue | null>(null);
 
 async function readStored(): Promise<StoredTokens | null> {
+  const record = await SecureStore.getItemAsync(SESSION);
+  if (record !== null) {
+    const value = JSON.parse(record) as StoredTokens;
+    if (typeof value.accessToken === 'string' && typeof value.refreshToken === 'string' && typeof value.userId === 'string') return value;
+  }
   const accessToken = await SecureStore.getItemAsync(ACCESS);
   const refreshToken = await SecureStore.getItemAsync(REFRESH);
   if (accessToken === null || refreshToken === null) {
@@ -28,12 +35,14 @@ async function readStored(): Promise<StoredTokens | null> {
 
 async function writeStored(tokens: StoredTokens | null): Promise<void> {
   if (tokens === null) {
+    await SecureStore.deleteItemAsync(SESSION);
     await SecureStore.deleteItemAsync(ACCESS);
     await SecureStore.deleteItemAsync(REFRESH);
     return;
   }
-  await SecureStore.setItemAsync(ACCESS, tokens.accessToken);
-  await SecureStore.setItemAsync(REFRESH, tokens.refreshToken);
+  await SecureStore.setItemAsync(SESSION, JSON.stringify(tokens));
+  await SecureStore.deleteItemAsync(ACCESS);
+  await SecureStore.deleteItemAsync(REFRESH);
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -50,13 +59,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setTokens(next);
     });
     void Promise.all([readStored(), SecureStore.getItemAsync(API_URL_KEY)])
-      .then(([stored, apiBase]) => {
+      .then(async ([stored, apiBase]) => {
         if (apiBase !== null && apiBase.length > 0) {
           setApiBaseOverride(apiBase);
+        }
+        if (stored && !stored.userId) {
+          try { stored = await verifyLocalAccount(stored); await writeStored(stored); } catch { /* Unverified legacy credentials cannot open local account data. */ }
         }
         setTokenMemory(stored);
         setTokens(stored);
       })
+      .catch(() => { setTokenMemory(null); setTokens(null); })
       .finally(() => setReady(true));
   }, [queryClient]);
 
@@ -64,7 +77,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () => ({
       ready,
       tokens,
-      save: (next) => transitionSession(() => queryClient.clear(), replaceTokens, next),
+      save: async (next) => {
+        const verified = await verifyLocalAccount(next);
+        await transitionSession(() => queryClient.clear(), replaceTokens, verified);
+      },
       clear: () => transitionSession(() => queryClient.clear(), replaceTokens, null),
     }),
     [queryClient, ready, tokens],

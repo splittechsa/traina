@@ -1,3 +1,5 @@
+import { useFormRecovery } from '../../src/storage/useFormRecovery';
+import { accountResource } from '../../src/offline/resource';
 import { useMemo, useState } from 'react';
 import { ScrollView, View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
@@ -81,6 +83,7 @@ export default function TrainingScreen() {
   const [sets, setSets] = useState('3');
   const [reps, setReps] = useState('8');
   const [message, setMessage] = useState('');
+  const draftRecovery = useFormRecovery('workout-builder', { name, discipline, selected, format, minutes, rounds, progression, hold, sets, reps }, draft => { setName(draft.name); setDiscipline(draft.discipline); setSelected(draft.selected); setFormat(draft.format); setMinutes(draft.minutes); setRounds(draft.rounds); setProgression(draft.progression); setHold(draft.hold); setSets(draft.sets); setReps(draft.reps); setOpen(true); }, name !== '' || selected.length > 0 || minutes !== '12' || rounds !== '5' || sets !== '3' || reps !== '8' || hold !== '');
   const exercises = useQuery({
     queryKey: ['exercises'],
     queryFn: () => apiRequest<{ exercises: Exercise[] }>('/v1/exercises'),
@@ -91,12 +94,12 @@ export default function TrainingScreen() {
   });
   const sessions = useQuery({
     queryKey: ['sessions'],
-    queryFn: () => apiRequest<{ sessions: SessionRow[] }>('/v1/training/sessions'),
+    queryFn: () => accountResource<{ sessions: SessionRow[] }>('/v1/training/sessions'),
   });
   const programs = useQuery({
     queryKey: ['training-programs'],
     queryFn: () =>
-      apiRequest<{
+      accountResource<{
         active: { id: string; name: string; templateId: string | null } | null;
         templates: { id: string; nameAr?: string; nameEn?: string; name?: string }[];
       }>('/v1/training/programs'),
@@ -165,6 +168,7 @@ export default function TrainingScreen() {
       });
       await client.invalidateQueries({ queryKey: ['sessions'] });
       await client.invalidateQueries({ queryKey: ['home'] });
+      await draftRecovery.clear();
       setOpen(false);
       setName('');
       setSelected([]);

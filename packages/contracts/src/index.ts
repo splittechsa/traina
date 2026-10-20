@@ -515,3 +515,5 @@ export const programActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('archive'), expectedVersion: z.number().int().positive() }).strict(),
 ]);
 export const programHistoryQuerySchema = z.object({ before: z.coerce.number().int().positive().optional() }).strict();
+
+export const replaceSetSchema = logSetSchema.extend({ expectedSet: logSetSchema.optional() }).strict();

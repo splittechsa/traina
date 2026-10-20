@@ -1,4 +1,4 @@
-import { getApiBaseOverride, getTokens, replaceTokens } from './tokens';
+import { getApiBaseOverride, getTokens, replaceTokens, sessionEpoch } from './tokens';
 
 export class ApiClientError extends Error {
   constructor(
@@ -35,17 +35,20 @@ async function refreshAccess(): Promise<boolean> {
   if (tokens === null) {
     return false;
   }
+  const refreshEpoch = sessionEpoch();
   const response = await fetch(`${apiBaseUrl()}/v1/auth/refresh`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'accept-language': localeHeader },
     body: JSON.stringify({ refreshToken: tokens.refreshToken }),
   });
+  if (sessionEpoch() !== refreshEpoch) return false;
   if (!response.ok) {
     await replaceTokens(null);
     return false;
   }
   const body = (await response.json()) as { accessToken: string; refreshToken: string };
-  await replaceTokens({ accessToken: body.accessToken, refreshToken: body.refreshToken });
+  if (sessionEpoch() !== refreshEpoch) return false;
+  await replaceTokens({ accessToken: body.accessToken, refreshToken: body.refreshToken, userId: tokens.userId });
   return true;
 }
 
@@ -60,6 +63,7 @@ function refreshAccessOnce(): Promise<boolean> {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}, retried = false): Promise<T> {
+  const requestEpoch = sessionEpoch();
   const headers = new Headers();
   headers.set('accept-language', localeHeader);
   if (options.body !== undefined) {
@@ -87,6 +91,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}, 
   } finally {
     clearTimeout(timer);
   }
+  if (options.auth !== false && requestEpoch !== sessionEpoch()) throw new ApiClientError(409, 'ACCOUNT_CHANGED', 'Account changed during request');
   if (response.status === 401 && options.auth !== false && !retried && !path.startsWith('/v1/auth/')) {
     const refreshed = await refreshAccessOnce().catch(() => false);
     if (refreshed) {
@@ -94,6 +99,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}, 
     }
   }
   const payload = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
+  if (options.auth !== false && requestEpoch !== sessionEpoch()) throw new ApiClientError(409, 'ACCOUNT_CHANGED', 'Account changed during request');
   if (!response.ok) {
     throw new ApiClientError(response.status, payload.error?.code ?? 'HTTP', payload.error?.message ?? 'Request failed');
   }
