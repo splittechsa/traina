@@ -78,6 +78,19 @@ describe('training program catalog', () => {
     expect(planDocumentDay({ templateId: template.id, days: [] }, 1).exercises.length).toBeGreaterThan(0);
   });
 
+  it('honors member strength settings while retaining an approved recovery overlay', () => {
+    const template = templateById('push_pull_legs')!;
+    const day = template.days[0]!;
+    const exerciseId = day.exerciseIds[0]!;
+    const document = { templateId: template.id, days: [{ ...day, strengthOverrides: { [exerciseId]: { sets: 5, reps: 12, restSeconds: 120 } } }] };
+    const plain = planDocumentDay(document, 0);
+    expect(plain.exercises[0]?.prescription).toMatchObject({ sets: 5, reps: 12, restSeconds: 120 });
+    const adapted = planDocumentDay(document, 0, { kind: 'recovery_preference', volumeScaleBps: 7000, restSecondsDelta: 30, loadIncrementPctMax: 0, recommendationId: 'rec-1', appliedAt: '2026-10-20T12:00:00.000Z' });
+    expect(adapted.exercises[0]?.prescription).toMatchObject({ sets: 4, reps: 12, restSeconds: 150 });
+    expect(() => planDocumentDay({ ...document, days: [{ ...day, strengthOverrides: { [exerciseId]: { sets: 0, reps: 12, restSeconds: 120 } } }] }, 0)).toThrow('Invalid exercise settings');
+    expect(() => planDocumentDay({ ...document, days: [{ ...day, strengthOverrides: { unknown: { sets: 3, reps: 8, restSeconds: 90 } } }] }, 0)).toThrow('Invalid exercise settings');
+  });
+
   it('ranks substitutes by shared primary muscle and equipment', () => {
     const ranked = suggestExerciseSubstitutions('a', [
       { id: 'a', primaryMuscles: ['chest'], equipment: ['barbell'], difficulty: 'intermediate' },

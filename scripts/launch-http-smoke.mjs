@@ -43,12 +43,16 @@ try {
   evidence.steps.push({ id: 'onboarding', status: 'PASS' });
   const { program } = await request('POST', '/v1/training/programs', { templateId: 'push_pull_legs' }, token);
   const days = program.days.map(day => ({ name_ar: day.name_ar, name_en: day.name_en, exerciseIds: [...day.exerciseIds].reverse() }));
-  const edited = await request('PUT', '/v1/training/programs/' + program.id, { name: 'Synthetic customized PPL', expectedVersion: 1, days }, token);
+  days[0].strengthOverrides = { [days[0].exerciseIds[0]]: { sets: 5, reps: 12, restSeconds: 120 } };
+    const edited = await request('PUT', '/v1/training/programs/' + program.id, { name: 'Synthetic customized PPL', expectedVersion: 1, days }, token);
   assert.equal(edited.program.version, 2);
   await request('PUT', '/v1/training/programs/' + program.id, { expectedVersion: 1, days }, token, 409);
   evidence.steps.push({ id: 'program-customize-stale-write-rejected', status: 'PASS' });
   const { session } = await request('POST', '/v1/training/programs/' + program.id + '/start-day', { dayIndex: 0, startNow: true }, token);
   assert.equal(session.plannedExercises[0].exerciseId, days[0].exerciseIds[0]);
+    assert.equal(session.plannedExercises[0].prescription.sets, 5);
+    assert.equal(session.plannedExercises[0].prescription.reps, 12);
+    assert.equal(session.plannedExercises[0].prescription.restSeconds, 120);
   const set = { id: randomUUID(), exerciseId: days[0].exerciseIds[0], setIndex: 1, reps: 8, loadGrams: 20000,
     rpeTenths: null, completedAt: new Date().toISOString() };
   await request('POST', '/v1/training/sessions/' + session.id + '/sets', set, token);

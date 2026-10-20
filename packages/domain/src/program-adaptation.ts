@@ -1,5 +1,5 @@
 import { DomainError } from './errors.js';
-import { planTemplateDay, templateById, type TrainingAdaptationOverlay } from './programs.js';
+import { planDocumentDay, templateById, type ProgramDayDocument, type TrainingAdaptationOverlay } from './programs.js';
 import type { CoachingRecommendation } from './recommendation.js';
 import { assertRecommendationMayApply, payloadKind } from './recommendation.js';
 import type { PlannedExercise } from './training.js';
@@ -18,7 +18,7 @@ export type { TrainingAdaptationOverlay };
 
 export type ProgramVersionDocument = {
   templateId: string;
-  days: readonly { name_ar: string; name_en: string; exerciseIds: readonly string[] }[];
+  days: readonly ProgramDayDocument[];
   adaptation?: TrainingAdaptationOverlay | null;
   sourceRecommendationId?: string | null;
 };
@@ -148,10 +148,10 @@ export function parseProgramVersionDocument(raw: unknown): ProgramVersionDocumen
 }
 
 function sampleDaySnapshot(
-  templateId: string,
+  document: ProgramVersionDocument,
   overlay: TrainingAdaptationOverlay | null,
 ): readonly { exerciseId: string; sets: number; restSeconds: number }[] {
-  const planned = planTemplateDay(templateId, 0, overlay);
+  const planned = planDocumentDay(document, 0, overlay);
   return planned.exercises.slice(0, 4).map((exercise) => snapshotExercise(exercise));
 }
 
@@ -240,14 +240,14 @@ export function buildProgramAdaptationPlan(input: {
       volumeScaleBps: beforeVol,
       restSecondsDelta: beforeRest,
       loadIncrementPctMax: beforeLoad,
-      sampleDayExercises: sampleDaySnapshot(currentDocument.templateId, beforeOverlay),
+      sampleDayExercises: sampleDaySnapshot(currentDocument, beforeOverlay),
     },
     after: {
       programVersion: currentVersion + 1,
       volumeScaleBps: overlay.volumeScaleBps,
       restSecondsDelta: overlay.restSecondsDelta,
       loadIncrementPctMax: overlay.loadIncrementPctMax,
-      sampleDayExercises: sampleDaySnapshot(currentDocument.templateId, overlay),
+      sampleDayExercises: sampleDaySnapshot(currentDocument, overlay),
     },
     changes,
   };

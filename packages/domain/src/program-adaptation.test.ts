@@ -50,6 +50,15 @@ describe('program adaptation (real apply)', () => {
     expect(plan.nextDocument.sourceRecommendationId).toBe(rec.id);
   });
 
+  it('previews the actual customized exercise and preserves its base settings', () => {
+    const id = '10000000-0000-4000-8000-000000000002';
+    const current = parseProgramVersionDocument({ templateId: 'gym_full_body', days: [{ name_ar: 'مخصص', name_en: 'Custom', exerciseIds: [id], strengthOverrides: { [id]: { sets: 5, reps: 12, restSeconds: 120 } } }] });
+    const plan = buildProgramAdaptationPlan({ recommendation: approvedRecovery(), currentDocument: current, currentVersion: 1, at: '2026-06-01T12:03:00.000Z' });
+    expect(plan.diff.before.sampleDayExercises).toEqual([{ exerciseId: id, sets: 5, restSeconds: 120 }]);
+    expect(plan.diff.after.sampleDayExercises).toEqual([{ exerciseId: id, sets: 4, restSeconds: 150 }]);
+    expect(plan.nextDocument.days).toEqual(current.days);
+  });
+
   it('rejects stale expectedProgramVersion', () => {
     const rec = approvedRecovery();
     expect(() =>

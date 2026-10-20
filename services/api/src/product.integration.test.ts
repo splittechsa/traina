@@ -555,7 +555,8 @@ describe('persisted product', () => {
       payload: {
         name: 'My PPL',
         days: [
-          { name_ar: pushDay.name_ar, name_en: pushDay.name_en, exerciseIds: swapped },
+          { name_ar: pushDay.name_ar, name_en: pushDay.name_en, exerciseIds: swapped,
+            strengthOverrides: { [swapped[0]]: { sets: 5, reps: 12, restSeconds: 120 } } },
           ...activated.json().program.days.slice(1).map((day: { name_ar: string; name_en: string; exerciseIds: string[] }) => ({
             name_ar: day.name_ar,
             name_en: day.name_en,
@@ -567,6 +568,9 @@ describe('persisted product', () => {
     expect(customized.statusCode).toBe(200);
     expect(customized.json().program.name).toBe('My PPL');
     expect(customized.json().program.days[0].exerciseIds[0]).toBe(swapped[0]);
+    expect(customized.json().program.days[0].strengthOverrides[swapped[0]]).toEqual({ sets: 5, reps: 12, restSeconds: 120 });
+    const persistedProgram = await app.inject({ method: 'GET', url: '/v1/training/programs', headers: { authorization: `Bearer ${progressToken}` } });
+    expect(persistedProgram.json().active.days[0].strengthOverrides[swapped[0]]).toEqual({ sets: 5, reps: 12, restSeconds: 120 });
     const substitutions = await app.inject({
       method: 'GET',
       url: `/v1/exercises/${swapped[0]}/substitutions`,
@@ -585,6 +589,7 @@ describe('persisted product', () => {
     expect(started.json().session.status).toBe('in_progress');
     expect(started.json().session.plannedExercises.length).toBeGreaterThanOrEqual(3);
     expect(started.json().session.plannedExercises[0].exerciseId).toBe(swapped[0]);
+    expect(started.json().session.plannedExercises[0].prescription).toMatchObject({ kind: 'strength', sets: 5, reps: 12, restSeconds: 120 });
     const startedAgain = await app.inject({
       method: 'POST',
       url: `/v1/training/programs/${activated.json().program.id}/start-day`,

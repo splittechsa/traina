@@ -1,3 +1,5 @@
+import type { ProgramDayDocument } from '@sahhti/domain';
+import { editedProgramDays, strengthDraftValues, strengthInputKey, type StrengthInputs } from '../src/training/programDraft';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -13,14 +15,15 @@ import { AppHeader, BottomSheet, ErrorState, LoadingSkeleton, SectionLabel, Surf
 import { YazanCard, openYazanWithPrompt } from '../src/ui/YazanCard';
 import { asLibraryList, type LibraryExercise } from '../src/training/library';
 
-type DayDraft = { name_ar: string; name_en: string; exerciseIds: string[] };
+type DayDraft = ProgramDayDocument;
 
 type ProgramsResponse = {
   active: {
     id: string;
     name: string;
     version: number;
-    days: { name_ar: string; name_en: string; exerciseIds: string[] }[];
+    discipline: string;
+    days: DayDraft[];
   } | null;
 };
 
@@ -31,6 +34,8 @@ export default function ProgramEditScreen() {
   const client = useQueryClient();
   const isAr = locale === 'ar';
   const [name, setName] = useState('');
+  const [initialDraft, setInitialDraft] = useState('');
+  const [strengthInputs, setStrengthInputs] = useState<StrengthInputs>({});
   const [draftVersion, setDraftVersion] = useState<number | undefined>(undefined);
   const [days, setDays] = useState<DayDraft[]>([]);
   const [message, setMessage] = useState('');
@@ -56,13 +61,14 @@ export default function ProgramEditScreen() {
     setInitializedProgramId(active.id);
     setDraftVersion(active.version);
     setName(active.name);
-    setDays(
-      active.days.map((day) => ({
+    const initialDays = active.days.map((day) => ({
         name_ar: day.name_ar,
         name_en: day.name_en,
         exerciseIds: [...day.exerciseIds],
-      })),
-    );
+        strengthOverrides: day.strengthOverrides,
+      }));
+    setDays(initialDays);
+    setInitialDraft(JSON.stringify({ name: active.name, days: initialDays }));
   }
 
   const currentExerciseId =
@@ -82,7 +88,7 @@ export default function ProgramEditScreen() {
       if (active === null) throw new Error('no program');
       return apiRequest(`/v1/training/programs/${active.id}`, {
         method: 'PUT',
-        body: { expectedVersion: draftVersion, name: name.trim().length > 0 ? name.trim() : undefined, days },
+        body: { expectedVersion: draftVersion, name: name.trim().length > 0 ? name.trim() : undefined, days: editedProgramDays(days, strengthInputs) },
       });
     },
     onSuccess: async () => {
@@ -91,7 +97,7 @@ export default function ProgramEditScreen() {
       router.back();
     },
     onError: (caught) => {
-      setMessage(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : text(locale, 'error'));
+      setMessage(caught instanceof ApiClientError ? messageFor(caught.code, locale, caught.message) : caught instanceof Error && caught.message === 'INVALID_STRENGTH_OVERRIDE' ? (isAr ? 'راجع أرقام المجموعات والتكرارات والراحة في جميع الأيام.' : 'Review sets, reps, and rest values on every day.') : text(locale, 'error'));
     },
   });
 
@@ -112,6 +118,9 @@ export default function ProgramEditScreen() {
     );
   }
 
+  let settingsInvalid = false;
+  try { editedProgramDays(days, strengthInputs); } catch { settingsInvalid = true; }
+  const strengthProgram = active.discipline !== 'crossfit' && active.discipline !== 'calisthenics';
   const day = days[dayIndex];
   const altRows = substitutions.data?.alternatives ?? [];
 
@@ -183,7 +192,7 @@ export default function ProgramEditScreen() {
         footer={
           <Button
             label={save.isPending ? text(locale, 'saving') : text(locale, 'saveCustomPlan')}
-            disabled={save.isPending || days.length === 0}
+            disabled={save.isPending || days.length === 0 || settingsInvalid}
             onPress={() => save.mutate()}
           />
         }
@@ -191,6 +200,12 @@ export default function ProgramEditScreen() {
         <AppHeader
           title={text(locale, 'customizePlan')}
           subtitle={isAr ? 'استبدل · رتّب · احفظ نسختك' : 'Swap · reorder · save your version'}
+          showBack
+          confirmUnsaved={(JSON.stringify({ name, days }) !== initialDraft || Object.keys(strengthInputs).length > 0) ? {
+            title: isAr ? 'تغييرات غير محفوظة' : 'Unsaved changes',
+            body: isAr ? 'هل تريد المغادرة بدون حفظ تعديلات البرنامج؟' : 'Leave without saving your program edits?',
+            leave: isAr ? 'مغادرة' : 'Leave', stay: isAr ? 'متابعة التعديل' : 'Keep editing',
+          } : undefined}
         />
 
         <YazanCard
@@ -241,6 +256,7 @@ export default function ProgramEditScreen() {
           ))}
         </View>
 
+        {settingsInvalid ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{isAr ? 'راجع الأرقام: المجموعات 1–20، التكرارات 1–100، الراحة 0–1800 ثانية.' : 'Use whole numbers: sets 1–20, reps 1–100, rest 0–1800 seconds.'}</Text> : null}
         {day === undefined ? null : (
           <SurfaceCard>
             <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: 16, marginBottom: 8 }}>
@@ -264,6 +280,22 @@ export default function ProgramEditScreen() {
                   </Text>
                   {muscles.length > 0 ? (
                     <Text style={{ color: theme.textMuted, fontSize: 12 }}>{muscles.join(' · ')}</Text>
+                  ) : null}
+                  {strengthProgram ? (
+                    <View style={{ gap: 8 }}>
+                      <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                        {isAr ? 'القيم الأساسية. تبقى تعديلات الاستشفاء المعتمدة سارية.' : 'Base values. Approved recovery adjustments still apply.'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {(['sets', 'reps', 'restSeconds'] as const).map(field => {
+                          const key = strengthInputKey(dayIndex, exerciseId);
+                          const values = strengthInputs[key] ?? strengthDraftValues(day, exerciseId);
+                          const label = field === 'sets' ? (isAr ? 'المجموعات' : 'Sets') : field === 'reps' ? (isAr ? 'التكرارات' : 'Reps') : (isAr ? 'الراحة بالثواني' : 'Rest seconds');
+                          return <View key={field} style={{ flex: 1 }}><Field label={label} value={values[field]} keyboardType="number-pad"
+                            onChangeText={value => setStrengthInputs(current => ({ ...current, [key]: { ...values, [field]: value } }))} /></View>;
+                        })}
+                      </View>
+                    </View>
                   ) : null}
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                     <Pressable
