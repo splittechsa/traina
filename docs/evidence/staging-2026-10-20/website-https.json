@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-20T18:37:09.692Z",
+  "origin": "https://traina-staging-www.vercel.app",
+  "checks": [
+    {
+      "path": "/",
+      "status": 200,
+      "noindex": "noindex, nofollow"
+    },
+    {
+      "path": "/en.html",
+      "status": 200,
+      "noindex": "noindex, nofollow"
+    },
+    {
+      "path": "/privacy.html",
+      "status": 200,
+      "noindex": "noindex, nofollow"
+    },
+    {
+      "path": "/terms.html",
+      "status": 200,
+      "noindex": "noindex, nofollow"
+    }
+  ]
+}

@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "eas-build-post-install": "npm --prefix ../../packages/domain run build"
   },
   "dependencies": {
     "@expo-google-fonts/ibm-plex-sans-arabic": "^0.4.2",

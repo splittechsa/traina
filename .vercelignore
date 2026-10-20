@@ -11,3 +11,11 @@ docs
 .git
 node_modules
 **/node_modules
+
+.local
+.data
+.neon
+**/.expo
+*.zip
+*.db
+*.sqlite

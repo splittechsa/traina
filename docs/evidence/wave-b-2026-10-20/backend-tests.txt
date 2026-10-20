@@ -1,0 +1,56 @@
+
+> sahhti@0.1.0 test
+> npm run test -w @sahhti/domain && npm run test -w @sahhti/contracts && npm run test -w @sahhti/design-tokens && npm run test -w @sahhti/api
+
+
+> @sahhti/domain@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/packages/domain
+
+
+ Test Files  24 passed (24)
+      Tests  136 passed (136)
+   Start at  21:37:21
+   Duration  716ms (transform 64%, import 22%, tests 8%, worker 6%)
+
+
+> @sahhti/contracts@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/packages/contracts
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  21:37:22
+   Duration  179ms (transform 58%, import 32%, worker 5%, tests 4%)
+
+
+> @sahhti/design-tokens@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/packages/design-tokens
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  21:37:23
+   Duration  147ms (transform 59%, import 27%, worker 9%, tests 5%)
+
+
+> @sahhti/api@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/services/api
+
+
+ Test Files  10 passed (10)
+      Tests  68 passed (68)
+   Start at  21:37:24
+   Duration  25.37s (tests 94%, import 4%, transform 3%)
+

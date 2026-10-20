@@ -1,0 +1,361 @@
+{
+  "scope": "Explicit source allowlist; no local databases, environment files, credentials or caches copied",
+  "files": [
+    {
+      "file": "package.json",
+      "sha256": "32e97bff7b3119a0758d6edc9e40cbe59506ae1b60cfe10f8d46f4ebd3c9d022"
+    },
+    {
+      "file": "package-lock.json",
+      "sha256": "f0b39a2e9882dc0b752319d0084219b3d66670ebabee1e77d521fb3265f919d1"
+    },
+    {
+      "file": "tsconfig.base.json",
+      "sha256": "5e3efe74af12ba3308810895f4249730493b6d4cc50bfbcdf597d5aec08e8b03"
+    },
+    {
+      "file": "api/index.mjs",
+      "sha256": "92abc8f3e4656cd3a65ca74e0ee23ef128fa68d22faddf55325d29909cae2e41"
+    },
+    {
+      "file": "services/api/package.json",
+      "sha256": "c9d38129b3c682c2658356466a1715a67f0380af18871241171708e2d592143d"
+    },
+    {
+      "file": "services/api/tsconfig.json",
+      "sha256": "1bda6cb5b5184c4a7bc96c31423d668de230da4c02dbe6855dd4f88fd779ff01"
+    },
+    {
+      "file": "services/api/src/app.test.ts",
+      "sha256": "56e39ecb9980b2b6fbc75ca42fc22fe0a4c850e5a93822a54ed5079b3bbf3ad7"
+    },
+    {
+      "file": "services/api/src/app.ts",
+      "sha256": "7fe3ab7c9e79e36288bff9e890f46e4182e48960185f269eaf0ae288df892f35"
+    },
+    {
+      "file": "services/api/src/auth-codes.integration.test.ts",
+      "sha256": "1ae4a70d91790ce796df590b2291e96fac5a0faf33ae409234a8ca9803c9650e"
+    },
+    {
+      "file": "services/api/src/auth.ts",
+      "sha256": "73a506faaf64f0c2129ed61f6dbdf8e2a242f5404a62e1ae8a728784048a5674"
+    },
+    {
+      "file": "services/api/src/coach/provider.test.ts",
+      "sha256": "cd99a4be5c9b199c7bd1cf2d0a90b46362fe7fa0fca73f7a22eee45ece13ceed"
+    },
+    {
+      "file": "services/api/src/coach/provider.ts",
+      "sha256": "cdae39cdefcdad02d11efda5191ea71409b76ead21d3d270c01e8d62481ca786"
+    },
+    {
+      "file": "services/api/src/coach-ops.integration.test.ts",
+      "sha256": "8d30307bbfccf4899ec56c47d7300ac9d1c3388ee9b93c197598a0a33292ce8b"
+    },
+    {
+      "file": "services/api/src/db/database.test.ts",
+      "sha256": "c1a78e15ff0d43b1344523cce20a5d2afb39474e30ecac871a652fdaa2b4e8f3"
+    },
+    {
+      "file": "services/api/src/db/database.ts",
+      "sha256": "161c29c8d57c2675c0bf985c65520e26b5027470301409446dfaf37328122fa8"
+    },
+    {
+      "file": "services/api/src/identity/accounts.ts",
+      "sha256": "492c50e88a3c15574407d3eb4d2ef2d8f413537dea72510ab41059626725c205"
+    },
+    {
+      "file": "services/api/src/identity/mail.ts",
+      "sha256": "75e71a8904d23791a0ba308f681d6b44caf474d8c8a3a930aa8341f63f8374e3"
+    },
+    {
+      "file": "services/api/src/identity/passwords.ts",
+      "sha256": "f9b1aa823703c13510b9b01fd83ee2b44c437c8b4ca3f33454e7a2a69b6a1990"
+    },
+    {
+      "file": "services/api/src/identity/shared-throttle.ts",
+      "sha256": "7b9adb6643455e965bab7f223c2d71a16e8dc4f53e635826377eec0e850e6209"
+    },
+    {
+      "file": "services/api/src/identity/throttle.test.ts",
+      "sha256": "b2293dc4cffe6ad3bb9a8e804ba92a5158d7b61f45bd6ef6c846814ab7fd864b"
+    },
+    {
+      "file": "services/api/src/identity/throttle.ts",
+      "sha256": "c77a447e32313093bc6cae648d5571572e4db1356da62cf7486917f361e80ef3"
+    },
+    {
+      "file": "services/api/src/ledger-sql.ts",
+      "sha256": "9625230fd32236675b1b8c6864e6e76f917e3ec05b0c1a07f51729e9ace2f923"
+    },
+    {
+      "file": "services/api/src/member/store.ts",
+      "sha256": "19dd716dee0e40de89d9694c1b9cdee95888c2694c469cb3905d60743e91e6da"
+    },
+    {
+      "file": "services/api/src/migrate.integration.test.ts",
+      "sha256": "f2c7fe1433e3f184c0df293239180bfc366160e941c4d9d208c11f414438bd8b"
+    },
+    {
+      "file": "services/api/src/migrate.ts",
+      "sha256": "2cb2b76ff3c14bccf53b8fde770ee8295d42694c719aad7bf071998659a8b9f3"
+    },
+    {
+      "file": "services/api/src/onboarding-loop.integration.test.ts",
+      "sha256": "ea8c9938aa153ba4155527a450c0e1099bef5be21a9145bdf2072658607d13a4"
+    },
+    {
+      "file": "services/api/src/product.integration.test.ts",
+      "sha256": "5569d7a35708597f23dad7592d15990bbd19ec2a8366d235d871b8a35307ffd3"
+    },
+    {
+      "file": "services/api/src/program-adaptation.integration.test.ts",
+      "sha256": "f893222c3e378b0501bb9e177a0cf14fda531600f5fb870574916109d17694d7"
+    },
+    {
+      "file": "services/api/src/routes/product.ts",
+      "sha256": "de4d74e4291330a8cc040727dba913927803a6b5a53f8c88435c701e1f0064b4"
+    },
+    {
+      "file": "services/api/src/server.ts",
+      "sha256": "8690410cee0080a02e9fa1dfd386a916d01e76c421dec51949ca55c2f07f97e9"
+    },
+    {
+      "file": "services/api/src/vercel.ts",
+      "sha256": "475b75d1de75fe7b5157fececc9dd90244b37714a66e5a7e32184261720e8c18"
+    },
+    {
+      "file": "packages/domain/package.json",
+      "sha256": "2164304d0b733d91d2b56b224303ea0d8e2c58ceebd4007bb1bf438e13dd569b"
+    },
+    {
+      "file": "packages/domain/tsconfig.json",
+      "sha256": "1bda6cb5b5184c4a7bc96c31423d668de230da4c02dbe6855dd4f88fd779ff01"
+    },
+    {
+      "file": "packages/domain/src/access.test.ts",
+      "sha256": "4b32dd916d0d9b69067af6c5fe3577787468c7b80d909e6b33c3143f3dd1a07b"
+    },
+    {
+      "file": "packages/domain/src/access.ts",
+      "sha256": "3a40a31dcd4c9a2aaa6e39885a4ce733e5327c4fc29c124a164500837344d735"
+    },
+    {
+      "file": "packages/domain/src/attribution.test.ts",
+      "sha256": "17989a7bfe170dfdbd2f6c599b238a174d73c7b8383cc4169b459580dc5eeb39"
+    },
+    {
+      "file": "packages/domain/src/attribution.ts",
+      "sha256": "f6658eb87f2a125c5b4669d61f16a230711f74e7e48553ec4cb572cde02e36d5"
+    },
+    {
+      "file": "packages/domain/src/capabilities.test.ts",
+      "sha256": "76a615516ed61fb0283b41f9d76c20bc2b09e9f99f0c3ab2392c4db5f20785d7"
+    },
+    {
+      "file": "packages/domain/src/capabilities.ts",
+      "sha256": "534d88de002615de73a3262ecdf34faf58c522169e3e68e5f3b95a0ca4650c2b"
+    },
+    {
+      "file": "packages/domain/src/coach-tools.test.ts",
+      "sha256": "d4a48a3f5eec596c110d99a72161121d0fc3cf5a66e5a9a5b47b04537e9d4934"
+    },
+    {
+      "file": "packages/domain/src/coach-tools.ts",
+      "sha256": "369dcf9fd65efaf108a52dfabdbec31c4d3bf908a967a9c346df3df4739e5e50"
+    },
+    {
+      "file": "packages/domain/src/coaching.test.ts",
+      "sha256": "a4160077dc2884828aff68ef3f8bd1185879dd6355906b4a094585afa861445b"
+    },
+    {
+      "file": "packages/domain/src/coaching.ts",
+      "sha256": "03810750a9652b7a541c45469b801f8c040a1d7e84e6966198dabcdeeb1a4a72"
+    },
+    {
+      "file": "packages/domain/src/commission.test.ts",
+      "sha256": "fb96bf52ab4ee734602deb4587b3d072a69fc7fc8fab0fb68648426a91ace71b"
+    },
+    {
+      "file": "packages/domain/src/commission.ts",
+      "sha256": "94e2e18075d228b0538f68fa344b34a8bbc4fc8eabc60bc7f68aefa9addfd40b"
+    },
+    {
+      "file": "packages/domain/src/daily.test.ts",
+      "sha256": "1c4b3c84f8c098ae61751b4f1f5dcb17ffb56fb43507298b4816315454b685ad"
+    },
+    {
+      "file": "packages/domain/src/daily.ts",
+      "sha256": "ad92dbd5b5ee7849ac290df52a4c86edbf6935fcf090273ebb97646200fdd86c"
+    },
+    {
+      "file": "packages/domain/src/energy-policy-gate.test.ts",
+      "sha256": "8c78087cfe68148f38892b3fe18b164c552125383506028f7a169bb4939fd4cf"
+    },
+    {
+      "file": "packages/domain/src/entitlements.test.ts",
+      "sha256": "903d32c65f32241fa7737078eacd1e780c9e4c3a488ce24c65655e02cbd9d5c4"
+    },
+    {
+      "file": "packages/domain/src/entitlements.ts",
+      "sha256": "59f8150a266a68b332368b00673aecf64763b9e9f74867974cc0663711453876"
+    },
+    {
+      "file": "packages/domain/src/errors.ts",
+      "sha256": "08991cd7832c37861256e1b7e97095b003b3881e08e0b441455dbb8e3f032297"
+    },
+    {
+      "file": "packages/domain/src/home.test.ts",
+      "sha256": "8eb6dfa27f5d33c45b6430559db17f881f05cb2d065f9e4e5f888af45d5d8f02"
+    },
+    {
+      "file": "packages/domain/src/home.ts",
+      "sha256": "f954f48084c1da7773a551aa10df2600479211425426536217fe485a9c1cff46"
+    },
+    {
+      "file": "packages/domain/src/human-coach.test.ts",
+      "sha256": "da82829ce738e0f435c103dd294cf82a75d51a0a6adb4c725ff26409e47a33e6"
+    },
+    {
+      "file": "packages/domain/src/human-coach.ts",
+      "sha256": "edc6c473f7f3191835a21422c2ca70aa1e76a2039499223dc837cf5349fe780f"
+    },
+    {
+      "file": "packages/domain/src/index.ts",
+      "sha256": "b04fc254163dcc14fa15a117e3a29af4fe6c0d8e358a108afdcdeb0a921e97f6"
+    },
+    {
+      "file": "packages/domain/src/meal-plan.test.ts",
+      "sha256": "0f28c0e11a76d8acf996596d8d4eee1549c9a287547feba3d4102b6d3aaad7c0"
+    },
+    {
+      "file": "packages/domain/src/meal-plan.ts",
+      "sha256": "23c57b910c78a770472ce83919c440b04fd86698f33b08e663a67d01b5458b34"
+    },
+    {
+      "file": "packages/domain/src/member-state.test.ts",
+      "sha256": "bbbca2ff96c44338200cd3e169036268c9491a2cf9774336450995bbc7d836a9"
+    },
+    {
+      "file": "packages/domain/src/member-state.ts",
+      "sha256": "49c6afb6f0680c7dd7d6bcec69a1600d5544d654470675bdcc483985060610b6"
+    },
+    {
+      "file": "packages/domain/src/money.test.ts",
+      "sha256": "3efa6497a93355d0c57cfa34e52e93965f9204627a3a63c199fa40f759db1ed4"
+    },
+    {
+      "file": "packages/domain/src/money.ts",
+      "sha256": "9a2714f6638c4c285f6bafa581e2aa03ef283992f5d0eee65af968cbf2631e8a"
+    },
+    {
+      "file": "packages/domain/src/nutrition.test.ts",
+      "sha256": "f24be2fb7ac56af577394789915ed2879b0552f36191f01c3897717f256ba10e"
+    },
+    {
+      "file": "packages/domain/src/nutrition.ts",
+      "sha256": "3ef62425462ce20cb889bdbbd5ee1d4810eb8a0fa4a3e81394c6c770acff79ba"
+    },
+    {
+      "file": "packages/domain/src/onboarding.test.ts",
+      "sha256": "ccee1d0c550d2eb729a1cd036e05fafa60ff402a18bed5f41ab8c8201d76a6cc"
+    },
+    {
+      "file": "packages/domain/src/onboarding.ts",
+      "sha256": "c4e717f2527d0449061e1fbeef0c8ad2ff6dd2c1b2216c868750fd2b4f9e3835"
+    },
+    {
+      "file": "packages/domain/src/program-adaptation.test.ts",
+      "sha256": "01e0b93b6be4644cb526b7f50d79c28fba8f94abb087a63d370922e506f600da"
+    },
+    {
+      "file": "packages/domain/src/program-adaptation.ts",
+      "sha256": "610361541b064566f78a796df6ad851140d90145c87000057f51e780b2586942"
+    },
+    {
+      "file": "packages/domain/src/programs.test.ts",
+      "sha256": "883ea7440fe63697632c89f3a492c7ccf46cfaeb03c9f087ce81be753dc87f10"
+    },
+    {
+      "file": "packages/domain/src/programs.ts",
+      "sha256": "49c73d6825cb386492f00b388bf037b248af4550e934c49886c6f57edb1b30de"
+    },
+    {
+      "file": "packages/domain/src/progress.test.ts",
+      "sha256": "cd23cca0abd308d1eca6a84f13760925c830554031eaff9a4dcd951ce842a0cf"
+    },
+    {
+      "file": "packages/domain/src/progress.ts",
+      "sha256": "cb9b3f1a519cb4d57ca9207a4bdbddeff5e854b7524cd857cd4cfef142da00b4"
+    },
+    {
+      "file": "packages/domain/src/recommendation-matrix.test.ts",
+      "sha256": "08b8c17e51705595df76a9fb0064d3fa967fc68568272e9fb0e82514b6ef9925"
+    },
+    {
+      "file": "packages/domain/src/recommendation.test.ts",
+      "sha256": "08dc51ebaaf5dca759a4693d0e9414d4141547cbe35f86074bab84673f073875"
+    },
+    {
+      "file": "packages/domain/src/recommendation.ts",
+      "sha256": "bcce7bbc60b2414aa6251b16ea302c7e932d14b209ec5033823f6922337fc6d5"
+    },
+    {
+      "file": "packages/domain/src/subscription.test.ts",
+      "sha256": "499e697eb966d45cbbb8a2d3326ec16afb34c86f5d1818f45ba8f2dd82f74ae7"
+    },
+    {
+      "file": "packages/domain/src/subscription.ts",
+      "sha256": "fdf61947f7b4cab55621de16a8229347f180d5c57de3e905322a2dcaf1b626a5"
+    },
+    {
+      "file": "packages/domain/src/training.test.ts",
+      "sha256": "268109ad8b5cbc348e6d9ab8bed13588e2b0139bc55bc52c70cc6b27d9e68275"
+    },
+    {
+      "file": "packages/domain/src/training.ts",
+      "sha256": "c667102ebf37be8d1dda483be2b08a756a1ce367036c52bb8c9715864ea4fd34"
+    },
+    {
+      "file": "packages/domain/src/yazan-coach.test.ts",
+      "sha256": "5d09ca946f1d273c1bb5562a4f49dd7fd790fc782a687ba1cec767870b793ddf"
+    },
+    {
+      "file": "packages/domain/src/yazan-coach.ts",
+      "sha256": "60b594529f06706cf04947165d237d22e0bdbf9eea6d0540d083f5196d80e3ac"
+    },
+    {
+      "file": "packages/contracts/package.json",
+      "sha256": "44545af7fc402dc8cc77ef9150f3a9bb1aaacd203ca951fded710d55491912bb"
+    },
+    {
+      "file": "packages/contracts/tsconfig.json",
+      "sha256": "1bda6cb5b5184c4a7bc96c31423d668de230da4c02dbe6855dd4f88fd779ff01"
+    },
+    {
+      "file": "packages/contracts/src/index.test.ts",
+      "sha256": "4d271eb41c1c4e843a5b645e46057d85da12bd7792e45d271d7456f72a3bd7fa"
+    },
+    {
+      "file": "packages/contracts/src/index.ts",
+      "sha256": "f124fa903248dce9e01efb574f89328ba1a26574f0aa629d5f4e31b9cec2c972"
+    },
+    {
+      "file": "packages/design-tokens/package.json",
+      "sha256": "4a7bd17392b9b69d89ff5dbf9e70dd553930096f305996f34408924131748972"
+    },
+    {
+      "file": "packages/design-tokens/tsconfig.json",
+      "sha256": "1bda6cb5b5184c4a7bc96c31423d668de230da4c02dbe6855dd4f88fd779ff01"
+    },
+    {
+      "file": "packages/design-tokens/src/index.test.ts",
+      "sha256": "814de0c56dbbadb3448dca03e5e96c69b7eef500788e7a477c4bf749148293a1"
+    },
+    {
+      "file": "packages/design-tokens/src/index.ts",
+      "sha256": "2e07e12e544d17b6b10894a4bbd7cef3c960a2c85fec39b97322567a85e5ad29"
+    }
+  ]
+}
