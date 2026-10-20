@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { coachRuntimeFromEnv, completeModelReply, streamModelReply } from './provider.js';
 
 describe('coach provider', () => {
@@ -91,6 +91,25 @@ describe('coach provider', () => {
     expect(reply.tool).toBe('getCurrentTrainingProgram');
     expect(reply.text).toContain('تكيّف');
     expect(round).toBe(2);
+  });
+
+  it('resolves every parallel authorized tool and refuses mixed writes before resolving reads', async () => {
+    const runtime = { name: 'openai_compatible' as const, apiKey: 'synthetic-key', baseUrl: 'https://test', model: 'test' };
+    const calls = [{ id: 'profile', function: { name: 'getUserProfile' } }, { id: 'progress', function: { name: 'getProgressTrends' } }];
+    const resolveTool = vi.fn((name: string) => ({ name, userId: 'owned-user' })); let round = 0;
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      round++;
+      if (round === 1) return new Response(JSON.stringify({ choices: [{ message: { tool_calls: calls } }] }));
+      const messages = JSON.parse(String(init.body)).messages;
+      expect(messages.filter((message: { role: string }) => message.role === 'tool').map((message: { tool_call_id: string }) => message.tool_call_id)).toEqual(['profile', 'progress']);
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'Owned facts only' } }] }));
+    }) as typeof fetch;
+    const reply = await completeModelReply({ runtime, localeHint: 'en', history: [], context: {}, resolveTool, fetchImpl });
+    expect(reply.tools).toEqual(['getUserProfile', 'getProgressTrends']); expect(resolveTool).toHaveBeenCalledTimes(2);
+    resolveTool.mockClear();
+    const mixed = (async () => new Response(JSON.stringify({ choices: [{ message: { tool_calls: [...calls, { id: 'write', function: { name: 'logWorkoutSet' } }] } }] }))) as typeof fetch;
+    expect((await completeModelReply({ runtime, localeHint: 'en', history: [], context: {}, resolveTool, fetchImpl: mixed })).text).toContain('Nothing was saved');
+    expect(resolveTool).not.toHaveBeenCalled();
   });
 
   it('assembles a streamed provider reply', async () => {
