@@ -1,0 +1,165 @@
+{
+  "at": "2026-10-20T12:21:44.215Z",
+  "authentication": "VERIFIED splittechsa",
+  "prs": [
+    {
+      "baseRefName": "ux/mobile-rtl-nutrition-workout",
+      "headRefName": "release/member-reliability-2026-10-20",
+      "mergedAt": null,
+      "number": 50,
+      "state": "OPEN",
+      "title": "Preserve workout writes and make program edits version-safe",
+      "url": "https://github.com/splittechsa/traina/pull/50"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "ux/mobile-rtl-nutrition-workout",
+      "mergedAt": null,
+      "number": 49,
+      "state": "OPEN",
+      "title": "Mobile UX: RTL nav, meal planner, workout session rebuild",
+      "url": "https://github.com/splittechsa/traina/pull/49"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "product/closure-wave3-4-5-ops-report",
+      "mergedAt": null,
+      "number": 48,
+      "state": "OPEN",
+      "title": "Waves 3-5: Design, ops services, FINAL readiness (NO-GO)",
+      "url": "https://github.com/splittechsa/traina/pull/48"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "product/closure-wave2-yazan-eval",
+      "mergedAt": null,
+      "number": 47,
+      "state": "OPEN",
+      "title": "Wave 2: Yazan eval suite + tool-calling completion",
+      "url": "https://github.com/splittechsa/traina/pull/47"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "product/closure-wave1-coach-member",
+      "mergedAt": null,
+      "number": 46,
+      "state": "OPEN",
+      "title": "Wave 1: Coach workspace + entitlement-aware member UX",
+      "url": "https://github.com/splittechsa/traina/pull/46"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "product/yazan-tools-and-www",
+      "mergedAt": "2026-10-18T11:17:44Z",
+      "number": 45,
+      "state": "MERGED",
+      "title": "Yazan tool orchestration + public site sections",
+      "url": "https://github.com/splittechsa/traina/pull/45"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "product/completion-entitlements-help",
+      "mergedAt": "2026-10-18T11:13:17Z",
+      "number": 44,
+      "state": "MERGED",
+      "title": "Product completion: entitlements API, membership/help, landing draft",
+      "url": "https://github.com/splittechsa/traina/pull/44"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "p1/real-training-adaptation",
+      "mergedAt": "2026-10-18T11:08:20Z",
+      "number": 43,
+      "state": "MERGED",
+      "title": "Real training program adaptation apply loop",
+      "url": "https://github.com/splittechsa/traina/pull/43"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "docs/coach-e2e-evidence",
+      "mergedAt": "2026-10-17T21:11:41Z",
+      "number": 42,
+      "state": "MERGED",
+      "title": "docs: human coaching live E2E evidence",
+      "url": "https://github.com/splittechsa/traina/pull/42"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "p2/human-coach-ops",
+      "mergedAt": "2026-10-17T20:59:56Z",
+      "number": 41,
+      "state": "MERGED",
+      "title": "P2: Harden coach ops and ship Coach Workspace",
+      "url": "https://github.com/splittechsa/traina/pull/41"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "p1/member-state-clean",
+      "mergedAt": "2026-10-17T19:10:39Z",
+      "number": 40,
+      "state": "MERGED",
+      "title": "P1: MemberState + recommendations + coach assignment (clean)",
+      "url": "https://github.com/splittechsa/traina/pull/40"
+    },
+    {
+      "baseRefName": "master",
+      "headRefName": "p1/member-state-engine",
+      "mergedAt": null,
+      "number": 39,
+      "state": "CLOSED",
+      "title": "P1-STATE-01: MemberState projection + Yazan getMemberState",
+      "url": "https://github.com/splittechsa/traina/pull/39"
+    }
+  ],
+  "publishedApplication": {
+    "headRefOid": "40633ae3ce625b0c7e7e856df7b71594ba216dfa",
+    "mergeable": "MERGEABLE",
+    "number": 50,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-20T12:20:43Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39421428860/job/118623060278",
+        "name": "api",
+        "startedAt": "2026-10-20T12:19:55Z",
+        "status": "COMPLETED",
+        "workflowName": "ci"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-20T12:20:04Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39421368617/job/118622857221",
+        "name": "api",
+        "startedAt": "2026-10-20T12:19:26Z",
+        "status": "COMPLETED",
+        "workflowName": "ci"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-20T12:20:42Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39421428860/job/118623059702",
+        "name": "mobile",
+        "startedAt": "2026-10-20T12:19:55Z",
+        "status": "COMPLETED",
+        "workflowName": "ci"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-20T12:20:04Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/splittechsa/traina/actions/runs/39421368617/job/118622857000",
+        "name": "mobile",
+        "startedAt": "2026-10-20T12:19:26Z",
+        "status": "COMPLETED",
+        "workflowName": "ci"
+      }
+    ],
+    "url": "https://github.com/splittechsa/traina/pull/50"
+  },
+  "projectAccess": "SKIPPED: user declined read:project",
+  "workflowPublication": "SKIPPED: user declined workflow scope; changes retained locally",
+  "merged": false
+}
