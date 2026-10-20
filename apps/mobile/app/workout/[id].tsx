@@ -26,6 +26,7 @@ import { acknowledgePendingSets, enqueuePendingSet, readPendingSets, readAccount
 import { pauseRestTimer, remainingRest, resumeRestTimer, startRestTimer, type RestTimerState } from '../../src/training/restTimer';
 import { accountScope, accountResource } from '../../src/offline/resource';
 import { useSession } from '../../src/auth/SessionProvider';
+import { normalizeWorkoutNumber } from '../../src/training/numericInput';
 
 type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia'>;
 type WorkoutProgress = {
@@ -53,6 +54,7 @@ export default function WorkoutScreen() {
   const [load, setLoad] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const actionInFlight = useRef(false);
   const [rest, setRest] = useState(0);
   const [restPaused, setRestPaused] = useState(false);
   const [activeExerciseId, setActiveExerciseId] = useState('');
@@ -180,7 +182,7 @@ export default function WorkoutScreen() {
     setRest(remainingRest(state, Date.now()));
     setRestPaused(false);
     restAnchor.current = state;
-    if (typeof id === 'string') owner && void writeAccountSnapshot(owner, `rest:${id}`, state);
+    if (typeof id === 'string' && owner) void writeAccountSnapshot(owner, `rest:${id}`, state).catch(() => setNotice(text(locale, 'error')));
   }
 
   function toggleRest() {
@@ -190,14 +192,14 @@ export default function WorkoutScreen() {
     restAnchor.current = state;
     setRest(remainingRest(state, Date.now()));
     setRestPaused(state.paused === true);
-    if (typeof id === 'string') owner && void writeAccountSnapshot(owner, `rest:${id}`, state);
+    if (typeof id === 'string' && owner) void writeAccountSnapshot(owner, `rest:${id}`, state).catch(() => setNotice(text(locale, 'error')));
   }
 
   function skipRest() {
     setRest(0);
     restAnchor.current = null;
     setRestPaused(false);
-    if (typeof id === 'string') owner && void writeAccountSnapshot(owner, `rest:${id}`, null);
+    if (typeof id === 'string' && owner) void writeAccountSnapshot(owner, `rest:${id}`, null).catch(() => setNotice(text(locale, 'error')));
   }
 
   useEffect(() => {
@@ -214,27 +216,42 @@ export default function WorkoutScreen() {
     return () => { cancelled = true; };
   }, [id, owner, locale]);
 
+  async function runAction(action: () => Promise<void>) {
+    if (actionInFlight.current) return;
+    actionInFlight.current = true; setBusy(true);
+    try { await action(); }
+    catch { setNotice(text(locale, 'error')); }
+    finally { actionInFlight.current = false; setBusy(false); }
+  }
+
   async function start() {
     if (typeof id !== 'string') return;
+    await runAction(async () => {
     await apiRequest(`/v1/training/sessions/${id}/start`, { method: 'POST', body: { at: new Date().toISOString() } });
     await client.invalidateQueries({ queryKey: ['session', id] });
     await client.invalidateQueries({ queryKey: ['home'] });
+    });
   }
 
   async function pause() {
     if (typeof id !== 'string') return;
+    await runAction(async () => {
     await apiRequest(`/v1/training/sessions/${id}/pause`, { method: 'POST', body: { at: new Date().toISOString() } });
     await client.invalidateQueries({ queryKey: ['session', id] });
+    });
   }
 
   async function resume() {
     if (typeof id !== 'string') return;
+    await runAction(async () => {
     await apiRequest(`/v1/training/sessions/${id}/resume`, { method: 'POST', body: { at: new Date().toISOString() } });
     await client.invalidateQueries({ queryKey: ['session', id] });
+    });
   }
 
   async function complete() {
     if (typeof id !== 'string') return;
+    await runAction(async () => {
     if (!(await flushPending())) {
       setNotice(isAr ? 'لم تُحفظ كل المجموعات بعد. اتصل بالإنترنت وأعد المحاولة قبل إنهاء التمرين.' : 'Some sets are still unsaved. Reconnect and retry before finishing.');
       return;
@@ -244,6 +261,7 @@ export default function WorkoutScreen() {
     await client.invalidateQueries({ queryKey: ['sessions'] });
     await client.invalidateQueries({ queryKey: ['home'] });
     await client.invalidateQueries({ queryKey: ['progress'] });
+    });
   }
 
   async function keepLocalEdit(command: PendingSetCommand) {
@@ -264,8 +282,11 @@ export default function WorkoutScreen() {
     const pending = await readPendingSets(owner);
     const projected = planOfflineSync(session.data.session, pending).session;
     client.setQueryData(['session', id, owner], { session: projected });
-    const saved = await flushPending();
-    setNotice(saved ? '' : text(locale, 'queued'));
+    setNotice(text(locale, 'queued'));
+    // SQLite durability releases the input immediately. A slow network must not freeze the next set.
+    void flushPending().then(saved => {
+      if (accountScope() === owner && saved) setNotice('');
+    });
   }
 
   async function logSetForExercise(exerciseId: string, setReps: number, loadKg: string) {
@@ -280,7 +301,9 @@ export default function WorkoutScreen() {
       return;
     }
     const bodyweight = planned.prescription.kind !== 'strength';
-    const loadGrams = bodyweight || loadKg.trim().length === 0 ? 0 : parseScaledInteger(loadKg, 1000);
+    let loadGrams = 0;
+    try { loadGrams = bodyweight || loadKg.trim().length === 0 ? 0 : parseScaledInteger(loadKg, 1000); }
+    catch { setNotice(isAr ? 'أدخل وزنًا صالحًا بحد أقصى ٣ منازل عشرية.' : 'Enter a valid weight with at most 3 decimal places.'); return; }
     if (editingSetId !== null) {
       const existing = editingBase ?? session.data.session.sets.find((set) => set.id === editingSetId);
       if (existing === undefined || existing.exerciseId !== exerciseId) {
@@ -303,9 +326,7 @@ export default function WorkoutScreen() {
           completedAt: new Date().toISOString(),
         },
       };
-      setBusy(true);
-      try { await recordCommand(replaceCommand); setEditingSetId(null); tapSuccess(reduce); }
-      catch { setNotice(text(locale, 'error')); } finally { setBusy(false); }
+      await runAction(async () => { await recordCommand(replaceCommand); setEditingSetId(null); tapSuccess(reduce); });
       return;
     }
     const command: PendingSetCommand = {
@@ -321,11 +342,10 @@ export default function WorkoutScreen() {
         completedAt: new Date().toISOString(),
       },
     };
-    setBusy(true);
-    try {
+    await runAction(async () => {
       await recordCommand(command); tapSuccess(reduce);
       if (planned.prescription.kind === 'strength') startRest(planned.prescription.restSeconds);
-    } catch { setNotice(text(locale, 'error')); } finally { setBusy(false); }
+    });
   }
 
 
@@ -373,11 +393,12 @@ export default function WorkoutScreen() {
 
   const footer =
     isScheduled ? (
-      <Button label={text(locale, 'start')} onPress={() => void start()} />
+      <Button label={busy ? (isAr ? 'جارٍ البدء…' : 'Starting…') : text(locale, 'start')} disabled={busy} onPress={() => void start()} />
     ) : isPaused ? (
-      <Button label={text(locale, 'resume')} onPress={() => void resume()} />
+      <Button label={text(locale, 'resume')} disabled={busy} onPress={() => void resume()} />
     ) : isRunning && active !== undefined ? (
       <Button
+        disabled={busy}
         label={
           busy
             ? isAr
@@ -627,7 +648,7 @@ export default function WorkoutScreen() {
                       key={value}
                       accessibilityRole="button"
                       accessibilityState={{ selected: reps === value }}
-                      onPress={() => setReps(value)}
+                      onPress={() => { setReps(value); setInputDirty(true); }}
                       style={{
                         flex: 1,
                         minHeight: 44,
@@ -644,7 +665,7 @@ export default function WorkoutScreen() {
                 <TextInput
                   accessibilityLabel={text(locale, 'reps')}
                   value={reps}
-                  onChangeText={value => { setReps(value); setInputDirty(true); }}
+                  onChangeText={value => { setReps(normalizeWorkoutNumber(value)); setInputDirty(true); }}
                   keyboardType="number-pad"
                   placeholder={text(locale, 'reps')}
                   placeholderTextColor={theme.textMuted}
@@ -664,7 +685,7 @@ export default function WorkoutScreen() {
                     <TextInput
                       accessibilityLabel={text(locale, 'load')}
                       value={load}
-                      onChangeText={value => { setLoad(value); setInputDirty(true); }}
+                      onChangeText={value => { setLoad(normalizeWorkoutNumber(value)); setInputDirty(true); }}
                       keyboardType="decimal-pad"
                       placeholder={`${text(locale, 'load')} (${text(locale, 'kilograms')})`}
                       placeholderTextColor={theme.textMuted}
@@ -688,6 +709,7 @@ export default function WorkoutScreen() {
                             const loadNow = Number(load) || 0;
                             const next = Math.max(0, loadNow + delta);
                             setLoad(Number.isInteger(next) ? String(next) : next.toFixed(1));
+                            setInputDirty(true);
                           }}
                           style={{ flex: 1, minHeight: 40, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
                         >
@@ -761,7 +783,7 @@ export default function WorkoutScreen() {
           </Text>
         ) : null}
 
-        {isRunning ? <Button label={text(locale, 'pause')} variant="secondary" onPress={() => void pause()} /> : null}
+        {isRunning ? <Button label={text(locale, 'pause')} disabled={busy} variant="secondary" onPress={() => void pause()} /> : null}
         {(isRunning || isPaused) ? (
           <Button
             label={text(locale, 'finish')}

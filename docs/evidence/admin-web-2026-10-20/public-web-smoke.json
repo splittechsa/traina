@@ -1,0 +1,256 @@
+{
+  "at": "2026-10-20T19:58:47.892Z",
+  "status": "PASS",
+  "syntheticOnly": true,
+  "assertions": [
+    "static assets served",
+    "secure HttpOnly cookies without token response",
+    "anonymous and foreign-origin rejection",
+    "admin-only API reads",
+    "explicit-consent lead persistence through website proxy",
+    "lead visible to administrator",
+    "stale changes rejected",
+    "append-only audit entry",
+    "logout revokes session"
+  ],
+  "calls": [
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/",
+      "method": "GET",
+      "status": 200,
+      "ms": 712
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/admin.css",
+      "method": "GET",
+      "status": 200,
+      "ms": 540
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/admin.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 330
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/assets/plex.ttf",
+      "method": "GET",
+      "status": 200,
+      "ms": 335
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/assets/traina-mark.svg",
+      "method": "GET",
+      "status": 200,
+      "ms": 523
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/assets/FONT-LICENSE.txt",
+      "method": "GET",
+      "status": 200,
+      "ms": 302
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/",
+      "method": "GET",
+      "status": 200,
+      "ms": 724
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/en.html",
+      "method": "GET",
+      "status": 200,
+      "ms": 302
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/landing.css",
+      "method": "GET",
+      "status": 200,
+      "ms": 532
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/site.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 284
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/assets/training.jpg",
+      "method": "GET",
+      "status": 200,
+      "ms": 358
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/assets/nutrition.jpg",
+      "method": "GET",
+      "status": 200,
+      "ms": 416
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/assets/run.jpg",
+      "method": "GET",
+      "status": 200,
+      "ms": 535
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/privacy.html",
+      "method": "GET",
+      "status": 200,
+      "ms": 330
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/terms.html",
+      "method": "GET",
+      "status": 200,
+      "ms": 932
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/assets/FONT-LICENSE.txt",
+      "method": "GET",
+      "status": 200,
+      "ms": 287
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/overview",
+      "method": "GET",
+      "status": 401,
+      "ms": 285
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/login",
+      "method": "POST",
+      "status": 403,
+      "ms": 300
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/login",
+      "method": "POST",
+      "status": 200,
+      "ms": 2465
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/overview",
+      "method": "GET",
+      "status": 200,
+      "ms": 689
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/members",
+      "method": "GET",
+      "status": 200,
+      "ms": 701
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/coaching",
+      "method": "GET",
+      "status": 200,
+      "ms": 486
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/interests",
+      "method": "GET",
+      "status": 200,
+      "ms": 453
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/support",
+      "method": "GET",
+      "status": 200,
+      "ms": 452
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/audit",
+      "method": "GET",
+      "status": 200,
+      "ms": 440
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/api/interest",
+      "method": "POST",
+      "status": 403,
+      "ms": 306
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/api/interest",
+      "method": "POST",
+      "status": 400,
+      "ms": 444
+    },
+    {
+      "origin": "https://traina-staging-www.vercel.app",
+      "path": "/api/interest",
+      "method": "POST",
+      "status": 202,
+      "ms": 490
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/interests",
+      "method": "GET",
+      "status": 200,
+      "ms": 468
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/interests/011c8505-d896-4258-b662-baca188fad50",
+      "method": "PATCH",
+      "status": 200,
+      "ms": 483
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/interests/011c8505-d896-4258-b662-baca188fad50",
+      "method": "PATCH",
+      "status": 409,
+      "ms": 753
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/audit",
+      "method": "GET",
+      "status": 200,
+      "ms": 442
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/logout",
+      "method": "POST",
+      "status": 200,
+      "ms": 428
+    },
+    {
+      "origin": "https://traina-staging-admin.vercel.app",
+      "path": "/api/overview",
+      "method": "GET",
+      "status": 401,
+      "ms": 497
+    }
+  ]
+}

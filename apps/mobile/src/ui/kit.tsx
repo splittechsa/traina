@@ -139,7 +139,7 @@ export function AppHeader({
               color: theme.text,
               fontFamily: fontFamily.bold,
               fontSize: size,
-              lineHeight: size * 1.22,
+              lineHeight: size * 1.5,
               writingDirection: 'auto',
               textAlign: align,
             },

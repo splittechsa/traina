@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState } from 'react-native';
 import { useNavigation } from 'expo-router';
-import { useIsFocused, usePreventRemove } from '@react-navigation/native';
+import { useIsFocused, usePreventRemove } from 'expo-router/react-navigation';
 import { useSession } from '../auth/SessionProvider';
 import { useLocale } from '../i18n/LocaleProvider';
 import { registerLeaveGuard } from './navigationDrafts';

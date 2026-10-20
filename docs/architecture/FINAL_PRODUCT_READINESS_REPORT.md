@@ -11,3 +11,7 @@ Reviewable commits: 0e556ec program lifecycle; f8ee9fb account isolation/recover
 See STAGING_HANDOFF.md for actual infrastructure, evidence, environment names, deployment/build instructions and blockers. See LAUNCH_MATRIX.json for the retained 447-row inventory. Untested rows remain NOT_TESTED; no whole-platform completion percentage is claimed.
 
 Release gates: signed internal artifacts and physical-device evidence; independent security review/integration; qualified AI/scientific approval; staffed coach operations; payment/store verification; production migration/backup/operations acceptance. Staging synthetic coaches and accounts do not satisfy those approvals.
+
+## Admin / landing / iPhone follow-up
+
+Live admin: https://traina-staging-admin.vercel.app. The Arabic/English website now persists consented interest forms to the shared API and exposes them to role-checked administrators. Isolated staging has 34 migrations. Native changes improve Arabic layout, keyboard handling, local-first set logging and bounded refresh; GL previews are opt-in and stop when the route loses focus or the app backgrounds. See ADMIN_WEB_IPHONE_HANDOFF.md and docs/evidence/admin-web-2026-10-20 for final checks, live HTTPS proof and limitations. Physical iPhone rendering and performance remain unverified; commercial NO-GO is unchanged.

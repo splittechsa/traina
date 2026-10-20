@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Traina">
+  <path d="M5 22.5L11.2 12.2L16 19.1L23.7 7.4L27 11.5" fill="none" stroke="#D6A54A" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M6 26H26" fill="none" stroke="#161411" stroke-width="2.7" stroke-linecap="round"/>
+  <circle cx="26.8" cy="8.7" r="2.4" fill="#161411"/>
+</svg>

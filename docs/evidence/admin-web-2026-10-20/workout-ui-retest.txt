@@ -1,0 +1,12 @@
+
+> @sahhti/mobile@0.1.0 test
+> vitest run src/training/workout-screen.test.tsx
+
+
+ RUN  v5.0.3 C:/Users/Ahmed/Desktop/app/apps/mobile
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  22:56:04
+   Duration  618ms (transform 59%, import 26%, tests 14%, worker 1%)

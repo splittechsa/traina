@@ -19,8 +19,8 @@ export type Palette = {
 };
 
 export const light: Palette = {
-  scheme: 'light', background: '#F3EEE6', surface: '#FFFBF6', surfaceMuted: '#ECE4D8', surfaceRaised: '#FFFFFF',
-  text: '#1C1915', textMuted: '#6E655C', border: '#DDD4C8', accent: '#315C49',
+  scheme: 'light', background: '#F5F6F1', surface: '#FFFFFF', surfaceMuted: '#EAF0E5', surfaceRaised: '#FFFFFF',
+  text: '#1C2B24', textMuted: '#667464', border: '#DCE4D7', accent: '#315C49',
   emphasis: '#315C49', emphasisText: '#FFFFFF', lime: '#D6A54A', limeInk: '#21180A',
   violet: '#796C89', hero: '#17382D', heroText: '#FFF9EF', heroAccent: '#E2B65E',
   danger: '#9B3A3A', warning: '#8A5A12', success: '#3E6B56', focus: '#B78329', ringTrack: '#DED5C7',

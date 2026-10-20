@@ -86,7 +86,8 @@ export default function TrainingScreen() {
   const draftRecovery = useFormRecovery('workout-builder', { name, discipline, selected, format, minutes, rounds, progression, hold, sets, reps }, draft => { setName(draft.name); setDiscipline(draft.discipline); setSelected(draft.selected); setFormat(draft.format); setMinutes(draft.minutes); setRounds(draft.rounds); setProgression(draft.progression); setHold(draft.hold); setSets(draft.sets); setReps(draft.reps); setOpen(true); }, name !== '' || selected.length > 0 || minutes !== '12' || rounds !== '5' || sets !== '3' || reps !== '8' || hold !== '');
   const exercises = useQuery({
     queryKey: ['exercises'],
-    queryFn: () => apiRequest<{ exercises: Exercise[] }>('/v1/exercises'),
+    queryFn: () => accountResource<{ exercises: Exercise[] }>('/v1/exercises'),
+    staleTime: 5 * 60_000,
   });
   const manufacturers = useQuery({
     queryKey: ['equipment-manufacturers'],
@@ -193,7 +194,7 @@ export default function TrainingScreen() {
     return (
       <Screen>
         <AppHeader title={text(locale, 'training')} />
-        <ErrorState body={text(locale, offline ? 'offline' : 'error')} onRetry={() => void sessions.refetch()} />
+        <ErrorState body={text(locale, offline ? 'offline' : 'error')} onRetry={() => { void sessions.refetch(); void exercises.refetch(); }} />
       </Screen>
     );
   }
@@ -222,6 +223,7 @@ export default function TrainingScreen() {
         />
 
         <YazanCard
+          compact
           body={yazanTip(locale, {
             surface: 'training',
             hasActivePlan: activePlan !== null,

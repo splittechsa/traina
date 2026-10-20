@@ -1,0 +1,80 @@
+{
+  "at": "2026-10-20T19:55:40.374Z",
+  "node": "v26.3.1",
+  "scope": "Local synthetic checks; no physical device, production write or remote CI verification; corrected mobile fixture type and retained brand accent; initial failures retained separately",
+  "results": [
+    {
+      "id": "build",
+      "command": "npm run build",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 6771
+    },
+    {
+      "id": "typecheck",
+      "command": "npm run typecheck",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 5030
+    },
+    {
+      "id": "backend-tests",
+      "command": "npm test",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 32109
+    },
+    {
+      "id": "mobile-typecheck",
+      "command": "npm run typecheck",
+      "status": "PASS",
+      "exitCode": 0,
+      "at": "2026-10-20T19:56:03.792Z"
+    },
+    {
+      "id": "mobile-tests",
+      "command": "npm test -- --maxWorkers=1",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 7820,
+      "at": "2026-10-20T19:55:40.213Z"
+    },
+    {
+      "id": "mobile-lint",
+      "command": "npm run lint",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 25606,
+      "retestedAt": "2026-10-20T19:52:58.726Z"
+    },
+    {
+      "id": "coach-build",
+      "command": "npm run build",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 3577
+    },
+    {
+      "id": "http-smoke",
+      "command": "node scripts/launch-http-smoke.mjs \"C:\\\\Users\\\\Ahmed\\\\Desktop\\\\app\\\\docs\\\\evidence\\\\admin-web-2026-10-20\\\\http-smoke.json\"",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 5241
+    },
+    {
+      "id": "gateway-tests",
+      "command": "node --test apps/admin-web/gateway.test.mjs",
+      "exitCode": 0,
+      "status": "PASS",
+      "durationMs": 161,
+      "at": "2026-10-20T19:55:40.374Z"
+    },
+    {
+      "id": "workout-ui-retest",
+      "command": "npm test -- src/training/workout-screen.test.tsx",
+      "status": "PASS",
+      "exitCode": 0,
+      "at": "2026-10-20T19:56:05.320Z"
+    }
+  ]
+}
