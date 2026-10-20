@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../src/api/client';
@@ -6,7 +6,7 @@ import { useLocale } from '../src/i18n/LocaleProvider';
 import { text } from '../src/i18n/copy';
 import { fontFamily, spacing, typeScale } from '../src/theme/tokens';
 import { useTheme } from '../src/theme/ThemeProvider';
-import { Screen, ScreenBody } from '../src/ui/Screen';
+import { Button, Screen, ScreenBody } from '../src/ui/Screen';
 import { AppHeader, EmptyState, LoadingSkeleton, SurfaceCard } from '../src/ui/kit';
 
 type NotificationRow = {
@@ -29,10 +29,30 @@ export default function NotificationsScreen() {
     queryKey: ['member-notifications'],
     queryFn: () => apiRequest<{ notifications: NotificationRow[] }>('/v1/member/notifications'),
   });
+  const pushStatus = useQuery({
+    queryKey: ['push-status'],
+    queryFn: () =>
+      apiRequest<{ deliveryConfigured: boolean; registeredDevices: number; note: string }>(
+        '/v1/member/push-status',
+      ),
+  });
   const markRead = useMutation({
     mutationFn: (id: string) => apiRequest(`/v1/member/notifications/${id}/read`, { method: 'POST' }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: ['member-notifications'] });
+    },
+  });
+  const registerPush = useMutation({
+    mutationFn: () =>
+      apiRequest('/v1/member/push-devices', {
+        method: 'POST',
+        body: {
+          token: `local-dev-${Platform.OS}-${Date.now()}`,
+          platform: Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web',
+        },
+      }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['push-status'] });
     },
   });
 
@@ -40,6 +60,22 @@ export default function NotificationsScreen() {
     <Screen>
       <ScreenBody>
         <AppHeader title={text(locale, 'notifications')} subtitle={text(locale, 'humanCoachLabel')} showBack />
+        <SurfaceCard tone="muted">
+          <Text style={{ color: theme.text, fontFamily: fontFamily.semibold, marginBottom: 6 }}>
+            {text(locale, 'pushStatusTitle')}
+          </Text>
+          <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 20 }}>
+            {pushStatus.data?.note ?? text(locale, 'pushStatusOff')}
+          </Text>
+          <View style={{ marginTop: spacing[2] }}>
+            <Button
+              label={text(locale, 'pushRegister')}
+              variant="secondary"
+              onPress={() => registerPush.mutate()}
+              disabled={registerPush.isPending}
+            />
+          </View>
+        </SurfaceCard>
         {list.isPending ? <LoadingSkeleton /> : null}
         {list.isError ? <EmptyState title={text(locale, 'error')} body={text(locale, 'error')} /> : null}
         {!list.isPending && (list.data?.notifications.length ?? 0) === 0 ? (

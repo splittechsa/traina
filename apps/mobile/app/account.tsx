@@ -1,5 +1,6 @@
+import { useState } from 'react';
+import { Alert, Share, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../src/api/client';
 import { useSession } from '../src/auth/SessionProvider';
@@ -17,6 +18,7 @@ export default function AccountScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
   const session = useSession();
+  const [exporting, setExporting] = useState(false);
   const me = useQuery({
     queryKey: ['me', session.tokens?.accessToken],
     enabled: session.tokens !== null,
@@ -35,6 +37,21 @@ export default function AccountScreen() {
     await apiRequest('/v1/account', { method: 'DELETE' });
     await session.clear();
     router.replace('/(auth)/login');
+  }
+
+  async function exportData() {
+    setExporting(true);
+    try {
+      const payload = await apiRequest<Record<string, unknown>>('/v1/account/export');
+      await Share.share({
+        message: JSON.stringify(payload, null, 2),
+        title: text(locale, 'exportAccount'),
+      });
+    } catch (err) {
+      Alert.alert(text(locale, 'error'), err instanceof Error ? err.message : text(locale, 'error'));
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -59,9 +76,25 @@ export default function AccountScreen() {
         </View>
         <SettingsGroup>
           <SettingsRow
+            icon={{ ios: 'hand.raised.fill', android: 'privacy_tip', web: 'privacy_tip' }}
+            title={text(locale, 'privacyConsent')}
+            onPress={() => router.push('/privacy')}
+          />
+          <SettingsRow
             icon={{ ios: 'gearshape.fill', android: 'settings', web: 'settings' }}
             title={text(locale, 'settings')}
             onPress={() => router.push('/settings')}
+            last
+          />
+        </SettingsGroup>
+        <SettingsGroup>
+          <SettingsRow
+            icon={{ ios: 'square.and.arrow.up', android: 'ios_share', web: 'share' }}
+            title={exporting ? text(locale, 'loading') : text(locale, 'exportAccount')}
+            showChevron={false}
+            onPress={() => {
+              if (!exporting) void exportData();
+            }}
             last
           />
         </SettingsGroup>

@@ -108,6 +108,9 @@ import {
   listMemberCoachFeedback,
   listMemberNotifications,
   entitlementsFor,
+  exportMemberData,
+  registerPushDevice,
+  pushDeliveryStatus,
   markMemberNotificationRead,
   addCoachNote,
   listCoachNotes,
@@ -354,6 +357,28 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     const actor = actorOf(request.claims);
     await deleteAccount(dbOf(options), actor.userId);
     return { deleted: true };
+  });
+
+  app.get('/v1/account/export', async (request) => (
+    exportMemberData(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.get('/v1/member/push-status', async (request) => (
+    pushDeliveryStatus(dbOf(options), actorOf(request.claims))
+  ));
+
+  app.post('/v1/member/push-devices', async (request) => {
+    const body = request.body as { token?: string; platform?: string };
+    if (typeof body?.token !== 'string') {
+      throw new ApiError(400, 'INVALID_PUSH_TOKEN', 'token is required');
+    }
+    const platform = body.platform === 'ios' || body.platform === 'android' || body.platform === 'web'
+      ? body.platform
+      : null;
+    if (platform === null) {
+      throw new ApiError(400, 'INVALID_PUSH_PLATFORM', 'platform must be ios, android, or web');
+    }
+    return registerPushDevice(dbOf(options), actorOf(request.claims), { token: body.token, platform });
   });
 
   app.get('/v1/me', async (request) => {

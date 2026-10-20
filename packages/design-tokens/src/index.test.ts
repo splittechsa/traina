@@ -7,8 +7,9 @@ describe('design tokens', () => {
     expect(layoutDirection('en')).toBe('ltr');
     expect(designTokens.color.semantic.background).toBe('#F3EEE6');
     expect(designTokens.color.semantic.text).toBe('#1C1915');
-    expect(designTokens.color.brand.green).toBe('#3E6B56');
-    expect(designTokens.color.brand.lime).toBe('#E0A24A');
+    expect(designTokens.color.brand.green).toBe('#315C49');
+    expect(designTokens.color.brand.gold).toBe('#D6A54A');
+    expect(designTokens.color.semantic.accent).toBe(designTokens.color.brand.green);
     expect(designTokens.spacing).toContain(8);
   });
 });

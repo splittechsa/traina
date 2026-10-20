@@ -2176,6 +2176,104 @@ export async function entitlementsFor(
   return { ...projection, purchasesEnabled: false, source: 'subscriptions' };
 }
 
+/**
+ * Member data export — facts the member already owns. No invented metrics.
+ * Privacy: account-holder export path; counsel still owns PDPL packaging (P0-PRIV).
+ */
+export async function exportMemberData(db: Database, actor: Actor) {
+  const profile = await readProfile(db, actor.userId);
+  const entitlements = await entitlementsFor(db, actor);
+  const consent = await coachShareConsentFor(db, actor);
+  const progress = await progressFor(db, actor.userId);
+  const sessions = await listSessions(db, actor.userId);
+  const recommendations = await listMemberRecommendations(db, actor);
+  const feedback = await listMemberCoachFeedback(db, actor);
+  const weekly = await latestWeeklyCoachBrief(db, actor.userId);
+  return {
+    exportedAt: new Date().toISOString(),
+    schemaVersion: 1,
+    disclaimer:
+      'Machine-readable export of stored Traina account facts. Not a medical record. Legal packaging pending P0-PRIV counsel.',
+    account: {
+      userId: actor.userId,
+      roles: actor.roles,
+      onboardingCompleted: profile.profile !== null,
+      displayName: profile.profile?.display_name ?? null,
+      goals: profile.goals,
+    },
+    entitlements: {
+      planCode: entitlements.planCode,
+      status: entitlements.status,
+      capabilities: entitlements.capabilities,
+      purchasesEnabled: entitlements.purchasesEnabled,
+      nutritionAdaptationsBlocked: entitlements.nutritionAdaptationsBlocked,
+    },
+    coachShareConsent: consent,
+    progress: {
+      weights: progress.weights,
+      completedWorkouts: progress.completedWorkouts,
+      personalRecords: progress.personalRecords,
+    },
+    sessions: sessions.slice(0, 100).map((row) => ({
+      id: (row as { id?: string }).id ?? null,
+      status: (row as { status?: string }).status ?? null,
+      name: (row as { name?: string }).name ?? null,
+    })),
+    recommendations: recommendations.recommendations.slice(0, 50).map((row) => ({
+      id: row.id,
+      category: row.category,
+      status: row.status,
+      summary: row.summary,
+    })),
+    humanCoachFeedback: feedback.feedback.slice(0, 50),
+    latestWeeklyBrief: weekly.brief,
+  };
+}
+
+/** Register a device push token. Delivery stays off until APNs/FCM ops are configured. */
+export async function registerPushDevice(
+  db: Database,
+  actor: Actor,
+  input: { token: string; platform: 'ios' | 'android' | 'web' },
+) {
+  const token = input.token.trim();
+  if (token.length < 8 || token.length > 512) {
+    throw new ApiError(400, 'INVALID_PUSH_TOKEN', 'Push token length is invalid');
+  }
+  await db.query(
+    `INSERT INTO member_push_devices (user_id, platform, push_token, updated_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id, push_token)
+     DO UPDATE SET platform = EXCLUDED.platform, updated_at = now(), revoked_at = NULL`,
+    [actor.userId, input.platform, token],
+  ).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('member_push_devices')) {
+      throw new ApiError(503, 'PUSH_SCHEMA_MISSING', 'Push device table is not migrated yet');
+    }
+    throw error;
+  });
+  return {
+    registered: true,
+    deliveryConfigured: false as const,
+    note: 'Token stored. Remote push delivery is not configured — in-app notifications remain the supported channel.',
+  };
+}
+
+export async function pushDeliveryStatus(db: Database, actor: Actor) {
+  const rows = await db.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM member_push_devices
+     WHERE user_id = $1 AND revoked_at IS NULL`,
+    [actor.userId],
+  ).catch(() => ({ rows: [{ n: '0' }] }));
+  return {
+    deliveryConfigured: false as const,
+    registeredDevices: Number(rows.rows[0]?.n ?? 0),
+    channel: 'in_app_only' as const,
+    note: 'Remote push (APNs/FCM) is not enabled in production yet.',
+  };
+}
+
 export async function listMemberNotifications(db: Database, actor: Actor) {
   const rows = await db.query<{
     id: string;
