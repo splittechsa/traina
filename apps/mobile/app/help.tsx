@@ -9,7 +9,7 @@ import { AppHeader, SurfaceCard } from '../src/ui/kit';
 export default function HelpScreen() {
   const { locale } = useLocale();
   const theme = useTheme();
-  const faqs: Array<{ q: CopyKey; a: CopyKey }> = [
+  const faqs: { q: CopyKey; a: CopyKey }[] = [
     { q: 'helpFaqAccount', a: 'helpFaqAccountBody' },
     { q: 'helpFaqCoach', a: 'helpFaqCoachBody' },
     { q: 'helpFaqBilling', a: 'helpFaqBillingBody' },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError, apiRequest } from '../src/api/client';
@@ -38,11 +38,10 @@ export default function WeightScreen() {
 
   // Initialize the wheel to the most recent recorded weight, once, as soon as it loads —
   // not on every refetch, so it doesn't jump back under the user mid-edit.
-  useEffect(() => {
-    if (initialized || latest === null) return;
+  if (!initialized && latest != null) {
     setWeightKg(Number(latest.weight_grams) / 1000);
     setInitialized(true);
-  }, [initialized, latest]);
+  }
 
   async function save() {
     setSaving(true);

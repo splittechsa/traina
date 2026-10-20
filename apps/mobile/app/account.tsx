@@ -19,6 +19,7 @@ export default function AccountScreen() {
   const theme = useTheme();
   const session = useSession();
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const me = useQuery({
     queryKey: ['me', session.tokens?.accessToken],
     enabled: session.tokens !== null,
@@ -34,9 +35,25 @@ export default function AccountScreen() {
   }
 
   async function remove() {
-    await apiRequest('/v1/account', { method: 'DELETE' });
-    await session.clear();
-    router.replace('/(auth)/login');
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await apiRequest('/v1/account', { method: 'DELETE' });
+      await session.clear();
+      router.replace('/(auth)/login');
+    } catch {
+      Alert.alert(text(locale, 'error'), text(locale, 'error'));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function confirmRemoval() {
+    if (deleting) return;
+    Alert.alert(text(locale, 'deleteAccount'), text(locale, 'closeAccountDisclosure'), [
+      { text: text(locale, 'cancel'), style: 'cancel' },
+      { text: text(locale, 'deleteAccount'), style: 'destructive', onPress: () => void remove() },
+    ]);
   }
 
   async function exportData() {
@@ -44,8 +61,10 @@ export default function AccountScreen() {
     setExporting(true);
     try {
       const payload = await apiRequest<Record<string, unknown>>('/v1/account/export');
-      await Share.share({ message: JSON.stringify(payload, null, 2) });
-      Alert.alert(text(locale, 'exportAccount'), text(locale, 'exportAccountDone'));
+      const result = await Share.share({ message: JSON.stringify(payload, null, 2) });
+      if (result.action === Share.sharedAction) {
+        Alert.alert(text(locale, 'exportAccount'), text(locale, 'exportAccountDone'));
+      }
     } catch {
       Alert.alert(text(locale, 'error'), text(locale, 'error'));
     } finally {
@@ -96,10 +115,10 @@ export default function AccountScreen() {
           <SettingsRow
             icon={{ ios: 'trash.fill', android: 'delete', web: 'delete' }}
             tint={theme.danger}
-            title={text(locale, 'deleteAccount')}
+            title={deleting ? text(locale, 'loading') : text(locale, 'deleteAccount')}
             destructive
             showChevron={false}
-            onPress={() => void remove()}
+            onPress={confirmRemoval}
             last
           />
         </SettingsGroup>

@@ -114,16 +114,10 @@ function PortionSheet({
   const { reduce } = useMotion();
   const client = useQueryClient();
   const ar = locale === 'ar';
-  const [amount, setAmount] = useState(100);
+  const [amount, setAmount] = useState(food?.servingGrams ?? 100);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (food !== null) {
-      setAmount(food.servingGrams ?? 100);
-      setError('');
-    }
-  }, [food]);
 
   if (food === null) return null;
   const preview = previewPortion(food, amount);
@@ -253,9 +247,11 @@ export default function FoodLogScreen() {
     queryFn: ({ signal }) => lookupBarcode(code ?? '', signal),
   });
 
-  useEffect(() => {
-    if (scanned.data !== undefined && scanned.data !== null) setSelected(scanned.data);
-  }, [scanned.data]);
+  const [previousScan, setPreviousScan] = useState<LibraryFood | null | undefined>(undefined);
+  if (scanned.data !== previousScan) {
+    setPreviousScan(scanned.data);
+    if (scanned.data != null) setSelected(scanned.data);
+  }
 
   const mineFoods = useMemo(() => (mine.data?.foods ?? []).map(normalizeLocalFood), [mine.data]);
   // Hide global hits the member already saved under the same name to avoid duplicates.
@@ -379,7 +375,7 @@ export default function FoodLogScreen() {
       </ScreenBody>
 
       <BottomSheet visible={selected !== null} onClose={() => setSelected(null)}>
-        <PortionSheet food={selected} day={day} mealSlot={mealSlot} onClose={() => setSelected(null)} />
+        <PortionSheet key={selected?.key ?? 'none'} food={selected} day={day} mealSlot={mealSlot} onClose={() => setSelected(null)} />
       </BottomSheet>
     </Screen>
   );
