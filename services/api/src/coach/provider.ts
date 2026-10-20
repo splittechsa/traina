@@ -63,6 +63,7 @@ export function coachRuntimeFromEnv(env: Record<string, string | undefined>): Co
 export type CoachTurn = {
   text: string;
   tool: string | null;
+  tools?: string[];
   promptTokens: number;
   completionTokens: number;
 };
@@ -181,30 +182,33 @@ export async function completeModelReply(input: {
     throw new Error('MODEL_REQUEST_FAILED');
   }
   const payload = (await first.json()) as Completion;
-  const call = payload.choices?.[0]?.message?.tool_calls?.[0];
-  const toolName = call?.function?.name;
-  if (toolName !== undefined && WRITE_TOOLS.has(toolName)) {
+  const calls = payload.choices?.[0]?.message?.tool_calls ?? [];
+  if (calls.length > 4) throw new Error('MODEL_TOOL_LIMIT');
+  const blockedWrite = calls.find(call => WRITE_TOOLS.has(call.function?.name ?? ''));
+  const toolName = calls[0]?.function?.name;
+  if (blockedWrite !== undefined) {
     return {
       text: input.localeHint === 'ar'
         ? 'هذا التغيير يحتاج تأكيدك داخل التطبيق. لم يُحفظ شيء.'
         : 'That change needs your confirmation in the app. Nothing was saved.',
-      tool: toolName,
+      tool: blockedWrite.function!.name!,
+      tools: [],
       promptTokens: payload.usage?.prompt_tokens ?? 0,
       completionTokens: payload.usage?.completion_tokens ?? 0,
     };
   }
-  if (toolName !== undefined && (READ_TOOLS as readonly string[]).includes(toolName)) {
+  if (calls.some(call => !call.id || !(READ_TOOLS as readonly string[]).includes(call.function?.name ?? '')) || new Set(calls.map(call => call.id)).size !== calls.length) throw new Error('MODEL_UNKNOWN_TOOL');
+  if (calls.length > 0) {
     messages.push({
       role: 'assistant',
       content: payload.choices?.[0]?.message?.content ?? '',
       tool_calls: payload.choices?.[0]?.message?.tool_calls,
     });
-    const resolved =
-      input.resolveTool !== undefined
-        ? input.resolveTool(toolName)
-        : { note: 'tool_resolver_missing', fallbackContext: input.context };
-    const toolPayload = JSON.stringify(resolved).slice(0, 4_500);
-    messages.push({ role: 'tool', tool_call_id: call?.id ?? 'tool', content: toolPayload });
+    for (const call of calls) {
+      const name = call.function!.name!;
+      const resolved = input.resolveTool ? input.resolveTool(name) : { note: 'tool_resolver_missing', fallbackContext: input.context };
+      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(resolved).slice(0, 4500) });
+    }
     // Share the SAME overall deadline rather than granting a fresh timeout: the two-call
     // tool-use path must stay within one client-observable budget, not double it.
     const remaining = deadline - Date.now();
@@ -222,7 +226,8 @@ export async function completeModelReply(input: {
     }
     return {
       text,
-      tool: toolName,
+      tool: toolName ?? null,
+      tools: calls.map(call => call.function!.name!),
       promptTokens: (payload.usage?.prompt_tokens ?? 0) + (followed.usage?.prompt_tokens ?? 0),
       completionTokens: (payload.usage?.completion_tokens ?? 0) + (followed.usage?.completion_tokens ?? 0),
     };

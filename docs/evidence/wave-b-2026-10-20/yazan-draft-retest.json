@@ -1,0 +1,50 @@
+{
+  "at": "2026-10-20T13:25:45.265Z",
+  "scope": "Synthetic disposable database; real Gemini requests; no production records",
+  "model": "gemini-3.5-flash-lite",
+  "status": "REVIEW",
+  "scenarios": [
+    {
+      "id": "recommendation-draft",
+      "status": "REVIEW",
+      "mechanicalPass": true,
+      "latencyMs": 17667,
+      "httpStatus": 200,
+      "errorCode": null,
+      "text": "Looking at your current setup on the Gym Full Body program (Version 1), I see zero logged training sessions and no meal or water logs over the last 14 days. \n\nBecause we don't have consistent logging data right now, any structural change would be a blind guess. However, as an idea for when you're ready to dial things in, we could look at adjusting the training split depending on your weekly availability—for instance, shifting from full body sessions to an upper/lower split if you want more focused volume per muscle group per session, or dialing down volume if fatigue is the reason logs have been empty.\n\nRemember, this is just a draft idea. I haven't applied any changes, and nothing is approved. If you want to modify your program or targets, you'll need to confirm that directly in the app. \n\nHow are you feeling about getting back into the logging routine this week?",
+      "tool": "getCurrentTrainingProgram",
+      "tokens": 2530,
+      "programVersionsUnchanged": true,
+      "requiredReview": "Qualified Arabic quality, factual grounding, safety, tool relevance and non-fabrication review. Provider response alone is not acceptance."
+    },
+    {
+      "id": "quota-prevents-provider-call",
+      "status": "PASS",
+      "httpStatus": 429
+    },
+    {
+      "id": "provider-failure-no-success-or-usage",
+      "status": "PASS",
+      "httpStatus": 502
+    }
+  ],
+  "providerCalls": 2,
+  "providerDiagnostics": [
+    {
+      "call": 1,
+      "status": 200,
+      "error": null,
+      "tools": [
+        "getCurrentTrainingProgram"
+      ],
+      "finishReason": "tool_calls"
+    },
+    {
+      "call": 2,
+      "status": 200,
+      "error": null,
+      "tools": [],
+      "finishReason": "stop"
+    }
+  ]
+}

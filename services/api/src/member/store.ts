@@ -4077,6 +4077,7 @@ export async function answerCoach(
   const history = await listCoachMessages(db, actor.userId);
   let text = '';
   let tool: string | null = null;
+  let tools: string[] | null = null;
   let tokens = 0;
   if (runtime.name === 'development_mock') {
     const lower = message.toLowerCase();
@@ -4225,6 +4226,7 @@ export async function answerCoach(
     });
     text = completed.text;
     tool = completed.tool;
+    tools = completed.tools ?? (tool ? [tool] : []);
     tokens = completed.promptTokens + completed.completionTokens;
   }
   const conversationId = await conversationFor(db, actor.userId);
@@ -4233,10 +4235,10 @@ export async function answerCoach(
       `INSERT INTO coach_messages (conversation_id, role, body) VALUES ($1, 'member', $2), ($1, 'assistant', $3)`,
       [conversationId, message, text],
     );
-    if (tool !== null) {
+    for (const executedTool of tools ?? (tool ? [tool] : [])) {
       await tx.query(
         `INSERT INTO coach_tool_executions (user_id, conversation_id, tool_name, persisted) VALUES ($1, $2, $3, false)`,
-        [actor.userId, conversationId, tool],
+        [actor.userId, conversationId, executedTool],
       );
     }
     await tx.query(`INSERT INTO ai_usage (user_id, provider, tokens) VALUES ($1, $2, $3)`, [actor.userId, runtime.name, tokens]);
