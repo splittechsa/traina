@@ -1,6 +1,7 @@
+import { Text } from '../src/ui/Text';
 import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError, apiRequest } from '../src/api/client';
 import { messageFor } from '../src/api/errors';

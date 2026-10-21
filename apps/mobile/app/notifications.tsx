@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text } from '../src/ui/Text';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../src/api/client';

@@ -1,3 +1,9 @@
+# Current Arabic/native closure and Android request — 2026-10-21
+
+**NO-GO; experience PARTIAL.** Source RTL and interaction fixes implemented in PR58; no fresh physical screenshot/recording acceptance. User reported opening/navigation error; staging configuration corrected and optional read-cache blocking removed, but phone resolution remains unverified. Android SDK, Java, emulator and Android36 image are now installed after the user freed disk space; emulator launch is BLOCKED on Windows virtualization and the protected preferences directory. Five reviewed exercise clips remain BLOCKED individually; no assets/approvals fabricated.
+
+Evidence: [route-by-route source review](../evidence/arabic-native-closure-2026-10-21/RTL_AUDIT.md), [five clip blockers](../evidence/arabic-native-closure-2026-10-21/EXERCISE_MEDIA_BLOCKERS.md), [Android setup](../ops/ANDROID_EMULATOR_ACCEPTANCE.md). PR57→PR58 dependency order and independent approvals/current-head CI remain required. Signed iOS acceptance still requires Apple distribution credentials. Previous engineering and development-device evidence below is historical, not acceptance of these new interfaces.
+
 # Current experience transformation — 2026-10-21
 
 **Release NO-GO; transformation PARTIAL.** Actual physical iPhone Expo Go screenshots, bounded JS traces, before/after observations and synthetic set persistence checks now exist. The historical blanket hardware-blocked claim below is superseded for these specific journeys only. See [experience evidence](../evidence/experience-2026-10-21/REPORT.md).

@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { Text } from '../src/ui/Text';
+import { View, Pressable, ScrollView } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { useQuery } from '@tanstack/react-query';
 import { fontFamily } from '../src/theme/tokens';

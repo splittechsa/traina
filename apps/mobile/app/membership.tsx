@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { Text } from '../src/ui/Text';
+import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../src/api/client';
 import { useLocale } from '../src/i18n/LocaleProvider';

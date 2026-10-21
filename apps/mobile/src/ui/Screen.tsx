@@ -1,5 +1,6 @@
+import { Text } from './Text';
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
@@ -138,6 +139,7 @@ export function Field({
   const { locale } = useLocale();
   const [hidden, setHidden] = useState(secureTextEntry);
   const [focused, setFocused] = useState(false);
+  const ltrContent = secureTextEntry || keyboardType !== 'default';
   return (
     <View style={styles.field}>
       <Muted inverse={inverse}>{label}</Muted>
@@ -162,8 +164,8 @@ export function Field({
               borderColor: focused ? theme.lime : theme.border,
               backgroundColor: theme.surface,
               fontFamily: fontFamily.regular,
-              textAlign: locale === 'ar' ? 'right' : 'left',
-              writingDirection: locale === 'ar' ? 'rtl' : 'ltr',
+              textAlign: ltrContent ? 'left' : locale === 'ar' ? 'right' : 'left',
+              writingDirection: ltrContent ? 'ltr' : locale === 'ar' ? 'rtl' : 'ltr',
               paddingEnd: secureTextEntry ? 72 : spacing[3],
             },
           ]}
@@ -218,6 +220,7 @@ export function Button({
       testID={testID}
       accessibilityRole="button"
       disabled={disabled}
+      accessibilityState={{ disabled }}
       onPress={() => {
         tapImpact(duration(1) === 0);
         onPress();

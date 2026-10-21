@@ -1,5 +1,6 @@
+import { Text } from '../ui/Text';
 import {useState,type ComponentType} from 'react';
-import {Text,View} from 'react-native';
+import { View } from 'react-native';
 import {Button} from '../ui/Screen';
 import {useLocale} from '../i18n/LocaleProvider';
 import {useTheme} from '../theme/ThemeProvider';

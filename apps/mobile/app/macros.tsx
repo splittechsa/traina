@@ -1,10 +1,11 @@
+import { Text } from '../src/ui/Text';
 import { useFormRecovery } from '../src/storage/useFormRecovery';
 // Calorie & macro calculator. Inputs are tappable tiles that open the right native control
 // (wheel for numbers, chips for choices) instead of a column of text fields; the result
 // recomputes live at the top. Saved on-device as a personal estimate (see targets.ts for why
 // this is not written to the API as an authoritative target).
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../src/api/client';

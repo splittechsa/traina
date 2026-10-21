@@ -1,6 +1,7 @@
+import { Text } from './Text';
 import { requestNavigation } from '../storage/navigationDrafts';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';

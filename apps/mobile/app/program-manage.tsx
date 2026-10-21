@@ -1,6 +1,7 @@
+import { Text } from '../src/ui/Text';
 import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ProgramDayDocument } from '@sahhti/domain';

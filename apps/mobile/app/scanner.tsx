@@ -1,8 +1,9 @@
+import { Text } from '../src/ui/Text';
 // Barcode scanner → food lookup. Reads EAN/UPC codes with the native camera scanner
 // (expo-camera, works in Expo Go) and hands the code to the food-log screen, which looks
 // the product up in Open Food Facts and opens the portion sheet directly.
 import { useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useLocale } from '../src/i18n/LocaleProvider';

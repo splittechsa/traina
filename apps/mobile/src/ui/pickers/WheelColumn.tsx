@@ -1,3 +1,4 @@
+import { Text } from '../Text';
 // One snapping column of a wheel picker.
 //
 // Rendered with an Animated.ScrollView rather than a FlatList on purpose: every screen
@@ -10,7 +11,7 @@
 // on the UI thread, a light selection haptic ticks each time a new row crosses the band, and
 // the value is committed when the scroll settles.
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "expo lint",
-    "eas-build-post-install": "npm --prefix ../../packages/domain run build"
+    "eas-build-post-install": "npm --prefix ../../packages/domain run build",
+    "start:staging": "node ../../scripts/start-mobile-staging.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/ibm-plex-sans-arabic": "^0.4.2",

@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { Text } from './Text';
+import { View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useLocale } from '../i18n/LocaleProvider';

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { I18nManager } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { setApiLocale } from '../api/client';
@@ -28,25 +28,29 @@ function isLocale(value: string | null): value is Locale {
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>('ar');
   const [restartRequired, setRestartRequired] = useState(false);
+  const manuallyChanged = useRef(false);
   useEffect(() => {
-    void SecureStore.getItemAsync(LOCALE_KEY).then((stored) => {
-      if (isLocale(stored)) {
-        setLocaleState(stored);
-      }
-    });
+    let mounted = true;
+    void SecureStore.getItemAsync(LOCALE_KEY).then(stored => {
+      if (!mounted || manuallyChanged.current) return;
+      const next = isLocale(stored) ? stored : 'ar';
+      setLocaleState(next);
+      I18nManager.forceRTL(next === 'ar');
+      setRestartRequired((next === 'ar') !== I18nManager.isRTL);
+    }).catch(() => { /* Keep the default language if secure storage is unavailable. */ });
+    return () => { mounted = false; };
   }, []);
   useEffect(() => {
     setApiLocale(locale);
   }, [locale]);
 
   function setLocale(next: Locale) {
+    manuallyChanged.current = true;
     setLocaleState(next);
     void SecureStore.setItemAsync(LOCALE_KEY, next);
     const wantsRtl = next === 'ar';
-    if (wantsRtl !== I18nManager.isRTL) {
-      I18nManager.forceRTL(wantsRtl);
-      setRestartRequired(true);
-    }
+    I18nManager.forceRTL(wantsRtl);
+    setRestartRequired(wantsRtl !== I18nManager.isRTL);
   }
 
   const value = useMemo<LocaleValue>(

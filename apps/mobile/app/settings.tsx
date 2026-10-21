@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text } from '../src/i18n/copy';
 import { Screen, ScreenBody } from '../src/ui/Screen';
-import { SectionLabel, SegmentedControl, SettingsGroup, SettingsRow } from '../src/ui/kit';
+import { AppHeader, SectionLabel, SegmentedControl, SettingsGroup, SettingsRow } from '../src/ui/kit';
 import { useTheme } from '../src/theme/ThemeProvider';
 
 export default function SettingsScreen() {
@@ -22,8 +22,9 @@ export default function SettingsScreen() {
     ]);
   }, [restartRequired, locale]);
   return (
-    <Screen title={text(locale, 'settings')}>
+    <Screen>
       <ScreenBody>
+        <AppHeader showBack title={text(locale, 'settings')} />
         <SectionLabel>{text(locale, 'appearance')}</SectionLabel>
         <SegmentedControl
           value={theme.preference}

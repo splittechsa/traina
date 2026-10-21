@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-21",
+  "mobile": {
+    "tests": 156,
+    "files": 44,
+    "typecheck": "PASS",
+    "lint": {
+      "errors": 0,
+      "existingWarnings": 5
+    }
+  },
+  "rootTests": {
+    "domain": 136,
+    "contracts": 3,
+    "designTokens": 1,
+    "api": 81,
+    "admin": 8,
+    "status": "PASS"
+  },
+  "androidExport": {
+    "bundle": "index-4d311a427c34a3b33c295de69d79180f.hbc",
+    "bytes": 5859935,
+    "modules": 2184,
+    "hermes": true,
+    "apk": false,
+    "emulatorRun": false
+  },
+  "device": {
+    "freshScreenshotCount": 0,
+    "recording": false,
+    "nativeInputLatency": "NOT_MEASURED",
+    "nativeMemory": "NOT_MEASURED",
+    "physicalErrorResolution": "UNVERIFIED"
+  },
+  "androidSetup": {
+    "sdkInstalled": true,
+    "emulatorInstalled": true,
+    "observedFreeGiB": 1.43,
+    "status": "BLOCKED_WINDOWS_VIRTUALIZATION_AND_PREFERENCES",
+    "freeSpaceResolved": true,
+    "freeGiBAfterUserCleanup": 36.71,
+    "javaVersion": "21.0.12.1",
+    "commandLineToolsHash": "90ae805d20434428bffcb699c290860f19bb5f66a67e6b330067e3de801fb04a",
+    "emulatorVersion": "37.2.12",
+    "image": "system-images;android-36;google_apis;x86_64 revision7",
+    "avd": "Traina_API_36",
+    "accelCheckCode": 6,
+    "booted": false
+  },
+  "media": {
+    "approvedAssets": 0
+  },
+  "release": "NO_GO",
+  "iosExport": {
+    "bundle": "index-7cf475ad7818ddcfb612c2bb0f3770ce.hbc",
+    "bytes": 5665358,
+    "modules": 2104,
+    "signedBinary": false
+  }
+}

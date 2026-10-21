@@ -1,6 +1,7 @@
+import { Text } from '../../src/ui/Text';
 import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView as RNScrollView, Text, TextInput, View, type ScrollView } from 'react-native';
+import { Pressable, ScrollView as RNScrollView, TextInput, View, type ScrollView } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';

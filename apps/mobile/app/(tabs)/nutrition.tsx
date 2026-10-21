@@ -1,5 +1,6 @@
+import { Text } from '../../src/ui/Text';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -299,12 +300,12 @@ export default function NutritionScreen() {
           const slotKcal = slotEntries.reduce((sum, row) => sum + row.energyKcal, 0);
           return (
             <SurfaceCard key={slot.id} style={{ marginBottom: spacing[3] }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[2] }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={text(locale, slot.copy) + ' · ' + text(locale, 'mealAddToSlot')} onPress={() => openFoodLog(slot.id)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginBottom: spacing[2] }}>
                 <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card }}>{text(locale, slot.copy)}</Text>
                 <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium, fontVariant: ['tabular-nums'] }}>
                   {formatCount(slotKcal, locale)} {text(locale, 'kcal')}
                 </Text>
-              </View>
+              </Pressable>
               {slotEntries.length === 0 ? (
                 <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginBottom: spacing[2] }}>{text(locale, 'mealEmptySlot')}</Text>
               ) : (

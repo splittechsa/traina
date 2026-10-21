@@ -1,5 +1,6 @@
+import { Text } from './Text';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type TextStyle } from 'react-native';
 import { Image, type ImageSource } from 'expo-image';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { Text } from '../src/ui/Text';
+import { View } from 'react-native';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text, type CopyKey } from '../src/i18n/copy';
 import { fontFamily, spacing, typeScale } from '../src/theme/tokens';

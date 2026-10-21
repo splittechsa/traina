@@ -1,5 +1,6 @@
+import { Text } from '../src/ui/Text';
 import { useMemo, useState, type ComponentProps } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { FlashList } from '@shopify/flash-list';

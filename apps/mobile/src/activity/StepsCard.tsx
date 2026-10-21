@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text } from '../ui/Text';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { formatCount } from '../format';

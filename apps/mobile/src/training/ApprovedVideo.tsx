@@ -1,5 +1,6 @@
+import { Text } from '../ui/Text';
 import { useEffect } from 'react';
-import { AppState, Text, View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { useEvent } from 'expo';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { VideoView, useVideoPlayer, setVideoCacheSizeAsync } from 'expo-video';

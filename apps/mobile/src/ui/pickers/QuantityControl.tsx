@@ -1,8 +1,10 @@
+import { Text } from '../Text';
+import { useLocale } from '../../i18n/LocaleProvider';
 // Compact quantity control: big tappable value, −/+ with press-and-hold acceleration,
 // optional preset chips, and tap-to-type. Used where a wheel is the wrong tool (food grams,
 // sets, servings) — fast for both small nudges and big jumps.
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useMotion } from '../../theme/motion';
 import { fontFamily, radius, spacing, typeScale } from '../../theme/tokens';
@@ -31,6 +33,7 @@ function StepButton({ glyph, onStep, disabled, label }: { glyph: string; onStep:
   const delay = useRef<ReturnType<typeof setTimeout> | null>(null);
   const repeat = useRef<ReturnType<typeof setInterval> | null>(null);
   const ticks = useRef(0);
+  const held = useRef(false);
 
   function stop() {
     if (delay.current !== null) clearTimeout(delay.current);
@@ -47,15 +50,16 @@ function StepButton({ glyph, onStep, disabled, label }: { glyph: string; onStep:
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
-      onPressIn={() => {
+      onPressIn={() => { held.current = false; }}
+      onPress={() => { if (!held.current) onStep(1); held.current = false; }}
+      delayLongPress={HOLD_DELAY_MS}
+      onLongPress={() => {
+        held.current = true;
         onStep(1);
-        delay.current = setTimeout(() => {
-          repeat.current = setInterval(() => {
-            ticks.current += 1;
-            // Accelerate: 1× for the first ~0.7 s of holding, then 5×, then 10×.
-            onStep(ticks.current > 20 ? 10 : ticks.current > 10 ? 5 : 1);
-          }, HOLD_INTERVAL_MS);
-        }, HOLD_DELAY_MS);
+        repeat.current = setInterval(() => {
+          ticks.current += 1;
+          onStep(ticks.current > 20 ? 10 : ticks.current > 10 ? 5 : 1);
+        }, HOLD_INTERVAL_MS);
       }}
       onPressOut={stop}
       style={({ pressed }) => ({
@@ -78,6 +82,8 @@ function StepButton({ glyph, onStep, disabled, label }: { glyph: string; onStep:
 export function QuantityControl({ value, onChange, min, max, step, unit, presets, accessibilityLabel, testID }: QuantityControlProps) {
   const theme = useTheme();
   const { reduce } = useMotion();
+  const {locale} = useLocale();
+  const ar = locale === 'ar';
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const latest = useRef(value);
@@ -106,14 +112,15 @@ export function QuantityControl({ value, onChange, min, max, step, unit, presets
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
         accessibilityValue={{ text: `${value}${unit !== undefined ? ` ${unit}` : ''}` }}
-        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }, { name: 'activate', label: ar ? 'تحرير الكمية' : 'Edit quantity' }]}
         onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'activate') { setDraft(String(value)); setEditing(true); }
           if (event.nativeEvent.actionName === 'increment') stepBy(1, 1);
           if (event.nativeEvent.actionName === 'decrement') stepBy(-1, 1);
         }}
         style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <StepButton glyph="−" label="−" disabled={value <= min} onStep={(m) => stepBy(-1, m)} />
+        <StepButton glyph="−" label={(ar ? 'تقليل ' : 'Decrease ') + accessibilityLabel} disabled={value <= min} onStep={(m) => stepBy(-1, m)} />
         {editing ? (
           <TextInput
             autoFocus
@@ -142,7 +149,7 @@ export function QuantityControl({ value, onChange, min, max, step, unit, presets
             </View>
           </Pressable>
         )}
-        <StepButton glyph="+" label="+" disabled={value >= max} onStep={(m) => stepBy(1, m)} />
+        <StepButton glyph="+" label={(ar ? 'زيادة ' : 'Increase ') + accessibilityLabel} disabled={value >= max} onStep={(m) => stepBy(1, m)} />
       </View>
       {presets !== undefined && presets.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing[2] }}>

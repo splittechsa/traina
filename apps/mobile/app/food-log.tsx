@@ -1,9 +1,10 @@
+import { Text } from '../src/ui/Text';
 import { useFormRecovery } from '../src/storage/useFormRecovery';
 // Search-first food logging: type (or scan) → pick → adjust grams → see calories & macros
 // update instantly → one tap to add. Combines the member's own foods with the global Open
 // Food Facts library. Logging goes through the existing API contracts (see logFood.ts).
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';

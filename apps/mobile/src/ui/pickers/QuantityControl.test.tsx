@@ -1,0 +1,13 @@
+import {beforeEach,afterEach,expect,it,vi} from 'vitest';
+import TestRenderer,{act} from 'react-test-renderer';
+import {QuantityControl} from './QuantityControl';
+vi.mock('react-native',()=>({View:'View',Text:'Text',TextInput:'TextInput',Pressable:'Pressable',ScrollView:'ScrollView',Keyboard:{dismiss:vi.fn()}}));
+vi.mock('../../i18n/LocaleProvider',()=>({useLocale:()=>({locale:'ar'})}));
+vi.mock('../../theme/ThemeProvider',()=>({useTheme:()=>({})}));
+vi.mock('../../theme/motion',()=>({useMotion:()=>({reduce:true})}));
+vi.mock('../haptics',()=>({tapImpact:vi.fn(),tapSelection:vi.fn()}));
+let tree:TestRenderer.ReactTestRenderer;const change=vi.fn();
+beforeEach(async()=>{vi.useFakeTimers();change.mockClear();(globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;await act(async()=>{tree=TestRenderer.create(<QuantityControl value={100} onChange={change} min={10} max={1000} step={10} accessibilityLabel="الكمية"/>);});});
+afterEach(async()=>{await act(async()=>tree.unmount());vi.useRealTimers();});
+it('supports accessibility activation without pointer-down and avoids a double increment',async()=>{const plus=tree.root.findAll(node=>node.type===('Pressable' as never)&&node.props.accessibilityLabel==='زيادة الكمية')[0]!;await act(async()=>plus.props.onPress());expect(change).toHaveBeenLastCalledWith(110);await act(async()=>{plus.props.onPressIn();plus.props.onPressOut();plus.props.onPress();});expect(change.mock.calls.map(x=>x[0])).toEqual([110,120]);});
+it('stops hold-repeat on release and exposes direct editing as an accessibility action',async()=>{const plus=tree.root.findAll(node=>node.type===('Pressable' as never)&&node.props.accessibilityLabel==='زيادة الكمية')[0]!;await act(async()=>{plus.props.onPressIn();plus.props.onLongPress();vi.advanceTimersByTime(140);plus.props.onPressOut();plus.props.onPress();});expect(change).toHaveBeenCalledTimes(3);await act(async()=>{vi.advanceTimersByTime(1000);});expect(change).toHaveBeenCalledTimes(3);const adjustable=tree.root.findAll(node=>node.props.accessibilityRole==='adjustable')[0]!;await act(async()=>adjustable.props.onAccessibilityAction({nativeEvent:{actionName:'activate'}}));expect(tree.root.findAllByType('TextInput' as never)).toHaveLength(1);});

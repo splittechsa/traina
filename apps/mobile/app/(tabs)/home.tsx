@@ -1,6 +1,7 @@
+import { Text } from '../../src/ui/Text';
 import { useWorkoutHistory } from '../../src/training/history';
 import { accountResource } from '../../src/offline/resource';
-import { Pressable, Text, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';

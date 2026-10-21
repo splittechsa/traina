@@ -1,8 +1,9 @@
+import { Text } from '../../src/ui/Text';
 import { useWorkoutHistory } from '../../src/training/history';
 import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { accountResource } from '../../src/offline/resource';
 import { useState } from 'react';
-import { ScrollView, View, Text, Pressable } from 'react-native';
+import { ScrollView, View, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';

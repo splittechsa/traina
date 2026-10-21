@@ -1,6 +1,7 @@
+import { Text } from '../src/ui/Text';
 import { useFormRecovery } from '../src/storage/useFormRecovery';
 import { useMemo, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError, apiRequest } from '../src/api/client';

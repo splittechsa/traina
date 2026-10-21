@@ -1,10 +1,12 @@
+import { SetInputs } from '../../src/training/SetInputs';
+import { Text } from '../../src/ui/Text';
 import { ExercisePreview } from '../../src/training/ExercisePreview';
 import { singleFlight, type Flight } from '../../src/offline/singleFlight';
 import { saveDurableSet, refreshWorkoutDependents } from '../../src/training/saveFeedback';
 import { perfMark } from '../../src/performance/lab';
 import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, Text, TextInput, View, Alert } from 'react-native';
+import { AppState, Pressable, View, Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
@@ -29,10 +31,9 @@ import { useMotion } from '../../src/theme/motion';
 import { tapSuccess } from '../../src/ui/haptics';
 import { planOfflineSync, synchronizeOfflineSets, type PendingSetCommand } from '../../src/offline/queue';
 import { acknowledgePendingSets, enqueuePendingSet, readPendingSets, readAccountSnapshot, writeAccountSnapshot, replaceConflictingSet } from '../../src/offline/sqlite';
-import { pauseRestTimer, remainingRest, resumeRestTimer, startRestTimer, type RestTimerState } from '../../src/training/restTimer';
+import { adjustRestTimer, pauseRestTimer, remainingRest, resumeRestTimer, startRestTimer, type RestTimerState } from '../../src/training/restTimer';
 import { accountScope, accountResource } from '../../src/offline/resource';
 import { useSession } from '../../src/auth/SessionProvider';
-import { normalizeWorkoutNumber } from '../../src/training/numericInput';
 
 type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia' | 'approvedDemonstration' | 'reviewStatus' | 'primary_muscles' | 'instructions_ar' | 'instructions_en'>;
 type WorkoutProgress = {
@@ -219,6 +220,14 @@ export default function WorkoutScreen() {
     const state = restPaused
       ? resumeRestTimer(restAnchor.current, Date.now())
       : pauseRestTimer(restAnchor.current, Date.now());
+    restAnchor.current = state;
+    setRest(remainingRest(state, Date.now()));
+    setRestPaused(state.paused === true);
+    if (typeof id === 'string' && owner) void writeAccountSnapshot(owner, `rest:${id}`, state).catch(() => setNotice(text(locale, 'error')));
+  }
+
+  function adjustRest(delta: number) {
+    const state = adjustRestTimer(restAnchor.current, delta, Date.now());
     restAnchor.current = state;
     setRest(remainingRest(state, Date.now()));
     setRestPaused(state.paused === true);
@@ -440,7 +449,7 @@ export default function WorkoutScreen() {
       <Button testID="workout-start" label={busy ? (isAr ? 'جارٍ البدء…' : 'Starting…') : text(locale, 'start')} disabled={busy} onPress={() => void start()} />
     ) : isPaused ? (
       <Button label={text(locale, 'resume')} disabled={busy} onPress={() => void resume()} />
-    ) : isRunning && activeTargetMet ? (
+    ) : isRunning && activeTargetMet && editingSetId === null ? (
       <Button testID={nextExercise ? 'workout-next' : 'workout-finish'} label={nextExercise ? (isAr ? 'التمرين التالي' : 'Next exercise') : text(locale, 'finish')} onPress={() => { if (nextExercise) { skipRest(); setActiveExerciseId(nextExercise.exerciseId); } else { Alert.alert(text(locale, 'finishWorkoutTitle'), text(locale, 'finishWorkoutBody'), [{ text: text(locale, 'stayWorkout'), style: 'cancel' }, { text: text(locale, 'finish'), onPress: () => void complete() }]); } }} />
     ) : isRunning && active !== undefined ? (
       <Button
@@ -552,6 +561,7 @@ export default function WorkoutScreen() {
             <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium }}>{text(locale, 'restTimer')}</Text>
             <RestCountdown readState={() => restAnchor.current} paused={restPaused} secondsAtChange={rest} onExpire={() => { setRest(0); restAnchor.current = null; }} />
             <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button variant="secondary" label={isAr ? '+١٥ ثانية' : '+15 seconds'} onPress={() => adjustRest(15)} />
               <Pressable
                 accessibilityRole="button"
                 testID="workout-pause-rest"
@@ -579,6 +589,7 @@ export default function WorkoutScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={isAr ? 'التمرين السابق' : 'Previous exercise'}
                 disabled={activeIndex <= 0}
                 onPress={() => {
                   const prev = current.plannedExercises[activeIndex - 1];
@@ -593,6 +604,7 @@ export default function WorkoutScreen() {
               </Text>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={isAr ? 'التمرين التالي' : 'Next exercise'}
                 disabled={activeIndex >= current.plannedExercises.length - 1}
                 onPress={() => {
                   const next = current.plannedExercises[activeIndex + 1];
@@ -622,89 +634,7 @@ export default function WorkoutScreen() {
               </Text>
             ) : null}
 
-            {isRunning ? (
-              <View style={{ gap: 10, marginBottom: spacing[3] }}>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {['5', '8', '10', '12'].map((value) => (
-                    <Pressable
-                      key={value}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: reps === value }}
-                      onPress={() => { setReps(value); setInputDirty(true); }}
-                      style={{
-                        flex: 1,
-                        minHeight: 44,
-                        borderRadius: radius.md,
-                        backgroundColor: reps === value ? theme.accent : theme.surfaceMuted,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: reps === value ? theme.emphasisText : theme.text, fontFamily: fontFamily.bold }}>{value}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextInput
-                  testID="workout-reps"
-                  accessibilityLabel={text(locale, 'reps')}
-                  value={reps}
-                  onChangeText={value => { setReps(normalizeWorkoutNumber(value)); setInputDirty(true); }}
-                  keyboardType="number-pad"
-                  placeholder={text(locale, 'reps')}
-                  placeholderTextColor={theme.textMuted}
-                  style={{
-                    minHeight: 48,
-                    borderRadius: radius.md,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    paddingHorizontal: 14,
-                    color: theme.text,
-                    fontFamily: fontFamily.semibold,
-                    textAlign: isAr ? 'right' : 'left',
-                  }}
-                />
-                {active.prescription.kind === 'strength' ? (
-                  <>
-                    <TextInput
-                      testID="workout-load"
-                      accessibilityLabel={text(locale, 'load')}
-                      value={load}
-                      onChangeText={value => { setLoad(normalizeWorkoutNumber(value)); setInputDirty(true); }}
-                      keyboardType="decimal-pad"
-                      placeholder={`${text(locale, 'load')} (${text(locale, 'kilograms')})`}
-                      placeholderTextColor={theme.textMuted}
-                      style={{
-                        minHeight: 48,
-                        borderRadius: radius.md,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        paddingHorizontal: 14,
-                        color: theme.text,
-                        fontFamily: fontFamily.semibold,
-                        textAlign: isAr ? 'right' : 'left',
-                      }}
-                    />
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {[-5, -2.5, 2.5, 5].map((delta) => (
-                        <Pressable
-                          key={delta}
-                          accessibilityRole="button"
-                          onPress={() => {
-                            const loadNow = Number(load) || 0;
-                            const next = Math.max(0, loadNow + delta);
-                            setLoad(Number.isInteger(next) ? String(next) : next.toFixed(1));
-                            setInputDirty(true);
-                          }}
-                          style={{ flex: 1, minHeight: 40, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{delta > 0 ? `+${delta}` : delta}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </>
-                ) : null}
-              </View>
-            ) : null}
+            {isRunning && editingSetId === null ? <SetInputs reps={reps} load={load} weighted={active.prescription.kind === 'strength'} onReps={value => { setReps(value); setInputDirty(true); }} onLoad={value => { setLoad(value); setInputDirty(true); }} /> : null}
             <SurfaceCard style={{ marginBottom: spacing[3] }}>
               <View style={{ flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.border }}>
                 <Text style={{ flex: 1, color: theme.textMuted, fontFamily: fontFamily.semibold }}>{text(locale, 'setTableHeader')}</Text>
@@ -717,10 +647,11 @@ export default function WorkoutScreen() {
                 const isNext = logged === undefined && loggedForActive.length === index && editingSetId === null;
                 const isEditing = logged !== undefined && editingSetId === logged.id;
                 return (
+                  <View key={`set-row-${index}`}>
                   <Pressable
-                    key={`set-row-${index}`}
                     accessibilityRole={logged ? 'button' : undefined}
-                    accessibilityLabel={logged ? text(locale, 'editLoggedSet') : undefined}
+                    accessibilityLabel={logged ? text(locale, 'editLoggedSet') + ' ' + (index + 1) : undefined}
+                    accessibilityState={{ expanded: isEditing, disabled: !logged || !isRunning }}
                     disabled={!logged || !isRunning}
                     onPress={() => {
                       if (logged === undefined || !isRunning) return;
@@ -762,6 +693,8 @@ export default function WorkoutScreen() {
                       </Text>
                     </View>
                   </Pressable>
+                  {isEditing ? <><SetInputs reps={reps} load={load} weighted={active.prescription.kind === 'strength'} onReps={value => { setReps(value); setInputDirty(true); }} onLoad={value => { setLoad(value); setInputDirty(true); }} /><Button variant="secondary" label={isAr ? 'إلغاء التعديل' : 'Cancel edit'} onPress={() => { setEditingSetId(null); setEditingBase(null); setNotice(''); }} /></> : null}
+                  </View>
                 );
               })}
             </SurfaceCard>
