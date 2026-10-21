@@ -36,7 +36,7 @@
     "sdkInstalled": true,
     "emulatorInstalled": true,
     "observedFreeGiB": 1.43,
-    "status": "BLOCKED_WINDOWS_VIRTUALIZATION_AND_PREFERENCES",
+    "status": "BLOCKED_PENDING_WINDOWS_RESTART",
     "freeSpaceResolved": true,
     "freeGiBAfterUserCleanup": 36.71,
     "javaVersion": "21.0.12.1",
@@ -45,7 +45,17 @@
     "image": "system-images;android-36;google_apis;x86_64 revision7",
     "avd": "Traina_API_36",
     "accelCheckCode": 6,
-    "booted": false
+    "booted": false,
+    "preferencesDirectoryResolved": true,
+    "adbVersion": "37.0.1",
+    "windowsFeatureEnabled": true,
+    "restartRequired": true,
+    "softwareBoot": "OFFLINE_NOT_BOOTED_STOPPED",
+    "expoGoRuntime": {
+      "version": "57.0.9",
+      "bytes": 208916626,
+      "sha256": "14c18828a3d04e43922245920bd941b978fd1c7a5aec88a0188032f0bb4972ce"
+    }
   },
   "media": {
     "approvedAssets": 0
