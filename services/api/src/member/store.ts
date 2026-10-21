@@ -1,3 +1,5 @@
+import { listSessionPage } from './history.js';
+import { approvedExerciseMedia } from '../media/registry.js';
 import { randomUUID } from 'node:crypto';
 import {
   DomainError,
@@ -3746,6 +3748,7 @@ const exerciseSelect = `id, name_ar, name_en, primary_muscles, secondary_muscles
 function mapExerciseRow<T extends Record<string, unknown>>(row: T) {
   return {
     ...row,
+    approvedDemonstration: approvedExerciseMedia(String(row.id)),
     demonstrationMedia:
       row.demo_type === 'none'
         ? null
@@ -3904,8 +3907,9 @@ export async function attributeReferral(db: Database, userId: string, codeValue:
 async function coachSnapshot(db: Database, actor: Actor) {
   const profile = await readProfile(db, actor.userId);
   const today = new Date().toISOString().slice(0, 10);
-  const sessions = await listSessions(db, actor.userId);
-  const first = sessions[0] as { id?: string; status?: string } | undefined;
+  const history = await listSessionPage(db, actor.userId, {limit:5,family:'all'});
+  const sessions = history.sessions;
+  const first = history.resume ?? history.featured ?? sessions[0];
   const todayWorkout = first?.id !== undefined ? await sessionOwned(db, actor.userId, String(first.id)) : null;
   const diary = await diaryFor(db, actor.userId, today);
   const progress = await progressFor(db, actor.userId);

@@ -1,6 +1,7 @@
+import { useWorkoutHistory } from '../../src/training/history';
 import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { accountResource } from '../../src/offline/resource';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, View, Text, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -12,7 +13,6 @@ import { formatCount, formatKg, formatRiyadhDate, formatRiyadhWeekday, riyadhTod
 import { label } from '../../src/i18n/labels';
 import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
-import { featuredSession, uniqueById } from '../../src/lists/unique';
 import { editorialPhotos, PhotoWash } from '../../src/ui/editorial';
 import { plannedExercises } from '../../src/training/plan';
 import { fontFamily } from '../../src/theme/tokens';
@@ -60,7 +60,6 @@ function weekDays(): string[] {
 }
 
 type Exercise = LibraryExercise;
-type SessionRow = { id: string; name: string; status: string; discipline: string; scheduled_for: string };
 type Progress = { personalRecords: { id: string; exercise_id: string; load_grams: number; reps: number }[] };
 
 export default function TrainingScreen() {
@@ -83,7 +82,7 @@ export default function TrainingScreen() {
   const [sets, setSets] = useState('3');
   const [reps, setReps] = useState('8');
   const [message, setMessage] = useState('');
-  const [visibleHistory, setVisibleHistory] = useState(12);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const draftRecovery = useFormRecovery('workout-builder', { name, discipline, selected, format, minutes, rounds, progression, hold, sets, reps }, draft => { setName(draft.name); setDiscipline(draft.discipline); setSelected(draft.selected); setFormat(draft.format); setMinutes(draft.minutes); setRounds(draft.rounds); setProgression(draft.progression); setHold(draft.hold); setSets(draft.sets); setReps(draft.reps); setOpen(true); }, name !== '' || selected.length > 0 || minutes !== '12' || rounds !== '5' || sets !== '3' || reps !== '8' || hold !== '');
   const exercises = useQuery({
     queryKey: ['exercises'],
@@ -95,10 +94,7 @@ export default function TrainingScreen() {
     enabled: open,
     queryFn: () => apiRequest<{ manufacturers: EquipmentManufacturer[] }>('/v1/equipment/manufacturers'),
   });
-  const sessions = useQuery({
-    queryKey: ['sessions'],
-    queryFn: () => accountResource<{ sessions: SessionRow[] }>('/v1/training/sessions'),
-  });
+  const sessions = useWorkoutHistory(filter, historyCursor);
   const programs = useQuery({
     queryKey: ['training-programs'],
     queryFn: () =>
@@ -112,24 +108,14 @@ export default function TrainingScreen() {
     queryFn: () => apiRequest<Progress>('/v1/progress'),
   });
 
-  const allRows = useMemo(() => uniqueById(sessions.data?.sessions ?? []), [sessions.data?.sessions]);
-  const rows = useMemo(
-    () => filter === 'all' ? allRows : allRows.filter((session) => familyForDiscipline(session.discipline) === filter),
-    [allRows, filter],
-  );
-  const sessionFamilyCounts = useMemo(() => ({
-    all: allRows.length,
-    strength: allRows.filter((session) => familyForDiscipline(session.discipline) === 'strength').length,
-    crossfit: allRows.filter((session) => familyForDiscipline(session.discipline) === 'crossfit').length,
-    calisthenics: allRows.filter((session) => familyForDiscipline(session.discipline) === 'calisthenics').length,
-  }), [allRows]);
-  const featured = featuredSession(rows, riyadhToday());
-  const inProgress = allRows.find((session) => session.status === 'in_progress' || session.status === 'paused') ?? null;
-  const rest = rows.filter((session) => session.id !== featured?.id && session.id !== inProgress?.id);
-  const today = riyadhToday();
-  const todayCount = rows.filter((session) => String(session.scheduled_for).slice(0, 10) === today).length;
-  const completedCount = rows.filter((session) => session.status === 'completed').length;
-  const activeCount = rows.filter((session) => session.status === 'in_progress' || session.status === 'paused').length;
+  const rows = sessions.data?.sessions ?? [];
+  const sessionFamilyCounts = sessions.data?.counts ?? { all:0,strength:0,crossfit:0,calisthenics:0 };
+  const featured = sessions.data?.featured ?? null;
+  const inProgress = sessions.data?.resume ?? null;
+  const rest = rows.filter(session => session.id !== featured?.id && session.id !== inProgress?.id);
+  const todayCount = sessions.data?.summary.today ?? 0;
+  const completedCount = sessions.data?.summary.completed ?? 0;
+  const activeCount = sessions.data?.summary.active ?? 0;
   const activePlan = programs.data?.active ?? null;
 
   async function schedule() {
@@ -346,7 +332,7 @@ export default function TrainingScreen() {
         {/* Real schedule, not decoration — a day is filled only when a session actually exists on it. */}
         <View style={{ flexDirection: 'row', marginBottom: 18 }}>
           {weekDays().map((day) => {
-            const has = rows.some((session) => String(session.scheduled_for).slice(0, 10) === day);
+            const has = sessions.data?.scheduledDays.includes(day) ?? false;
             const isToday = day === riyadhToday();
             return (
               <View key={day} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
@@ -357,9 +343,9 @@ export default function TrainingScreen() {
           })}
         </View>
 
-        <TrainingFamilyCards value={filter} onChange={setFilter} counts={sessionFamilyCounts} />
+        <TrainingFamilyCards value={filter} onChange={next => { setHistoryCursor(null); setFilter(next); }} counts={sessionFamilyCounts} />
         {rest.length > 0 ? <SectionLabel>{text(locale, 'workoutHistory')}</SectionLabel> : null}
-        {rest.slice(0, visibleHistory).map((session) => (
+        {rest.map((session) => (
           <SurfaceCard key={session.id} padding={8} style={{ marginBottom: 10 }}>
             <MediaRow
               title={session.name}
@@ -370,7 +356,11 @@ export default function TrainingScreen() {
             />
           </SurfaceCard>
         ))}
-        {rest.length > visibleHistory ? <Button variant="secondary" label={locale === 'ar' ? 'عرض المزيد من الجلسات' : 'Show more sessions'} onPress={() => setVisibleHistory(value => value + 12)} /> : null}
+        <View style={{ flexDirection:'row', gap:8, marginBottom:12 }}>
+          <Button variant="secondary" disabled={sessions.isFetching || !sessions.data?.pageInfo.previousCursor} label={locale === 'ar' ? 'الأحدث' : 'Newer'} onPress={() => setHistoryCursor(sessions.data?.pageInfo.previousCursor ?? null)} />
+          <Button variant="secondary" disabled={sessions.isFetching || !sessions.data?.pageInfo.nextCursor} label={sessions.isFetching ? (locale === 'ar' ? 'جارٍ التحميل…' : 'Loading…') : (locale === 'ar' ? 'الأقدم' : 'Older')} onPress={() => setHistoryCursor(sessions.data?.pageInfo.nextCursor ?? null)} />
+          {historyCursor ? <Button variant="secondary" label={locale === 'ar' ? 'الأحدث أولًا' : 'Latest'} onPress={() => setHistoryCursor(null)} /> : null}
+        </View>
         <SectionTitle title={text(locale, 'workoutLibrary')} action={locale === 'ar' ? 'عرض الكل' : 'See all'} onAction={() => router.push('/exercises')} />
         {library.slice(0, 5).map((exercise, index) => (
           <ExerciseCard

@@ -1,3 +1,4 @@
+import type { SessionStatus } from '@sahhti/domain';
 export type YazanContext =
   | {
       surface: 'home';
@@ -30,6 +31,7 @@ export type YazanContext =
     }
   | {
       surface: 'workout';
+      status?: SessionStatus;
       exerciseName: string;
       setCount: number;
     };
@@ -121,6 +123,8 @@ export function yazanTip(locale: 'ar' | 'en', ctx: YazanContext): string {
         : `You finished ${ctx.sessionsCompleted} sessions and ${ctx.mealDaysLogged} meal days. That's a useful weekly review base.`;
     }
     case 'workout': {
+      if (ctx.status === 'completed') return ar ? `تم حفظ ${ctx.setCount} مجموعات. راجع ملخصك وخذ وقتك للتعافي.` : `${ctx.setCount} sets saved. Review your summary and give yourself time to recover.`;
+      if (ctx.status === 'paused') return ar ? 'الجلسة متوقفة مؤقتًا. استأنف عندما تكون جاهزًا.' : 'Your workout is paused. Resume when you are ready.';
       if (ctx.setCount === 0) {
         return ar
           ? `${ctx.exerciseName}: ركّز على المسار الكامل والحركة النظيفة. اسألني «لماذا هذا التمرين؟» لو تبي.`

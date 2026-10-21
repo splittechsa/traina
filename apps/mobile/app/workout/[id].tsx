@@ -1,3 +1,4 @@
+import { ExercisePreview } from '../../src/training/ExercisePreview';
 import { singleFlight, type Flight } from '../../src/offline/singleFlight';
 import { saveDurableSet, refreshWorkoutDependents } from '../../src/training/saveFeedback';
 import { perfMark } from '../../src/performance/lab';
@@ -19,7 +20,7 @@ import { text } from '../../src/i18n/copy';
 import { Button, Screen, ScreenBody } from '../../src/ui/Screen';
 import { AppHeader, ErrorState, LoadingSkeleton, SurfaceCard } from '../../src/ui/kit';
 
-import { asLibraryList, type LibraryExercise } from '../../src/training/library';
+import { type LibraryExercise } from '../../src/training/library';
 import { YazanCard, openYazanWithPrompt } from '../../src/ui/YazanCard';
 import { yazanTip } from '../../src/training/yazanPresence';
 import { fontFamily, radius, spacing, typeScale } from '../../src/theme/tokens';
@@ -33,7 +34,7 @@ import { accountScope, accountResource } from '../../src/offline/resource';
 import { useSession } from '../../src/auth/SessionProvider';
 import { normalizeWorkoutNumber } from '../../src/training/numericInput';
 
-type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia' | 'reviewStatus' | 'primary_muscles' | 'instructions_ar' | 'instructions_en'>;
+type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia' | 'approvedDemonstration' | 'reviewStatus' | 'primary_muscles' | 'instructions_ar' | 'instructions_en'>;
 type WorkoutProgress = {
   personalRecords: { exercise_id: string; load_grams: number; reps: number }[];
 };
@@ -87,6 +88,7 @@ export default function WorkoutScreen() {
 
   const session = useQuery({
     queryKey: ['session', id, owner],
+    gcTime: 60_000,
     enabled: typeof id === 'string' && owner !== null,
     queryFn: async () => {
       const fresh = await accountResource<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
@@ -173,6 +175,12 @@ export default function WorkoutScreen() {
   }, [flushPending, restPaused]);
 
   const currentSession = session.data?.session;
+  const results = useQuery({
+    queryKey: ['session-results', id, owner],
+    enabled: typeof id === 'string' && owner !== null && currentSession?.status === 'completed',
+    gcTime: 60_000,
+    queryFn: () => accountResource<{ improvements: { exerciseId:string;loadGrams:number;reps:number;previous:{loadGrams:number;reps:number} }[]; firstRecorded: {exerciseId:string;loadGrams:number;reps:number}[] }>(`/v1/training/sessions/${id}/results`),
+  });
   const activeExercise =
     currentSession === undefined
       ? undefined
@@ -484,8 +492,9 @@ export default function WorkoutScreen() {
           compact
           body={yazanTip(locale, {
             surface: 'workout',
+            status: current.status,
             exerciseName: active === undefined ? current.name : exerciseName(active.exerciseId),
-            setCount: loggedForActive.length,
+            setCount: isDone ? completedSets : loggedForActive.length,
           })}
           actions={[
             {
@@ -603,6 +612,7 @@ export default function WorkoutScreen() {
             </Text>
 
 
+            <ExercisePreview key={active.exerciseId} exerciseId={active.exerciseId} asset={demo?.approvedDemonstration} instructions={isAr ? demo?.instructions_ar : demo?.instructions_en} reviewed={demo?.reviewStatus==='reviewed'} />
             {previous !== undefined ? (
               <Text style={{ color: theme.textMuted, marginBottom: 10 }}>
                 {text(locale, 'previousBest')}:{' '}
@@ -758,7 +768,6 @@ export default function WorkoutScreen() {
 
 
             <Button variant="secondary" label={isAr ? 'اسأل يزن عن هذا التمرين' : 'Ask Yazan about this exercise'} onPress={() => openYazanWithPrompt(isAr ? `كيف أنفّذ تمرين ${exerciseName(active.exerciseId)}؟ سجلت ${loggedForActive.length} مجموعات.` : `How do I perform ${exerciseName(active.exerciseId)}? I have logged ${loggedForActive.length} sets.`)} />
-            {demo?.reviewStatus === 'reviewed' ? asLibraryList(isAr ? demo.instructions_ar : demo.instructions_en).slice(0, 3).map((cue, index) => <Text key={index} style={{ color: theme.textMuted, lineHeight: 22, marginVertical: 4 }}>{index + 1}. {cue}</Text>) : null}
             <Text style={{ color: theme.textMuted, marginVertical: 12 }}>{demo?.demonstrationMedia?.reviewStatus === 'reviewed' ? text(locale, 'techniqueHint') : (isAr ? 'العرض الحركي غير متاح حاليًا. راجع تعليمات التمرين أو اطلب مساعدة مدرب.' : 'Movement demonstration is unavailable. Check exercise instructions or ask a coach.')}</Text>
           </>
         ) : (
@@ -799,6 +808,16 @@ export default function WorkoutScreen() {
             </Text>
           </SurfaceCard>
         ) : null}
+
+        {isDone ? <SurfaceCard style={{marginBottom:12}}>
+          <Text style={{color:theme.accent,fontFamily:fontFamily.semibold}}>{isAr?'التقدّم مقارنة بما قبل الجلسة':'Progress against your pre-workout best'}</Text>
+          {results.isPending?<Text style={{color:theme.textMuted}}>{isAr?'نراجع سجلك…':'Checking your history…'}</Text>:null}
+          {results.isError?<Text style={{color:theme.textMuted}}>{isAr?'جلستك محفوظة. مقارنة الأرقام غير متاحة الآن.':'Your workout is saved. Record comparisons are unavailable right now.'}</Text>:null}
+          {results.data?.improvements.map(record=><Text key={record.exerciseId} style={{color:theme.text,lineHeight:24}}>{exerciseName(record.exerciseId)} · {formatKg(record.previous.loadGrams,locale)} × {record.previous.reps} → {formatKg(record.loadGrams,locale)} × {record.reps}</Text>)}
+          {results.data?.firstRecorded.map(record=><Text key={record.exerciseId} style={{color:theme.textMuted,lineHeight:24}}>{exerciseName(record.exerciseId)} · {isAr?'خط أساس جديد':'First recorded baseline'} · {formatKg(record.loadGrams,locale)} × {record.reps}</Text>)}
+          {results.data&&results.data.improvements.length===0&&results.data.firstRecorded.length===0?<Text style={{color:theme.textMuted}}>{isAr?'تم تسجيل عملك اليوم. لا توجد زيادة على أفضل أرقامك السابقة.':'Today’s work is recorded. No increase over your prior best.'}</Text>:null}
+          <Button variant="secondary" label={isAr?'العودة إلى سجل التمارين':'Back to workout history'} onPress={()=>router.replace('/(tabs)/training')} />
+        </SurfaceCard>:null}
 
         {conflicts.length > 0 ? <SurfaceCard>
           <Text style={{ color: theme.text }}>{isAr ? 'تعارض في المزامنة. السجلات المحلية محفوظة. أعد المحاولة أو اعتمد سجل الخادم.' : 'Sync conflict. Local records are retained. Retry or keep the server records.'}</Text>

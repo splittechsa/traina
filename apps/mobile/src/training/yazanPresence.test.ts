@@ -34,3 +34,8 @@ describe('yazanTip', () => {
     expect(tip).toContain('Barbell squat');
   });
 });
+
+it('uses a saved-summary cue after completion instead of prescribing another rest',()=>{
+  expect(yazanTip('en',{surface:'workout',status:'completed',exerciseName:'Squat',setCount:9})).toContain('9 sets saved');
+  expect(yazanTip('en',{surface:'workout',status:'paused',exerciseName:'Squat',setCount:1})).toContain('paused');
+});

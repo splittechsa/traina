@@ -1,3 +1,5 @@
+import { createSessionTransport } from './session-request.mjs';
+const sessionFetch = createSessionTransport();
 const $=id=>document.getElementById(id);
 const escape=value=>String(value??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=value=>value?new Intl.DateTimeFormat('ar-SA',{dateStyle:'medium',timeZone:'Asia/Riyadh',calendar:'gregory'}).format(new Date(value)):'—';
@@ -6,8 +8,9 @@ const names={active:'نشط',pending:'بانتظار التحقق',suspended:'م
 let current='overview',offset=0,search='',loading=false,generation=0;
 const titles={overview:['نظرة على نشاط المنصة','كل يوم، خطوة للأمام.'],members:['إدارة المجتمع','الأعضاء'],coaching:['المتابعة البشرية','المدربون والمراجعات'],interests:['من اللاندينق إلى الفريق','طلبات الاهتمام'],support:['متابعة طلبات الأعضاء','مساحة الدعم'],audit:['شفافية التشغيل','سجل النشاط']};
 async function api(path,{method='GET',body}={}) {
-  const response=await fetch('/api/'+path,{method,credentials:'same-origin',headers:{'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});
+  const response=await sessionFetch('/api/'+path,{method,credentials:'same-origin',headers:{'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});
   let data;try{data=await response.json();}catch{throw new Error('تعذّر قراءة رد الخادم. أعد المحاولة.');}
+  if(response.status===409 && data?.error?.code==='SESSION_REFRESH_RETRY'){showLogin();throw new Error('تعذر تجديد الجلسة. سجّل الدخول مجددًا.');}
   if(response.status===401||response.status===403){showLogin();throw new Error(response.status===403?'هذا الحساب لا يملك صلاحية الإدارة.':'انتهت الجلسة. سجّل الدخول مجددًا.');}
   if(!response.ok)throw new Error(response.status===409?'تغيّرت البيانات. حدّث الصفحة قبل المحاولة.':response.status===429?'محاولات كثيرة. انتظر قليلًا ثم أعد المحاولة.':'تعذّر تنفيذ الطلب. تحقق من الاتصال وأعد المحاولة.');
   return data;

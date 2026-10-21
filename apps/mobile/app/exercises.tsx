@@ -16,7 +16,7 @@ import { fontFamily, radius, spacing, typeScale } from '../src/theme/tokens';
 import { Button, Screen } from '../src/ui/Screen';
 import { AppHeader, BottomSheet, EmptyState, ErrorState, LoadingSkeleton, SectionLabel } from '../src/ui/kit';
 import { EnvironmentCards, EquipmentBrandCards, TrainingFamilyCards, type TrainingFamily } from '../src/training/filterCards';
-import { MovementDemo3D } from '../src/training/MovementDemo3D';
+import { ExercisePreview } from '../src/training/ExercisePreview';
 import {
   asLibraryList,
   brandLabel,
@@ -248,7 +248,7 @@ export default function ExercisesScreen() {
               <SymbolView name={iconFor(selected)} size={30} tintColor={theme.accent} />
             </View>
             <AppHeader title={ar ? selected.name_ar : selected.name_en} subtitle={ar ? selected.name_en : movementLabel(selected.movement_pattern, locale)} />
-            <MovementDemo3D profile={selected.demonstrationMedia?.profile ?? selected.movement_pattern} equipment={asLibraryList(selected.equipment)} />
+            <ExercisePreview key={selected.id} exerciseId={selected.id} asset={selected.approvedDemonstration} instructions={ar ? selected.instructions_ar : selected.instructions_en} reviewed={selected.reviewStatus==='reviewed'} />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginBottom: spacing[3] }}>
               <DetailTag>{label(locale, 'experience', selected.difficulty)}</DetailTag>
               <DetailTag>{movementLabel(selected.movement_pattern, locale)}</DetailTag>

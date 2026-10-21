@@ -58,7 +58,14 @@
           "motionPermission": "تستخدم ترينا مستشعر الحركة لعدّ خطواتك اليومية. traina uses motion data to count your daily steps."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ]
     ],
     "extra": {
       "router": {},

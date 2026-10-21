@@ -1,0 +1,8 @@
+{
+  "at": "2026-10-21T11:31:00.816Z",
+  "isolatedStagingProject": "solitary-pond-59179148",
+  "applied": [
+    "0035_workout_history_cursor.sql"
+  ],
+  "productionTouched": false
+}

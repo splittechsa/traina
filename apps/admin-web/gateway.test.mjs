@@ -25,3 +25,9 @@ test('can renew after the short-lived access cookie expires',async()=>{
   const handler=createGateway({fetchImpl:async(url,init)=>url.endsWith('/refresh')?new Response(JSON.stringify({accessToken:'renewed',refreshToken:'rotated'})):new Response(JSON.stringify({metrics:{}}),{status:init.headers.authorization==='Bearer renewed'?200:401})});
   assert.equal((await request(handler,'overview','GET',undefined,{cookie:'__Host-traina_admin_refresh=valid-refresh'})).status,200);
 });
+
+test('a losing refresh does not clear cookies installed by a concurrent winner',async()=>{
+  const handler=createGateway({fetchImpl:async()=>new Response('{}',{status:401})});
+  const r=await request(handler,'members','GET',undefined,{cookie:'__Host-traina_admin_access=old; __Host-traina_admin_refresh=used'});
+  assert.equal(r.status,409);assert.equal(r.body.error.code,'SESSION_REFRESH_RETRY');assert.equal(r.headers['set-cookie'],undefined);
+});
