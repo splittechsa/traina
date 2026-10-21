@@ -5,7 +5,12 @@ import { perfMark } from '../performance/lab';
 const DATABASE = 'sahhti-offline.db';
 let operations: Promise<void> = Promise.resolve();
 function serialize<T>(operation: () => Promise<T>): Promise<T> {
-  const result = operations.then(operation); operations = result.then(() => undefined, () => undefined); return result;
+  const queuedAt = performance.now();
+  const result = operations.then(async () => {
+    perfMark('sqlite.wait', 'serialized queue', performance.now() - queuedAt);
+    const started = performance.now();
+    try { return await operation(); } finally { perfMark('sqlite.operation', 'serialized operation', performance.now() - started); }
+  }); operations = result.then(() => undefined, () => undefined); return result;
 }
 function requireOwner(owner: string): void { if (!owner || !owner.includes('|')) throw new Error('OFFLINE_ACCOUNT_UNVERIFIED'); }
 let connection: Promise<SQLite.SQLiteDatabase> | undefined;

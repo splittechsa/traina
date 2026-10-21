@@ -1,3 +1,6 @@
+import { singleFlight, type Flight } from '../../src/offline/singleFlight';
+import { saveDurableSet, refreshWorkoutDependents } from '../../src/training/saveFeedback';
+import { perfMark } from '../../src/performance/lab';
 import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, Text, TextInput, View, Alert } from 'react-native';
@@ -100,39 +103,49 @@ export default function WorkoutScreen() {
     queryFn: () => accountResource<WorkoutProgress>('/v1/progress'),
   });
 
-  const syncing = useRef(false);
-  const flushPending = useCallback(async (): Promise<boolean> => {
-    if (typeof id !== 'string' || owner === null || syncing.current) return false;
-    syncing.current = true;
+  const syncing = useRef<Flight<boolean> | null>(null);
+  const flushPending = useCallback((): Promise<boolean> => {
+    if (typeof id !== 'string' || owner === null) return Promise.resolve(false);
+    return singleFlight(syncing, owner + '|' + id, async () => {
     try {
+      while (accountScope() === owner) {
       const pending = await readPendingSets(owner!);
       if (!pending.some(command => command.sessionId === id)) return true;
       // The query cache may include optimistic offline sets. Only server state can prove a replay.
       const fresh = await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
       if (accountScope() !== owner) return false;
+      let confirmed = fresh.session;
       const plan = planOfflineSync(fresh.session, pending);
       setConflicts(pending.filter(command => plan.conflicts.some(conflict => conflict.clientEventId === command.clientEventId)));
       const result = await synchronizeOfflineSets(fresh.session, pending, async command => {
         if (accountScope() !== owner) throw new Error('ACCOUNT_CHANGED');
         if (command.kind === 'replace') {
-          await apiRequest(`/v1/training/sessions/${command.sessionId}/sets/${command.set.id}`, {
+          confirmed = (await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${command.sessionId}/sets/${command.set.id}`, {
             method: 'PUT', body: { ...command.set, expectedSet: command.baseSet },
-          });
+          })).session;
         } else {
-          await apiRequest(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set });
+          confirmed = (await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set })).session;
         }
       });
-      await acknowledgePendingSets(owner!, pending, result.remaining);
+      if (accountScope() !== owner) return false;
+      // Keep a durable server snapshot before deleting replay commands, so offline reopen retains acknowledged sets.
+      await writeAccountSnapshot(owner, 'resource:/v1/training/sessions/' + id, { session: confirmed });
+      await acknowledgePendingSets(owner, pending, result.remaining);
       const remaining = await readPendingSets(owner!);
       if (result.hasConflicts) setNotice(text(locale, 'conflict'));
-      await client.invalidateQueries({ queryKey: ['session', id] });
-      return !remaining.some(command => command.sessionId === id);
+      if (accountScope() !== owner) return false;
+      client.setQueryData(['session', id, owner], { session: planOfflineSync(confirmed, remaining).session });
+      if (!remaining.some(command => command.sessionId === id)) return true;
+      const original = new Set(pending.filter(command => command.sessionId === id).map(command => command.clientEventId));
+      // Continue immediately for writes appended during this batch; never spin on a failed/conflicting write.
+      if (result.hasConflicts || remaining.some(command => original.has(command.clientEventId))) return false;
+      }
+      return false;
     } catch {
       // Keep the durable queue intact on connection or storage failures.
       return false;
-    } finally {
-      syncing.current = false;
     }
+    });
   }, [client, id, locale, owner]);
 
   useEffect(() => {
@@ -227,10 +240,11 @@ export default function WorkoutScreen() {
 
   async function runAction(action: () => Promise<void>) {
     if (actionInFlight.current) return;
+    const actionStarted = performance.now();
     actionInFlight.current = true; setBusy(true);
     try { await action(); }
     catch (error) { setNotice(error instanceof ApiClientError ? messageFor(error.code, locale, text(locale, 'error')) : text(locale, 'error')); }
-    finally { actionInFlight.current = false; setBusy(false); }
+    finally { actionInFlight.current = false; setBusy(false); perfMark('workout.action', 'input lock', performance.now() - actionStarted); }
   }
 
   async function start() {
@@ -272,10 +286,11 @@ export default function WorkoutScreen() {
     if (accountScope() !== owner) return;
     client.setQueryData(['session', id, owner], finished);
     skipRest(); setNotice('');
-    await client.invalidateQueries({ queryKey: ['session', id] });
-    await client.invalidateQueries({ queryKey: ['sessions'] });
-    await client.invalidateQueries({ queryKey: ['home'] });
-    await client.invalidateQueries({ queryKey: ['progress'] });
+    // The POST is authoritative. Refreshing the same session and three dashboards must not hold the finish action.
+    void writeAccountSnapshot(owner!, 'resource:/v1/training/sessions/' + id, finished).catch(() => {
+      if (accountScope() === owner) setNotice(isAr ? 'حُفظت الجلسة على الخادم، وتعذر تحديث نسختها المحلية.' : 'Workout saved on the server; its local copy could not be updated.');
+    });
+    refreshWorkoutDependents(key => client.invalidateQueries({ queryKey: [key] }));
     });
   }
 
@@ -292,15 +307,19 @@ export default function WorkoutScreen() {
 
   async function recordCommand(command: PendingSetCommand): Promise<void> {
     if (owner === null || accountScope() !== owner || session.data === undefined) throw new Error('OFFLINE_ACCOUNT_UNVERIFIED');
-    await enqueuePendingSet(owner, command);
-    await inputRecovery.clear(); setInputDirty(false);
-    const pending = await readPendingSets(owner);
-    const projected = planOfflineSync(session.data.session, pending).session;
-    client.setQueryData(['session', id, owner], { session: projected });
-    setNotice(text(locale, 'queued'));
-    // SQLite durability releases the input immediately. A slow network must not freeze the next set.
-    void flushPending().then(saved => {
-      if (accountScope() === owner && saved) setNotice('');
+    const savedAt = performance.now();
+    await saveDurableSet(command, {
+      persist: () => enqueuePendingSet(owner, command),
+      isCurrentAccount: () => accountScope() === owner,
+      current: () => client.getQueryData<{ session: WorkoutSession }>(['session', id, owner])?.session ?? session.data!.session,
+      publish: projected => {
+        client.setQueryData(['session', id, owner], { session: projected });
+        setInputDirty(false); setNotice(text(locale, 'queued'));
+        perfMark('set.phase', 'durable save + feedback', performance.now() - savedAt);
+      },
+      clearDraft: () => inputRecovery.clear(),
+      synchronize: async () => { const saved = await flushPending(); if (accountScope() === owner && saved) setNotice(''); },
+      backgroundError: () => { if (accountScope() === owner) setNotice(text(locale, 'queued')); },
     });
   }
 

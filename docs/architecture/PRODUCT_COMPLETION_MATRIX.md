@@ -4,13 +4,15 @@
 
 | Gate | Current evidence / remaining work |
 | --- | --- |
-| Storage / workout input | Implemented; 130 mobile tests; physical scripted beginner and experienced journeys; review required |
+| Storage / workout input | Implemented; 137 mobile tests; physical scripted beginner and experienced journeys; review required |
 | Performance | Development-only observations; native FPS/memory/cold-start/release-mode/Android remain NOT_TESTED |
 | Exercise demonstrations | BLOCKED: licensed, technically reviewed realistic trainer/animation assets absent |
 | Native usability | PARTIAL: real screenshots and handlers; independent human tasks, English/RTL restart, accessibility, recordings and next-day return open |
 | Completion | Replay-safe completion deployed to isolated staging; HTTPS completion/replay PASS; native human retry after reported error open |
 | Yazan | Context action retained; clinical/coaching quality acceptance open |
 | Release / merge | Required review, privacy, ENERGY_POLICY, billing and platform-policy gates remain intact; no merge authorized |
+
+Follow-up: [save feedback latency](../evidence/experience-2026-10-21/SAVE_FEEDBACK.md) removes additional waits; new physical latency verification remains open after disconnect.
 
 ## Historical evidence below
 
