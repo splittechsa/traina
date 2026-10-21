@@ -11,7 +11,7 @@
   },
   "iosHermesExport": {
     "status": "PASS",
-    "modules": 2003,
+    "modules": 2004,
     "size": "6.1MB",
     "note": "First attempt failed writing sandbox temp; retry with writable TEMP/TMP succeeded"
   },
@@ -33,6 +33,21 @@
       "100-session round-trip budget"
     ],
     "apiFullSuitePassedBeforeAddedBudgetTest": 72,
-    "apiProductTestsAfterBudgetAddition": 27
+    "apiProductTestsAfterBudgetAddition": 27,
+    "deployment": "dpl_Mr44SQzqdMiDwQpeh6bvNfL3jbk5",
+    "publicHttps": {
+      "completion": 200,
+      "replay": 200,
+      "sameCompletedAt": true,
+      "beforeMs": 3526.5447,
+      "afterMs": 851.5638
+    },
+    "nativeHumanRetry": "PENDING: device disconnected"
+  },
+  "ci": {
+    "head": "d9050d3d61da4d59db7cd7c3cd1f87c77cca5cf7",
+    "apiChecks": 2,
+    "mobileChecks": 2,
+    "all": "SUCCESS"
   }
 }
