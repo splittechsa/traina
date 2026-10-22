@@ -37,7 +37,8 @@
     "releaseLike": "NOT_TESTED",
     "nativeFps": "NOT_MEASURED",
     "nativeMemory": "NOT_MEASURED",
-    "physicalIphone": "NOT_TESTED_CURRENT_HEAD"
+    "physicalIphone": "NOT_TESTED_CURRENT_HEAD",
+    "nativeEvidenceSourceCommit": "d7e165d7b55db4ef4e0a81335eca2385f06adecf"
   },
   "media": {
     "approvedAssets": 0,
@@ -73,9 +74,9 @@
     "merged": false
   },
   "easPreview": {
-    "status": "NOT_STARTED_CURRENT_HEAD",
-    "previousBuild": "57cea473-8e52-4183-bf15-20bd5d3f13f9",
-    "previousFailure": "obsolete React Navigation imports; current source imports router compatibility module"
+    "status": "REBUILD_REQUIRED_AFTER_SDK_CONFIG_PATCH",
+    "supersededAttempt": "aec648d6-ed26-4b19-8265-37aafbc70db9",
+    "archiveMode": "EAS_NO_VCS_EXPLICIT_ROOT_INSPECTED"
   },
   "androidExport": {
     "status": "PASS",
@@ -88,5 +89,19 @@
     "bundle": "index-8e756d8a242d50a582f61fb5f63ec73e.hbc",
     "bytes": 5666851,
     "installableBinary": false
+  },
+  "expoDoctor": {
+    "status": "PASS",
+    "passed": 21,
+    "total": 21,
+    "at": "2026-10-22T22:52:04.660Z"
+  },
+  "dependencies": {
+    "expo": "57.0.31",
+    "router": "57.0.29",
+    "notifications": "57.0.24",
+    "splash": "57.0.10",
+    "runtimeVersion": "0.1.0-staging.2",
+    "securityReview": "OPEN_THREE_UNDERLYING_ADVISORIES"
   }
 }

@@ -62,3 +62,7 @@ Statuses for tasks: `BACKLOG → READY → IN_PROGRESS → REVIEW → VERIFIED �
 3. **External checkout from iOS** — not assumed legal; do not implement purchase redirects / misleading upgrade prompts.  
 4. **P2P exception** — live person-to-person coaching evaluated separately; async human review + AI **not** auto-exempt.  
 5. Guidelines change (e.g. Oct 2026 updates) — re-verify before each iOS submission: https://developer.apple.com/app-store/review/guidelines/
+
+## Dependency gate — 2026-10-23
+
+Expo Doctor21/21 passes after SDK57 patch/config migration. Three underlying dependency advisories remain open; [dependency triage](../evidence/android-closure-2026-10-22/DEPENDENCY_SECURITY.md) does not constitute independent approval. Commercial NO-GO unchanged.

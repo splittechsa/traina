@@ -139,3 +139,7 @@ Device legend: **PASS** · **FAIL** · **BLOCKED** · **NOT TESTED** · **PARTIA
 2. Do not mark reconstructed mobile UX complete without device evidence.  
 3. Do not enable live billing or real sensitive-data processing before approvals.  
 4. Screenshots require real capture — never fabricated.  
+
+## Dependency gate — 2026-10-23
+
+Expo Doctor21/21 passes after SDK57 patch/config migration. Three underlying dependency advisories remain open; [dependency triage](../evidence/android-closure-2026-10-22/DEPENDENCY_SECURITY.md) does not constitute independent approval. Commercial NO-GO unchanged.

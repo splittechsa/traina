@@ -29,3 +29,7 @@ The public website and admin returned 200. API health returned 200; commercial r
 ## Remaining launch gates
 
 Signed Android preview installation/performance; physical iPhone signed-build journey and recordings (Apple Developer access unavailable); native startup/FPS/memory and 100/500/1,000-session device runs; independent PR57 then PR58 review and approvals; qualified exercise/AI review; licensed reviewed 3D/video assets (zero approved assets); coach operational acceptance; privacy/store/payment and production operations gates. Do not merge or label the experience DONE from this evidence.
+
+## SDK57 release-build follow-up — 2026-10-23
+
+Cloud JavaScript bundling passed but Expo Doctor exposed a removed splash configuration field and three outdated patch packages. Configuration now uses the SDK57 splash plugin; compatible patches are installed and runtime is0.1.0-staging.2. Expo Doctor passes21/21 and160 mobile tests pass again. A fresh signed build is required for this changed native runtime; the earlier Expo Go evidence is associated with source commitd7e165d. See [dependency security review](DEPENDENCY_SECURITY.md) for three underlying audit advisories still requiring resolution/review; no findings are suppressed.
