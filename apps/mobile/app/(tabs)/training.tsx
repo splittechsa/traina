@@ -371,7 +371,7 @@ export default function TrainingScreen() {
             meta={[
               label(locale, 'equipment', Array.isArray(exercise.equipment) ? exercise.equipment[0] ?? '' : exercise.equipment),
               exercise.difficulty === undefined ? '' : label(locale, 'experience', exercise.difficulty),
-              asLibraryList(exercise.primary_muscles).slice(0, 2).join(' · '),
+              asLibraryList(exercise.primary_muscles).slice(0, 2).map((muscle) => label(locale, 'muscle', muscle)).join(' · '),
             ].filter((part) => part.length > 0).join(' · ')}
             onPress={() => {
               setSelected((current) => (current.includes(exercise.id) ? current : [...current, exercise.id].slice(0, 8)));
