@@ -74,7 +74,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     });
     void Promise.all([readStored(), SecureStore.getItemAsync(API_URL_KEY)])
       .then(async ([stored, apiBase]) => {
-        if (apiBase !== null && apiBase.length > 0) {
+        // A development diagnostics endpoint must never override the API baked
+        // into an internal/release binary sharing the same SecureStore keys.
+        if (__DEV__ && apiBase !== null && apiBase.length > 0) {
           setApiBaseOverride(apiBase);
         }
         if (stored && !stored.userId) {

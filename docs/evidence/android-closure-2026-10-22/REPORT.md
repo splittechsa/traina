@@ -33,3 +33,5 @@ Signed Android preview installation/performance; physical iPhone signed-build jo
 ## SDK57 release-build follow-up — 2026-10-23
 
 Cloud JavaScript bundling passed but Expo Doctor exposed a removed splash configuration field and three outdated patch packages. Configuration now uses the SDK57 splash plugin; compatible patches are installed and runtime is0.1.0-staging.2. Expo Doctor passes21/21 and160 mobile tests pass again. A fresh signed build is required for this changed native runtime; the earlier Expo Go evidence is associated with source commitd7e165d. See [dependency security review](DEPENDENCY_SECURITY.md) for three underlying audit advisories still requiring resolution/review; no findings are suppressed.
+
+Release API restoration now ignores persisted development endpoint overrides. A complete SessionProvider hydration regression confirms an existing account restores against the build-configured HTTPS endpoint rather than an old LAN address. Mobile validation is now161 tests across46 files (390 total with unchanged root checks), with typecheck/lint passing.

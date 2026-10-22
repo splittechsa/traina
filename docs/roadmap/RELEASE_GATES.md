@@ -1,6 +1,6 @@
 # Current Android native closure — 2026-10-22
 
-**Release NO-GO; experience PARTIAL.** Android now boots with host WHPX acceleration and runs Traina in Expo Go. Actual native synthetic interaction verified login, set logging, final-set editing, pause/resume, offline queue reconciliation (6→9 sets), a deliberately lost successful completion response, safe HTTPS replay, history and persistence after process restart. Screenshots prompted RTL, keyboard, workout controls and summary improvements. 389 automated tests passed. Signed preview/native performance and current-head physical iPhone acceptance remain open; no independent approvals, reviewed 3D assets or commercial readiness.
+**Release NO-GO; experience PARTIAL.** Android now boots with host WHPX acceleration and runs Traina in Expo Go. Actual native synthetic interaction verified login, set logging, final-set editing, pause/resume, offline queue reconciliation (6→9 sets), a deliberately lost successful completion response, safe HTTPS replay, history and persistence after process restart. Screenshots prompted RTL, keyboard, workout controls and summary improvements. 390 automated tests passed. Signed preview/native performance and current-head physical iPhone acceptance remain open; no independent approvals, reviewed 3D assets or commercial readiness.
 
 Evidence: [Android closure report](../evidence/android-closure-2026-10-22/REPORT.md). Earlier snapshots below are historical and do not supersede this status.
 

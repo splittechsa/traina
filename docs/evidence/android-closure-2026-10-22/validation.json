@@ -3,8 +3,8 @@
   "release": "NO_GO",
   "experience": "PARTIAL",
   "mobile": {
-    "tests": 160,
-    "files": 45,
+    "tests": 161,
+    "files": 46,
     "typecheck": "PASS",
     "lint": {
       "errors": 0,
@@ -20,7 +20,7 @@
     "typecheck": "PASS",
     "build": "PASS"
   },
-  "totalTests": 389,
+  "totalTests": 390,
   "android": {
     "device": "Pixel 7 AVD / Android 36 x86_64",
     "runtime": "Expo Go 57.0.9",
@@ -103,5 +103,6 @@
     "splash": "57.0.10",
     "runtimeVersion": "0.1.0-staging.2",
     "securityReview": "OPEN_THREE_UNDERLYING_ADVISORIES"
-  }
+  },
+  "releaseEndpointGuard": "PASS_RELEASE_IGNORES_PERSISTED_DEBUG_LAN_OVERRIDE"
 }
