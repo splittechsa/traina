@@ -57,7 +57,7 @@ export function EditorialLink({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={{ paddingVertical: 10, alignItems: align === 'center' ? 'center' : locale === 'ar' ? 'flex-end' : 'flex-start' }}
+      style={{ paddingVertical: 10, direction: 'ltr', alignItems: align === 'center' ? 'center' : locale === 'ar' ? 'flex-end' : 'flex-start' }}
     >
       <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: typeScale.label, writingDirection: 'auto' }}>
         {children}
@@ -145,10 +145,10 @@ export function EditorialFrame({
   const theme = useTheme();
   const alignment = { textAlign: locale === 'ar' ? 'right' as const : 'left' as const, writingDirection: locale === 'ar' ? 'rtl' as const : 'ltr' as const };
   return (
-    <View style={[styles.frame, { backgroundColor: theme.hero }]}>
+    <View style={[styles.frame, { backgroundColor: theme.hero, direction: locale === 'ar' ? 'rtl' : 'ltr' }]}>
       <PhotoWash source={source} />
       <View style={[styles.copy, { paddingTop: insets.top + spacing[4], paddingBottom: Math.max(insets.bottom, spacing[4]) + keyboard }]}>
-        <View style={{ position: 'absolute', top: insets.top + spacing[3], ...(locale === 'ar' ? { right: spacing[5] } : { left: spacing[5] }) }}>
+        <View style={{ position: 'absolute', top: insets.top + spacing[3], start: spacing[5] }}>
           <TrainaMark size={38} inverse wordmark />
         </View>
         <View style={styles.copyBlock}>
