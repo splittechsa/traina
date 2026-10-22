@@ -1,6 +1,7 @@
+import { Text } from '../src/ui/Text';
 import { useState } from 'react';
 import { router } from 'expo-router';
-import { Alert, Share, Text, View } from 'react-native';
+import { Alert, Share, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../src/api/client';
 import { useSession } from '../src/auth/SessionProvider';
@@ -10,7 +11,7 @@ import { text } from '../src/i18n/copy';
 import { fontFamily, spacing, typeScale } from '../src/theme/tokens';
 import { useTheme } from '../src/theme/ThemeProvider';
 import { Screen, ScreenBody } from '../src/ui/Screen';
-import { ProfileAvatar, SettingsGroup, SettingsRow } from '../src/ui/kit';
+import { AppHeader, ProfileAvatar, SettingsGroup, SettingsRow } from '../src/ui/kit';
 
 type Me = { profile: { display_name?: string | null } | null; goals?: string[] };
 
@@ -73,13 +74,15 @@ export default function AccountScreen() {
   }
 
   return (
-    <Screen title={text(locale, 'account')}>
+    <Screen>
       <ScreenBody>
-        <View style={{ alignItems: 'center', marginTop: spacing[2], marginBottom: spacing[5] }}>
+        <AppHeader showBack title={text(locale, 'account')} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[3], marginTop: spacing[2], marginBottom: spacing[5] }}>
           <ProfileAvatar name={name} />
+          <View style={{ flex: 1, minWidth: 0 }}>
           <Text
             numberOfLines={1}
-            style={{ marginTop: spacing[3], color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.title, writingDirection: 'auto' }}
+            style={{ marginTop: 0, color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.title, writingDirection: 'auto' }}
           >
             {name}
           </Text>
@@ -91,6 +94,7 @@ export default function AccountScreen() {
               {goalLabel}
             </Text>
           ) : null}
+          </View>
         </View>
         <SettingsGroup>
           <SettingsRow icon={{ ios: 'person.fill', android: 'person', web: 'person' }} title={locale === 'ar' ? 'تعديل الملف' : 'Edit profile'} onPress={() => router.push('/profile-edit')} />

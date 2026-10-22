@@ -9,7 +9,7 @@ import { buildApp } from './app.js';
 import { applyMigrationsTo, createPgliteDatabase, seedDevelopment, type Database } from './db/database.js';
 import { insertLedgerStatement } from './ledger-sql.js';
 import { allowAuthAttempt } from './identity/shared-throttle.js';
-import { insertLedgerLines } from './member/store.js';
+import { insertLedgerLines, mutateSession } from './member/store.js';
 
 const secret = 'session-secret-value';
 const exerciseId = '10000000-0000-4000-8000-000000000001';
@@ -75,6 +75,22 @@ describe('persisted product', () => {
     expect(await allowAuthAttempt(database, scope, key, 3, 1000, 4000)).toBe(true);
     const stored = await database.query<{ key_hash: string }>('SELECT key_hash FROM auth_rate_limits');
     expect(stored.rows.every(row => /^[a-f0-9]{64}$/.test(row.key_hash))).toBe(true);
+  });
+
+  it('completes a 100-workout account with a fixed database round-trip budget and owned records', async () => {
+    const token = await tokenFor('completion-budget@traina.test');
+    const me = await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${token}` } });
+    const userId = me.json().userId as string, currentId = randomUUID();
+    await database.query(`INSERT INTO workout_sessions (user_id,name,discipline,status,planned_exercises,scheduled_for,started_at,completed_at,pauses)
+      SELECT $1,'Synthetic history','powerlifting','completed','[]'::jsonb,'2026-06-01'::timestamptz,'2026-06-01'::timestamptz,'2026-06-01 01:00:00Z'::timestamptz,'[]'::jsonb FROM generate_series(1,100)`, [userId]);
+    await database.query(`INSERT INTO workout_sets (session_id,exercise_id,set_index,reps,load_grams,completed_at) SELECT id,$2,1,8,20000,completed_at FROM workout_sessions WHERE user_id=$1`, [userId, exerciseId]);
+    await database.query(`INSERT INTO workout_sessions (id,user_id,name,discipline,status,planned_exercises,scheduled_for,started_at,pauses) VALUES ($1,$2,'Current','powerlifting','in_progress','[]'::jsonb,'2026-06-02','2026-06-02','[]'::jsonb)`,[currentId,userId]);
+    let calls = 0;
+    const counted = (db: Database): Database => ({ query: async (sql, params) => { calls++; return db.query(sql, params); }, exec: sql => db.exec(sql), close: () => db.close(), transaction: fn => db.transaction(tx => fn(counted(tx))) });
+    const done = await mutateSession(counted(database), userId, currentId, { type: 'complete', at: '2026-06-02T01:00:00.000Z' });
+    expect(done.status).toBe('completed'); expect(calls).toBeLessThanOrEqual(12);
+    const records = await database.query<{ user_id: string; load_grams: number }>('SELECT user_id,load_grams FROM personal_records WHERE user_id=$1',[userId]);
+    expect(records.rows).toHaveLength(1); expect(Number(records.rows[0]?.load_grams)).toBe(20000);
   });
 
   it('refuses development seeds without an explicit confirmation', async () => {
@@ -265,6 +281,9 @@ describe('persisted product', () => {
     expect(completed.statusCode).toBe(200);
     expect(completed.json().session.status).toBe('completed');
     expect((completed.json().session.sets as unknown[]).length).toBe(1);
+
+    const replays = await Promise.all([1, 2].map(() => app.inject({ method: 'POST', url: `/v1/training/sessions/${sessionId}/complete`, headers: { authorization: `Bearer ${accessToken}` }, payload: { at: '2026-06-01T16:00:00.000Z' } })));
+    for (const replay of replays) { expect(replay.statusCode).toBe(200); expect(replay.json().session.completedAt).toBe(completed.json().session.completedAt); expect(replay.json().session.sets).toEqual(completed.json().session.sets); }
 
     const food = await app.inject({
       method: 'POST',

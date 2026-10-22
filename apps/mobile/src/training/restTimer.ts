@@ -20,3 +20,9 @@ export function pauseRestTimer(state: RestTimerState | null, now: number): RestT
 export function resumeRestTimer(state: RestTimerState | null, now: number): RestTimerState {
   return startRestTimer(remainingRest(state, now), now);
 }
+
+/** Adjust without silently resuming a paused timer. */
+export function adjustRestTimer(state: RestTimerState | null, delta: number, now: number): RestTimerState {
+  const next = startRestTimer(Math.min(900, Math.max(0, remainingRest(state, now) + delta)), now);
+  return state?.paused ? pauseRestTimer(next, now) : next;
+}

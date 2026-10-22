@@ -1,5 +1,6 @@
+import { Text } from '../ui/Text';
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
-import { AppState, Pressable, Text, View } from 'react-native';
+import { AppState, Pressable, View } from 'react-native';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { GLView } from 'expo-gl';
 import { SymbolView } from 'expo-symbols';

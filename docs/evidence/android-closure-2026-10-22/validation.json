@@ -1,0 +1,450 @@
+{
+  "at": "2026-10-22T23:47:35.628Z",
+  "release": "NO_GO",
+  "experience": "PARTIAL",
+  "mobile": {
+    "tests": 164,
+    "files": 46,
+    "typecheck": "PASS",
+    "lint": {
+      "errors": 0,
+      "existingWarnings": 5
+    }
+  },
+  "root": {
+    "domain": 136,
+    "contracts": 3,
+    "designTokens": 1,
+    "api": 81,
+    "admin": 8,
+    "typecheck": "PASS",
+    "build": "PASS"
+  },
+  "totalTests": 393,
+  "android": {
+    "device": "Pixel 7 AVD / Android 36 x86_64",
+    "runtime": "Signed EAS release APKs on Android API36 emulator",
+    "whpx": "HOST_PROBE_0_USABLE",
+    "booted": true,
+    "syntheticNativeLogin": true,
+    "rapidOfflineSets": "PASS",
+    "editFinalSet": "PASS_SERVER_RECONCILED",
+    "pauseResume": "PASS_SERVER_RECONCILED",
+    "completionLostResponse": "PASS_EXPO_GO; signed-binary fault injection not repeated",
+    "completionReplay": "PASS_HTTPS",
+    "history": "PASS",
+    "restart": "PASS",
+    "releaseLike": "TESTED_EMULATOR_ONLY",
+    "nativeFps": "NOT_MEASURED; emulator gfxinfo frame times/jank captured",
+    "nativeMemory": "PSS_100_500_1000_AND_FULL_50_PAGE_TRAVERSAL",
+    "physicalIphone": "NOT_TESTED_CURRENT_HEAD",
+    "keyboard": "NATIVE_OBSERVED_STATUS_BAR_COORDINATES_CORRECTED",
+    "priorityRouteAudit": "Expo Go priority routes; signed workout, history and localized library observed; physical-iPhone acceptance open",
+    "expoGo": {
+      "sourceCommit": "d7e165d7b55db4ef4e0a81335eca2385f06adecf",
+      "completionLostResponse": "PASS_NATIVE_RECONCILIATION",
+      "offlineReconciliation": "6 to9 sets; separate Expo Go fixture"
+    },
+    "signedWorkout": {
+      "buildId": "bdec93f1-cb4e-4398-aedb-cc1cb73000eb",
+      "sourceCommit": "240c552",
+      "sessionId": "76a5145e-2fdc-4644-aad1-65aca2eaee65",
+      "sets": 3,
+      "reps": [
+        8,
+        8,
+        9
+      ],
+      "loadGrams": 20000,
+      "volumeGrams": 500000,
+      "exerciseCount": 1,
+      "plannedSets": 12,
+      "completion": "PASS",
+      "history": "PASS",
+      "restart": "PASS",
+      "recording": "signed-workout.mp4",
+      "offlineRestart": "PASS"
+    },
+    "performance": {
+      "baselineBuild": "fcab602d-4f8c-44a6-adc6-c978b2907f00",
+      "sourceCommit": "5e0576a",
+      "cohorts": [
+        100,
+        500,
+        1000
+      ],
+      "pagesPerInitialCohort": 4,
+      "fullTraversal": {
+        "at": "2026-10-22T23:33:05.926Z",
+        "sourceCommit": "5e0576a",
+        "syntheticOnly": true,
+        "historySessions": 1000,
+        "pages": 50,
+        "pageSize": 20,
+        "coldStart": [
+          "LaunchState: COLD",
+          "TotalTime: 2205",
+          "WaitTime: 2209"
+        ],
+        "samples": [
+          {
+            "page": 1,
+            "at": "2026-10-22T23:28:28.092Z",
+            "totalPssKiB": 208513
+          },
+          {
+            "page": 2,
+            "at": "2026-10-22T23:28:40.332Z",
+            "totalPssKiB": 227543
+          },
+          {
+            "page": 5,
+            "at": "2026-10-22T23:28:57.054Z",
+            "totalPssKiB": 233783
+          },
+          {
+            "page": 10,
+            "at": "2026-10-22T23:29:24.372Z",
+            "totalPssKiB": 242431
+          },
+          {
+            "page": 15,
+            "at": "2026-10-22T23:29:51.428Z",
+            "totalPssKiB": 252418
+          },
+          {
+            "page": 20,
+            "at": "2026-10-22T23:30:18.859Z",
+            "totalPssKiB": 257300
+          },
+          {
+            "page": 25,
+            "at": "2026-10-22T23:30:46.100Z",
+            "totalPssKiB": 253747
+          },
+          {
+            "page": 30,
+            "at": "2026-10-22T23:31:13.410Z",
+            "totalPssKiB": 255362
+          },
+          {
+            "page": 35,
+            "at": "2026-10-22T23:31:41.067Z",
+            "totalPssKiB": 256970
+          },
+          {
+            "page": 40,
+            "at": "2026-10-22T23:32:08.795Z",
+            "totalPssKiB": 259982
+          },
+          {
+            "page": 45,
+            "at": "2026-10-22T23:32:36.164Z",
+            "totalPssKiB": 261266
+          },
+          {
+            "page": 50,
+            "at": "2026-10-22T23:33:03.195Z",
+            "totalPssKiB": 256075
+          }
+        ],
+        "lastPageOlderDisabled": true,
+        "graphicsSummary": [
+          "Total frames rendered: 1222",
+          "Janky frames: 334 (27.33%)",
+          "50th percentile: 28ms",
+          "90th percentile: 48ms",
+          "95th percentile: 53ms",
+          "99th percentile: 65ms",
+          "Number Missed Vsync: 72",
+          "50th gpu percentile: 16ms",
+          "90th gpu percentile: 4950ms",
+          "95th gpu percentile: 4950ms",
+          "99th gpu percentile: 4950ms"
+        ],
+        "limits": "One release emulator run. PSS includes native allocations; no forced GC. am start timing is activity launch, not first usable paint. No physical device or independent usability acceptance."
+      },
+      "limits": "Emulator observations, concurrent host activity, no physical-device timing or independent human acceptance. Initial cohorts reuse a warm process and cannot establish memory proportionality across account sizes."
+    },
+    "finalApkSmoke": {
+      "at": "2026-10-22T23:47:07.838Z",
+      "buildId": "c4183d28-2419-49ff-b5fc-89298532be88",
+      "sourceCommit": "db8aaac6b48ea557f41e328f7d7c8bc8741fd0b6",
+      "runtime": "signed release APK on Android API36 x86_64 emulator",
+      "package": "sa.sahhti.member",
+      "debuggable": false,
+      "apk": {
+        "name": "Traina-preview-c4183d28-2419-49ff-b5fc-89298532be88.apk",
+        "bytes": 156428768,
+        "sha256": "a0df856c15f0c423fa09a07c9fe9909c1d3325aa77d70452e7da486a818eaefe"
+      },
+      "syntheticOnly": true,
+      "sessionId": "7ebddd96-406b-4148-9298-3c2f1b095e88",
+      "status": "completed",
+      "sets": 3,
+      "completedAt": "2026-10-22T23:46:30.651Z",
+      "sameCompletionTimestamp": true,
+      "savedSummaryAfterRestart": true,
+      "genericFailure": false,
+      "coldActivityLaunch": [
+        "LaunchState: COLD",
+        "TotalTime: 1437",
+        "WaitTime: 1440"
+      ],
+      "scope": "Latest APK installed and launched using delivered helper; restored and completed the previously offline-reconciled3-set synthetic session; persisted after force-stop. Full edit/pause recording is predecessor240c552, differing only in training-library muscle localization. No physical-iPhone acceptance."
+    }
+  },
+  "media": {
+    "approvedAssets": 0,
+    "status": "BLOCKED"
+  },
+  "services": [
+    {
+      "url": "https://traina-staging-api.vercel.app/v1/health",
+      "status": 200
+    },
+    {
+      "url": "https://traina-staging-api.vercel.app/v1/ready",
+      "status": 503,
+      "body": {
+        "ready": false,
+        "missing": [
+          "store_verifier"
+        ]
+      }
+    },
+    {
+      "url": "https://traina-staging-www.vercel.app",
+      "status": 200
+    },
+    {
+      "url": "https://traina-staging-admin.vercel.app",
+      "status": 200
+    }
+  ],
+  "merge": {
+    "order": [
+      57,
+      58
+    ],
+    "independentApprovals": "MISSING",
+    "merged": false
+  },
+  "easPreview": {
+    "phone": {
+      "at": "2026-10-22T23:43:37.885Z",
+      "id": "c4183d28-2419-49ff-b5fc-89298532be88",
+      "status": "FINISHED",
+      "buildProfile": "preview",
+      "sourceCommit": "db8aaac",
+      "archiveContentSha256": "4558afd33c0244adde976a3622746ee41db119613c4f16233d388e148a6beec7",
+      "url": "https://expo.dev/accounts/splittech/projects/sahhti/builds/c4183d28-2419-49ff-b5fc-89298532be88",
+      "artifactAvailable": true,
+      "phases": [
+        "SPIN_UP_BUILDER",
+        "INSTALL_CUSTOM_TOOLS",
+        "PREPARE_PROJECT",
+        "PRE_INSTALL_HOOK",
+        "READ_EAS_JSON",
+        "READ_PACKAGE_JSON",
+        "INSTALL_DEPENDENCIES",
+        "READ_APP_CONFIG",
+        "RUN_EXPO_DOCTOR",
+        "PREBUILD",
+        "RESTORE_CACHE",
+        "POST_INSTALL_HOOK",
+        "CALCULATE_EXPO_UPDATES_RUNTIME_VERSION",
+        "PREPARE_CREDENTIALS",
+        "CONFIGURE_EXPO_UPDATES",
+        "EAGER_BUNDLE",
+        "RUN_GRADLEW",
+        "GRADLE_BUILD_PROFILE",
+        "PRE_UPLOAD_ARTIFACTS_HOOK",
+        "UPLOAD_APPLICATION_ARCHIVE",
+        "SAVE_CACHE",
+        "CACHE_STATS",
+        "ON_BUILD_SUCCESS_HOOK",
+        "ON_BUILD_COMPLETE_HOOK",
+        "UPLOAD_BUILD_ARTIFACTS"
+      ],
+      "failures": []
+    },
+    "emulator": {
+      "at": "2026-10-22T23:33:54.609Z",
+      "id": "bdec93f1-cb4e-4398-aedb-cc1cb73000eb",
+      "status": "FINISHED",
+      "buildProfile": "preview-emulator",
+      "sourceCommit": "240c552",
+      "archiveContentSha256": "95da2f0eb12ff265de6d5e3354a90ec6ddc54a36820202319850fa776bd289b2",
+      "url": "https://expo.dev/accounts/splittech/projects/sahhti/builds/bdec93f1-cb4e-4398-aedb-cc1cb73000eb",
+      "artifactAvailable": true,
+      "phases": [
+        "SPIN_UP_BUILDER",
+        "INSTALL_CUSTOM_TOOLS",
+        "PREPARE_PROJECT",
+        "PRE_INSTALL_HOOK",
+        "READ_EAS_JSON",
+        "READ_PACKAGE_JSON",
+        "INSTALL_DEPENDENCIES",
+        "READ_APP_CONFIG",
+        "RUN_EXPO_DOCTOR",
+        "PREBUILD",
+        "RESTORE_CACHE",
+        "POST_INSTALL_HOOK",
+        "CALCULATE_EXPO_UPDATES_RUNTIME_VERSION",
+        "PREPARE_CREDENTIALS",
+        "CONFIGURE_EXPO_UPDATES",
+        "EAGER_BUNDLE",
+        "RUN_GRADLEW",
+        "GRADLE_BUILD_PROFILE",
+        "PRE_UPLOAD_ARTIFACTS_HOOK",
+        "UPLOAD_APPLICATION_ARCHIVE",
+        "SAVE_CACHE",
+        "CACHE_STATS",
+        "ON_BUILD_SUCCESS_HOOK",
+        "ON_BUILD_COMPLETE_HOOK",
+        "UPLOAD_BUILD_ARTIFACTS"
+      ],
+      "failures": []
+    },
+    "baseline": {
+      "at": "2026-10-22T23:21:43.550Z",
+      "id": "fcab602d-4f8c-44a6-adc6-c978b2907f00",
+      "status": "FINISHED",
+      "buildProfile": "preview",
+      "sourceCommit": "5e0576adec55a34e4174214a1a837a049ca25b32",
+      "archiveContentSha256": "6aed13ea494b4ae97d706ccddcedeb59cf48e5e1b1a6407f5c76ee9c46ac8244",
+      "url": "https://expo.dev/accounts/splittech/projects/sahhti/builds/fcab602d-4f8c-44a6-adc6-c978b2907f00",
+      "artifactAvailable": true,
+      "phases": [
+        "SPIN_UP_BUILDER",
+        "INSTALL_CUSTOM_TOOLS",
+        "PREPARE_PROJECT",
+        "PRE_INSTALL_HOOK",
+        "READ_EAS_JSON",
+        "READ_PACKAGE_JSON",
+        "INSTALL_DEPENDENCIES",
+        "READ_APP_CONFIG",
+        "RUN_EXPO_DOCTOR",
+        "PREBUILD",
+        "RESTORE_CACHE",
+        "POST_INSTALL_HOOK",
+        "CALCULATE_EXPO_UPDATES_RUNTIME_VERSION",
+        "PREPARE_CREDENTIALS",
+        "CONFIGURE_EXPO_UPDATES",
+        "EAGER_BUNDLE",
+        "RUN_GRADLEW",
+        "GRADLE_BUILD_PROFILE",
+        "PRE_UPLOAD_ARTIFACTS_HOOK",
+        "UPLOAD_APPLICATION_ARCHIVE",
+        "SAVE_CACHE",
+        "CACHE_STATS",
+        "ON_BUILD_SUCCESS_HOOK",
+        "ON_BUILD_COMPLETE_HOOK",
+        "UPLOAD_BUILD_ARTIFACTS"
+      ],
+      "failures": []
+    }
+  },
+  "androidExport": {
+    "status": "PASS",
+    "bundle": "index-6adea7621b043acc5d6369ec0adb44ce.hbc",
+    "bytes": 5861897,
+    "installableBinary": false,
+    "scope": "Historical optimized export before SDK patch; signed Android build is separate current evidence. iOS export is not a signed binary."
+  },
+  "iosExport": {
+    "status": "PASS",
+    "bundle": "index-8e756d8a242d50a582f61fb5f63ec73e.hbc",
+    "bytes": 5666851,
+    "installableBinary": false,
+    "scope": "Historical optimized export before SDK patch; signed Android build is separate current evidence. iOS export is not a signed binary."
+  },
+  "expoDoctor": {
+    "status": "PASS",
+    "passed": 21,
+    "total": 21,
+    "at": "2026-10-22T22:52:04.660Z"
+  },
+  "dependencies": {
+    "expo": "57.0.31",
+    "router": "57.0.29",
+    "notifications": "57.0.24",
+    "splash": "57.0.10",
+    "runtimeVersion": "0.1.0-staging.2",
+    "securityReview": "OPEN_THREE_UNDERLYING_ADVISORIES"
+  },
+  "releaseEndpointGuard": "PASS_RELEASE_IGNORES_PERSISTED_DEBUG_LAN_OVERRIDE",
+  "sourceCommit": "db8aaac6b48ea557f41e328f7d7c8bc8741fd0b6",
+  "reviewGates": {
+    "at": "2026-10-22T23:32:44.855Z",
+    "dependencyOrder": [
+      57,
+      58
+    ],
+    "pullRequests": [
+      {
+        "number": 57,
+        "head": "7971d0484467790ee3df0f0c6db461594fa27c4e",
+        "base": "release/vercel-staging",
+        "draft": true,
+        "reviewDecision": "",
+        "approvedReviews": 0,
+        "checks": [
+          {
+            "name": "api",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS"
+          },
+          {
+            "name": "api",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS"
+          },
+          {
+            "name": "mobile",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS"
+          },
+          {
+            "name": "mobile",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS"
+          }
+        ]
+      },
+      {
+        "number": 58,
+        "head": "db8aaac6b48ea557f41e328f7d7c8bc8741fd0b6",
+        "base": "feature/admin-landing-iphone",
+        "draft": true,
+        "reviewDecision": "",
+        "approvedReviews": 0,
+        "checks": [
+          {
+            "name": "api",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS"
+          },
+          {
+            "name": "api",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS"
+          },
+          {
+            "name": "mobile",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS"
+          },
+          {
+            "name": "mobile",
+            "status": "COMPLETED",
+            "conclusion": "SUCCESS"
+          }
+        ]
+      }
+    ],
+    "merged": false,
+    "independentApproval": "MISSING"
+  }
+}

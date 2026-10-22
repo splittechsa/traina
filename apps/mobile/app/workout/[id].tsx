@@ -1,11 +1,19 @@
+import { SetInputs } from '../../src/training/SetInputs';
+import { Text } from '../../src/ui/Text';
+import { ExercisePreview } from '../../src/training/ExercisePreview';
+import { singleFlight, type Flight } from '../../src/offline/singleFlight';
+import { saveDurableSet, refreshWorkoutDependents } from '../../src/training/saveFeedback';
+import { perfMark } from '../../src/performance/lab';
 import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, Text, TextInput, View, Alert } from 'react-native';
+import { AppState, Pressable, View, Alert } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import type { WorkoutSession, WorkoutSet } from '@sahhti/domain';
-import { parseScaledInteger } from '@sahhti/domain';
+import { parseScaledInteger, workoutElapsedSeconds } from '@sahhti/domain';
+import { completionTimestamp, finishWithReconciliation } from '../../src/training/completeWorkout';
+import { messageFor } from '../../src/api/errors';
 import { ApiClientError, apiRequest } from '../../src/api/client';
 import { formatCount, formatKg } from '../../src/format';
 import { label } from '../../src/i18n/labels';
@@ -13,8 +21,8 @@ import { useLocale } from '../../src/i18n/LocaleProvider';
 import { text } from '../../src/i18n/copy';
 import { Button, Screen, ScreenBody } from '../../src/ui/Screen';
 import { AppHeader, ErrorState, LoadingSkeleton, SurfaceCard } from '../../src/ui/kit';
-import { MovementDemo3D } from '../../src/training/MovementDemo3D';
-import { asLibraryList, type LibraryExercise } from '../../src/training/library';
+
+import { type LibraryExercise } from '../../src/training/library';
 import { YazanCard, openYazanWithPrompt } from '../../src/ui/YazanCard';
 import { yazanTip } from '../../src/training/yazanPresence';
 import { fontFamily, radius, spacing, typeScale } from '../../src/theme/tokens';
@@ -23,12 +31,11 @@ import { useMotion } from '../../src/theme/motion';
 import { tapSuccess } from '../../src/ui/haptics';
 import { planOfflineSync, synchronizeOfflineSets, type PendingSetCommand } from '../../src/offline/queue';
 import { acknowledgePendingSets, enqueuePendingSet, readPendingSets, readAccountSnapshot, writeAccountSnapshot, replaceConflictingSet } from '../../src/offline/sqlite';
-import { pauseRestTimer, remainingRest, resumeRestTimer, startRestTimer, type RestTimerState } from '../../src/training/restTimer';
+import { adjustRestTimer, pauseRestTimer, remainingRest, resumeRestTimer, startRestTimer, type RestTimerState } from '../../src/training/restTimer';
 import { accountScope, accountResource } from '../../src/offline/resource';
 import { useSession } from '../../src/auth/SessionProvider';
-import { normalizeWorkoutNumber } from '../../src/training/numericInput';
 
-type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia'>;
+type ExerciseMeta = Pick<LibraryExercise, 'id' | 'name_ar' | 'name_en' | 'movement_pattern' | 'equipment' | 'demonstrationMedia' | 'approvedDemonstration' | 'reviewStatus' | 'primary_muscles' | 'instructions_ar' | 'instructions_en'>;
 type WorkoutProgress = {
   personalRecords: { exercise_id: string; load_grams: number; reps: number }[];
 };
@@ -36,7 +43,26 @@ type WorkoutProgress = {
 function formatRest(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
+  if (m >= 60) return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** Only this label ticks; the form and set table do not rerender each second. */
+function RestCountdown({ readState, paused, secondsAtChange, onExpire }: { readState: () => RestTimerState | null; paused: boolean; secondsAtChange: number; onExpire: () => void }) {
+  const theme = useTheme();
+  const [seconds, setSeconds] = useState(secondsAtChange);
+  const expired = useRef(onExpire);
+  useEffect(() => { expired.current = onExpire; }, [onExpire]);
+  const read = useRef(readState);
+  useEffect(() => { read.current = readState; }, [readState]);
+  useEffect(() => {
+    const state = read.current();
+    const tick = () => { const left = remainingRest(state, Date.now()); setSeconds(left); if (left === 0) expired.current(); };
+    tick();
+    if (state?.paused || !state) return;
+    const timer = setInterval(tick, 1000); return () => clearInterval(timer);
+  }, [paused, secondsAtChange]);
+  return <Text accessibilityLiveRegion="polite" style={{ color: theme.accent, fontFamily: fontFamily.bold, fontSize: 24, marginVertical: 2 }}>{formatRest(seconds)}</Text>;
 }
 
 export default function WorkoutScreen() {
@@ -64,6 +90,7 @@ export default function WorkoutScreen() {
 
   const session = useQuery({
     queryKey: ['session', id, owner],
+    gcTime: 60_000,
     enabled: typeof id === 'string' && owner !== null,
     queryFn: async () => {
       const fresh = await accountResource<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
@@ -80,39 +107,49 @@ export default function WorkoutScreen() {
     queryFn: () => accountResource<WorkoutProgress>('/v1/progress'),
   });
 
-  const syncing = useRef(false);
-  const flushPending = useCallback(async (): Promise<boolean> => {
-    if (typeof id !== 'string' || owner === null || syncing.current) return false;
-    syncing.current = true;
+  const syncing = useRef<Flight<boolean> | null>(null);
+  const flushPending = useCallback((): Promise<boolean> => {
+    if (typeof id !== 'string' || owner === null) return Promise.resolve(false);
+    return singleFlight(syncing, owner + '|' + id, async () => {
     try {
+      while (accountScope() === owner) {
       const pending = await readPendingSets(owner!);
       if (!pending.some(command => command.sessionId === id)) return true;
       // The query cache may include optimistic offline sets. Only server state can prove a replay.
       const fresh = await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`);
       if (accountScope() !== owner) return false;
+      let confirmed = fresh.session;
       const plan = planOfflineSync(fresh.session, pending);
       setConflicts(pending.filter(command => plan.conflicts.some(conflict => conflict.clientEventId === command.clientEventId)));
       const result = await synchronizeOfflineSets(fresh.session, pending, async command => {
         if (accountScope() !== owner) throw new Error('ACCOUNT_CHANGED');
         if (command.kind === 'replace') {
-          await apiRequest(`/v1/training/sessions/${command.sessionId}/sets/${command.set.id}`, {
+          confirmed = (await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${command.sessionId}/sets/${command.set.id}`, {
             method: 'PUT', body: { ...command.set, expectedSet: command.baseSet },
-          });
+          })).session;
         } else {
-          await apiRequest(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set });
+          confirmed = (await apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${command.sessionId}/sets`, { method: 'POST', body: command.set })).session;
         }
       });
-      await acknowledgePendingSets(owner!, pending, result.remaining);
+      if (accountScope() !== owner) return false;
+      // Keep a durable server snapshot before deleting replay commands, so offline reopen retains acknowledged sets.
+      await writeAccountSnapshot(owner, 'resource:/v1/training/sessions/' + id, { session: confirmed });
+      await acknowledgePendingSets(owner, pending, result.remaining);
       const remaining = await readPendingSets(owner!);
       if (result.hasConflicts) setNotice(text(locale, 'conflict'));
-      await client.invalidateQueries({ queryKey: ['session', id] });
-      return !remaining.some(command => command.sessionId === id);
+      if (accountScope() !== owner) return false;
+      client.setQueryData(['session', id, owner], { session: planOfflineSync(confirmed, remaining).session });
+      if (!remaining.some(command => command.sessionId === id)) return true;
+      const original = new Set(pending.filter(command => command.sessionId === id).map(command => command.clientEventId));
+      // Continue immediately for writes appended during this batch; never spin on a failed/conflicting write.
+      if (result.hasConflicts || remaining.some(command => original.has(command.clientEventId))) return false;
+      }
+      return false;
     } catch {
       // Keep the durable queue intact on connection or storage failures.
       return false;
-    } finally {
-      syncing.current = false;
     }
+    });
   }, [client, id, locale, owner]);
 
   useEffect(() => {
@@ -139,18 +176,13 @@ export default function WorkoutScreen() {
     return () => sub.remove();
   }, [flushPending, restPaused]);
 
-  const restRunning = rest > 0 && !restPaused;
-  useEffect(() => {
-    if (!restRunning) return;
-    const timer = setInterval(() => {
-      const left = remainingRest(restAnchor.current, Date.now());
-      setRest(left);
-      if (left === 0) restAnchor.current = null;
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [restRunning]);
-
   const currentSession = session.data?.session;
+  const results = useQuery({
+    queryKey: ['session-results', id, owner],
+    enabled: typeof id === 'string' && owner !== null && currentSession?.status === 'completed',
+    gcTime: 60_000,
+    queryFn: () => accountResource<{ improvements: { exerciseId:string;loadGrams:number;reps:number;previous:{loadGrams:number;reps:number} }[]; firstRecorded: {exerciseId:string;loadGrams:number;reps:number}[] }>(`/v1/training/sessions/${id}/results`),
+  });
   const activeExercise =
     currentSession === undefined
       ? undefined
@@ -195,6 +227,14 @@ export default function WorkoutScreen() {
     if (typeof id === 'string' && owner) void writeAccountSnapshot(owner, `rest:${id}`, state).catch(() => setNotice(text(locale, 'error')));
   }
 
+  function adjustRest(delta: number) {
+    const state = adjustRestTimer(restAnchor.current, delta, Date.now());
+    restAnchor.current = state;
+    setRest(remainingRest(state, Date.now()));
+    setRestPaused(state.paused === true);
+    if (typeof id === 'string' && owner) void writeAccountSnapshot(owner, `rest:${id}`, state).catch(() => setNotice(text(locale, 'error')));
+  }
+
   function skipRest() {
     setRest(0);
     restAnchor.current = null;
@@ -218,10 +258,11 @@ export default function WorkoutScreen() {
 
   async function runAction(action: () => Promise<void>) {
     if (actionInFlight.current) return;
+    const actionStarted = performance.now();
     actionInFlight.current = true; setBusy(true);
     try { await action(); }
-    catch { setNotice(text(locale, 'error')); }
-    finally { actionInFlight.current = false; setBusy(false); }
+    catch (error) { setNotice(error instanceof ApiClientError ? messageFor(error.code, locale, text(locale, 'error')) : text(locale, 'error')); }
+    finally { actionInFlight.current = false; setBusy(false); perfMark('workout.action', 'input lock', performance.now() - actionStarted); }
   }
 
   async function start() {
@@ -256,11 +297,18 @@ export default function WorkoutScreen() {
       setNotice(isAr ? 'لم تُحفظ كل المجموعات بعد. اتصل بالإنترنت وأعد المحاولة قبل إنهاء التمرين.' : 'Some sets are still unsaved. Reconnect and retry before finishing.');
       return;
     }
-    await apiRequest(`/v1/training/sessions/${id}/complete`, { method: 'POST', body: { at: new Date().toISOString() } });
-    await client.invalidateQueries({ queryKey: ['session', id] });
-    await client.invalidateQueries({ queryKey: ['sessions'] });
-    await client.invalidateQueries({ queryKey: ['home'] });
-    await client.invalidateQueries({ queryKey: ['progress'] });
+    const finished = await finishWithReconciliation(
+      () => apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}/complete`, { method: 'POST', body: { at: completionTimestamp(session.data!.session, Date.now()) } }),
+      () => apiRequest<{ session: WorkoutSession }>(`/v1/training/sessions/${id}`),
+    );
+    if (accountScope() !== owner) return;
+    client.setQueryData(['session', id, owner], finished);
+    skipRest(); setNotice('');
+    // The POST is authoritative. Refreshing the same session and three dashboards must not hold the finish action.
+    void writeAccountSnapshot(owner!, 'resource:/v1/training/sessions/' + id, finished).catch(() => {
+      if (accountScope() === owner) setNotice(isAr ? 'حُفظت الجلسة على الخادم، وتعذر تحديث نسختها المحلية.' : 'Workout saved on the server; its local copy could not be updated.');
+    });
+    refreshWorkoutDependents(key => client.invalidateQueries({ queryKey: [key] }));
     });
   }
 
@@ -277,15 +325,19 @@ export default function WorkoutScreen() {
 
   async function recordCommand(command: PendingSetCommand): Promise<void> {
     if (owner === null || accountScope() !== owner || session.data === undefined) throw new Error('OFFLINE_ACCOUNT_UNVERIFIED');
-    await enqueuePendingSet(owner, command);
-    await inputRecovery.clear(); setInputDirty(false);
-    const pending = await readPendingSets(owner);
-    const projected = planOfflineSync(session.data.session, pending).session;
-    client.setQueryData(['session', id, owner], { session: projected });
-    setNotice(text(locale, 'queued'));
-    // SQLite durability releases the input immediately. A slow network must not freeze the next set.
-    void flushPending().then(saved => {
-      if (accountScope() === owner && saved) setNotice('');
+    const savedAt = performance.now();
+    await saveDurableSet(command, {
+      persist: () => enqueuePendingSet(owner, command),
+      isCurrentAccount: () => accountScope() === owner,
+      current: () => client.getQueryData<{ session: WorkoutSession }>(['session', id, owner])?.session ?? session.data!.session,
+      publish: projected => {
+        client.setQueryData(['session', id, owner], { session: projected });
+        setInputDirty(false); setNotice(text(locale, 'queued'));
+        perfMark('set.phase', 'durable save + feedback', performance.now() - savedAt);
+      },
+      clearDraft: () => inputRecovery.clear(),
+      synchronize: async () => { const saved = await flushPending(); if (accountScope() === owner && saved) setNotice(''); },
+      backgroundError: () => { if (accountScope() === owner) setNotice(text(locale, 'queued')); },
     });
   }
 
@@ -391,13 +443,18 @@ export default function WorkoutScreen() {
   const targetReps = active?.prescription.kind === 'strength' ? active.prescription.reps : Number(reps) || 8;
   const previous = previousForActive;
 
+  const nextExercise = current.plannedExercises[activeIndex + 1];
+  const activeTargetMet = editingSetId === null && active?.prescription.kind === 'strength' && loggedForActive.length >= plannedSets;
   const footer =
     isScheduled ? (
-      <Button label={busy ? (isAr ? 'جارٍ البدء…' : 'Starting…') : text(locale, 'start')} disabled={busy} onPress={() => void start()} />
+      <Button testID="workout-start" label={busy ? (isAr ? 'جارٍ البدء…' : 'Starting…') : text(locale, 'start')} disabled={busy} onPress={() => void start()} />
     ) : isPaused ? (
       <Button label={text(locale, 'resume')} disabled={busy} onPress={() => void resume()} />
+    ) : isRunning && activeTargetMet && editingSetId === null ? (
+      <Button testID={nextExercise ? 'workout-next' : 'workout-finish'} label={nextExercise ? (isAr ? 'التمرين التالي' : 'Next exercise') : text(locale, 'finish')} onPress={() => { if (nextExercise) { skipRest(); setActiveExerciseId(nextExercise.exerciseId); } else { Alert.alert(text(locale, 'finishWorkoutTitle'), text(locale, 'finishWorkoutBody'), [{ text: text(locale, 'stayWorkout'), style: 'cancel' }, { text: text(locale, 'finish'), onPress: () => void complete() }]); } }} />
     ) : isRunning && active !== undefined ? (
       <Button
+        testID="workout-log-set"
         disabled={busy}
         label={
           busy
@@ -426,8 +483,9 @@ export default function WorkoutScreen() {
         }
       >
         <AppHeader
-          title={current.name}
+          title={isRunning || isPaused ? (isAr ? 'التمرين الحالي' : 'Current exercise') : current.name}
           subtitle={label(locale, 'session', current.status)}
+          trailing={isRunning ? <Pressable accessibilityRole="button" accessibilityLabel={text(locale, 'pause')} accessibilityState={{disabled:busy}} disabled={busy} testID="workout-pause" onPress={() => void pause()} style={{minHeight:44,minWidth:44,padding:8,justifyContent:'center',borderRadius:radius.sm,backgroundColor:theme.surfaceMuted,opacity:busy?0.55:1}}><Text style={{color:theme.accent,fontFamily:fontFamily.semibold,fontSize:typeScale.label}}>{text(locale, 'pause')}</Text></Pressable> : undefined}
           showBack
           confirmUnsaved={
             isRunning || isPaused
@@ -441,12 +499,37 @@ export default function WorkoutScreen() {
           }
         />
 
-        <YazanCard
+        {isDone ? (
+          <SurfaceCard tone="raised" style={{ marginBottom: spacing[3] }}>
+            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
+              {isAr ? 'ملخص الجلسة' : 'Session summary'}
+            </Text>
+            <Text style={{ color: theme.accent, marginBottom: 8 }}>{isAr ? 'أحسنت، تم حفظ جلستك' : 'Well done, your session is saved'} · {formatRest(workoutElapsedSeconds(current, current.completedAt!))}</Text>
+            <Text style={{ color: theme.textMuted, lineHeight: 22 }}>
+              {isAr
+                ? `${completedSets} مجموعات · ${new Set(current.sets.map(set => set.exerciseId)).size} تمارين مسجّلة${volumeGrams > 0 ? ` · حجم تدريبي ${formatKg(volumeGrams, locale)} كغ` : ''}`
+                : `${completedSets} sets · ${new Set(current.sets.map(set => set.exerciseId)).size} exercises logged${volumeGrams > 0 ? ` · volume ${formatKg(volumeGrams, locale)} kg` : ''}`}
+            </Text>
+          </SurfaceCard>
+        ) : null}
+
+        {isDone ? <SurfaceCard style={{marginBottom:12}}>
+          <Text style={{color:theme.accent,fontFamily:fontFamily.semibold}}>{isAr?'التقدّم مقارنة بما قبل الجلسة':'Progress against your pre-workout best'}</Text>
+          {results.isPending?<Text style={{color:theme.textMuted}}>{isAr?'نراجع سجلك…':'Checking your history…'}</Text>:null}
+          {results.isError?<Text style={{color:theme.textMuted}}>{isAr?'جلستك محفوظة. مقارنة الأرقام غير متاحة الآن.':'Your workout is saved. Record comparisons are unavailable right now.'}</Text>:null}
+          {results.data?.improvements.map(record=><Text key={record.exerciseId} style={{color:theme.text,lineHeight:24}}>{exerciseName(record.exerciseId)} · {formatKg(record.previous.loadGrams,locale)} × {record.previous.reps} → {formatKg(record.loadGrams,locale)} × {record.reps}</Text>)}
+          {results.data?.firstRecorded.map(record=><Text key={record.exerciseId} style={{color:theme.textMuted,lineHeight:24}}>{exerciseName(record.exerciseId)} · {isAr?'خط أساس جديد':'First recorded baseline'} · {formatKg(record.loadGrams,locale)} × {record.reps}</Text>)}
+          {results.data&&results.data.improvements.length===0&&results.data.firstRecorded.length===0?<Text style={{color:theme.textMuted}}>{isAr?'تم تسجيل عملك اليوم. لا توجد زيادة على أفضل أرقامك السابقة.':'Today’s work is recorded. No increase over your prior best.'}</Text>:null}
+          <Button variant="secondary" label={isAr?'العودة إلى سجل التمارين':'Back to workout history'} onPress={()=>router.replace('/(tabs)/training')} />
+        </SurfaceCard>:null}
+
+        {(isScheduled || isDone) ? (<YazanCard
           compact
           body={yazanTip(locale, {
             surface: 'workout',
+            status: current.status,
             exerciseName: active === undefined ? current.name : exerciseName(active.exerciseId),
-            setCount: loggedForActive.length,
+            setCount: isDone ? completedSets : loggedForActive.length,
           })}
           actions={[
             {
@@ -476,15 +559,17 @@ export default function WorkoutScreen() {
                 ]
               : []),
           ]}
-        />
+        />) : null}
 
+        {isScheduled ? <Text style={{ color: theme.textMuted, lineHeight: 22, marginBottom: 12 }}>{isAr ? 'راجع ترتيب التمارين، ثم ابدأ. يمكنك تعديل الوزن والتكرارات وتسجيل كل مجموعة أثناء الجلسة.' : 'Review your exercises, then start. Adjust weight and reps and record each set during the session.'}</Text> : null}
+        {(isScheduled || isDone) ? (
         <SurfaceCard tone="raised" style={{ marginBottom: spacing[3] }}>
           <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, fontSize: typeScale.label, marginBottom: 6 }}>
             {isDone ? (isAr ? 'جلسة مكتملة' : 'Session complete') : isRunning ? (isAr ? 'جلسة نشطة' : 'Active session') : isPaused ? (isAr ? 'متوقفة مؤقتاً' : 'Paused') : (isAr ? 'جاهز للبدء' : 'Ready to start')}
           </Text>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {[
-              [String(current.plannedExercises.length), isAr ? 'تمارين' : 'Exercises'],
+              [String(isDone ? new Set(current.sets.map(set => set.exerciseId)).size : current.plannedExercises.length), isAr ? 'تمارين' : 'Exercises'],
               [`${completedSets}/${plannedSetTotal}`, isAr ? 'مجموعات' : 'Sets'],
               [volumeGrams > 0 ? formatKg(volumeGrams, locale) : '—', isAr ? 'حجم' : 'Volume'],
             ].map(([n, caption]) => (
@@ -495,14 +580,19 @@ export default function WorkoutScreen() {
             ))}
           </View>
         </SurfaceCard>
+        ) : null}
 
         {rest > 0 && isRunning ? (
           <SurfaceCard style={{ marginBottom: spacing[3], borderColor: theme.accent, borderWidth: 1 }}>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium }}>{text(locale, 'restTimer')}</Text>
-            <Text style={{ color: theme.accent, fontFamily: fontFamily.bold, fontSize: 36, marginVertical: 4 }}>{formatRest(rest)}</Text>
+            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8}}>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium }}>{text(locale, 'restTimer')}</Text>
+              <RestCountdown readState={() => restAnchor.current} paused={restPaused} secondsAtChange={rest} onExpire={() => { setRest(0); restAnchor.current = null; }} />
+            </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={isAr ? 'إضافة ١٥ ثانية للراحة' : 'Add 15 seconds to rest'} onPress={() => adjustRest(15)} style={{flex:1,minHeight:44,borderRadius:radius.md,backgroundColor:theme.surfaceMuted,alignItems:'center',justifyContent:'center'}}><Text style={{color:theme.text,fontFamily:fontFamily.semibold}}>{isAr ? '+١٥ ثانية' : '+15 seconds'}</Text></Pressable>
               <Pressable
                 accessibilityRole="button"
+                testID="workout-pause-rest"
                 onPress={toggleRest}
                 style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
               >
@@ -512,6 +602,7 @@ export default function WorkoutScreen() {
               </Pressable>
               <Pressable
                 accessibilityRole="button"
+                testID="workout-skip-rest"
                 onPress={skipRest}
                 style={{ flex: 1, minHeight: 44, borderRadius: radius.md, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}
               >
@@ -526,6 +617,7 @@ export default function WorkoutScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={isAr ? 'التمرين السابق' : 'Previous exercise'}
                 disabled={activeIndex <= 0}
                 onPress={() => {
                   const prev = current.plannedExercises[activeIndex - 1];
@@ -540,6 +632,7 @@ export default function WorkoutScreen() {
               </Text>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={isAr ? 'التمرين التالي' : 'Next exercise'}
                 disabled={activeIndex >= current.plannedExercises.length - 1}
                 onPress={() => {
                   const next = current.plannedExercises[activeIndex + 1];
@@ -554,22 +647,14 @@ export default function WorkoutScreen() {
             <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.headline, marginBottom: 6 }}>
               {exerciseName(active.exerciseId)}
             </Text>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.regular, marginBottom: 10, lineHeight: 20 }}>
-              {text(locale, 'techniqueHint')}
+            <Text style={{ color: theme.textMuted, marginBottom: 10 }}>
+              {activeTargetMet
+                ? (isAr ? 'اكتملت مجموعات هذا التمرين' : 'All sets for this exercise are recorded')
+                : (isAr ? `المجموعة ${formatCount(Math.min(loggedForActive.length + 1, plannedSets),locale)} من ${formatCount(plannedSets,locale)} · ${formatCount(targetReps,locale)} تكرارات` : `Set ${Math.min(loggedForActive.length + 1, plannedSets)} of ${plannedSets} · ${targetReps} reps`)}
             </Text>
 
-            {demo?.demonstrationMedia != null ? (
-              <MovementDemo3D
-                compact
-                profile={demo.demonstrationMedia.profile ?? demo.movement_pattern ?? 'neutral'}
-                equipment={asLibraryList(demo.equipment)}
-              />
-            ) : (
-              <SurfaceCard tone="muted" style={{ marginBottom: spacing[3] }}>
-                <Text style={{ color: theme.textMuted }}>{text(locale, 'demoUnavailable')}</Text>
-              </SurfaceCard>
-            )}
 
+            <ExercisePreview key={active.exerciseId} exerciseId={active.exerciseId} asset={demo?.approvedDemonstration} instructions={isAr ? demo?.instructions_ar : demo?.instructions_en} reviewed={demo?.reviewStatus==='reviewed'} />
             {previous !== undefined ? (
               <Text style={{ color: theme.textMuted, marginBottom: 10 }}>
                 {text(locale, 'previousBest')}:{' '}
@@ -579,6 +664,7 @@ export default function WorkoutScreen() {
               </Text>
             ) : null}
 
+            {isRunning && editingSetId === null && !activeTargetMet ? <SetInputs reps={reps} load={load} weighted={active.prescription.kind === 'strength'} onReps={value => { setReps(value); setInputDirty(true); }} onLoad={value => { setLoad(value); setInputDirty(true); }} /> : null}
             <SurfaceCard style={{ marginBottom: spacing[3] }}>
               <View style={{ flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.border }}>
                 <Text style={{ flex: 1, color: theme.textMuted, fontFamily: fontFamily.semibold }}>{text(locale, 'setTableHeader')}</Text>
@@ -591,10 +677,11 @@ export default function WorkoutScreen() {
                 const isNext = logged === undefined && loggedForActive.length === index && editingSetId === null;
                 const isEditing = logged !== undefined && editingSetId === logged.id;
                 return (
+                  <View key={`set-row-${index}`}>
                   <Pressable
-                    key={`set-row-${index}`}
                     accessibilityRole={logged ? 'button' : undefined}
-                    accessibilityLabel={logged ? text(locale, 'editLoggedSet') : undefined}
+                    accessibilityLabel={logged ? text(locale, 'editLoggedSet') + ' ' + (index + 1) : undefined}
+                    accessibilityState={{ expanded: isEditing, disabled: !logged || !isRunning }}
                     disabled={!logged || !isRunning}
                     onPress={() => {
                       if (logged === undefined || !isRunning) return;
@@ -636,91 +723,15 @@ export default function WorkoutScreen() {
                       </Text>
                     </View>
                   </Pressable>
+                  {isEditing ? <><SetInputs reps={reps} load={load} weighted={active.prescription.kind === 'strength'} onReps={value => { setReps(value); setInputDirty(true); }} onLoad={value => { setLoad(value); setInputDirty(true); }} /><Button variant="secondary" label={isAr ? 'إلغاء التعديل' : 'Cancel edit'} onPress={() => { setEditingSetId(null); setEditingBase(null); setNotice(''); }} /></> : null}
+                  </View>
                 );
               })}
             </SurfaceCard>
 
-            {isRunning ? (
-              <View style={{ gap: 10, marginBottom: spacing[3] }}>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {['5', '8', '10', '12'].map((value) => (
-                    <Pressable
-                      key={value}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: reps === value }}
-                      onPress={() => { setReps(value); setInputDirty(true); }}
-                      style={{
-                        flex: 1,
-                        minHeight: 44,
-                        borderRadius: radius.md,
-                        backgroundColor: reps === value ? theme.accent : theme.surfaceMuted,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: reps === value ? theme.emphasisText : theme.text, fontFamily: fontFamily.bold }}>{value}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextInput
-                  accessibilityLabel={text(locale, 'reps')}
-                  value={reps}
-                  onChangeText={value => { setReps(normalizeWorkoutNumber(value)); setInputDirty(true); }}
-                  keyboardType="number-pad"
-                  placeholder={text(locale, 'reps')}
-                  placeholderTextColor={theme.textMuted}
-                  style={{
-                    minHeight: 48,
-                    borderRadius: radius.md,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    paddingHorizontal: 14,
-                    color: theme.text,
-                    fontFamily: fontFamily.semibold,
-                    textAlign: isAr ? 'right' : 'left',
-                  }}
-                />
-                {active.prescription.kind === 'strength' ? (
-                  <>
-                    <TextInput
-                      accessibilityLabel={text(locale, 'load')}
-                      value={load}
-                      onChangeText={value => { setLoad(normalizeWorkoutNumber(value)); setInputDirty(true); }}
-                      keyboardType="decimal-pad"
-                      placeholder={`${text(locale, 'load')} (${text(locale, 'kilograms')})`}
-                      placeholderTextColor={theme.textMuted}
-                      style={{
-                        minHeight: 48,
-                        borderRadius: radius.md,
-                        borderWidth: 1,
-                        borderColor: theme.border,
-                        paddingHorizontal: 14,
-                        color: theme.text,
-                        fontFamily: fontFamily.semibold,
-                        textAlign: isAr ? 'right' : 'left',
-                      }}
-                    />
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {[-5, -2.5, 2.5, 5].map((delta) => (
-                        <Pressable
-                          key={delta}
-                          accessibilityRole="button"
-                          onPress={() => {
-                            const loadNow = Number(load) || 0;
-                            const next = Math.max(0, loadNow + delta);
-                            setLoad(Number.isInteger(next) ? String(next) : next.toFixed(1));
-                            setInputDirty(true);
-                          }}
-                          style={{ flex: 1, minHeight: 40, borderRadius: radius.md, backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Text style={{ color: theme.text, fontFamily: fontFamily.semibold }}>{delta > 0 ? `+${delta}` : delta}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </>
-                ) : null}
-              </View>
-            ) : null}
+
+            <Button variant="secondary" label={isAr ? 'اسأل يزن عن هذا التمرين' : 'Ask Yazan about this exercise'} onPress={() => openYazanWithPrompt(isAr ? `كيف أنفّذ تمرين ${exerciseName(active.exerciseId)}؟ سجلت ${loggedForActive.length} مجموعات.` : `How do I perform ${exerciseName(active.exerciseId)}? I have logged ${loggedForActive.length} sets.`)} />
+            <Text style={{ color: theme.textMuted, marginVertical: 12 }}>{demo?.demonstrationMedia?.reviewStatus === 'reviewed' ? text(locale, 'techniqueHint') : (isAr ? 'العرض الحركي غير متاح حاليًا. راجع تعليمات التمرين أو اطلب مساعدة مدرب.' : 'Movement demonstration is unavailable. Check exercise instructions or ask a coach.')}</Text>
           </>
         ) : (
           <View style={{ gap: 10, marginBottom: spacing[3] }}>
@@ -747,19 +758,6 @@ export default function WorkoutScreen() {
           </View>
         )}
 
-        {isDone ? (
-          <SurfaceCard tone="raised" style={{ marginBottom: spacing[3] }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
-              {isAr ? 'ملخص الجلسة' : 'Session summary'}
-            </Text>
-            <Text style={{ color: theme.textMuted, lineHeight: 22 }}>
-              {isAr
-                ? `${completedSets} مجموعات · ${current.plannedExercises.length} تمارين${volumeGrams > 0 ? ` · حجم ${formatKg(volumeGrams, locale)}` : ''}`
-                : `${completedSets} sets · ${current.plannedExercises.length} exercises${volumeGrams > 0 ? ` · volume ${formatKg(volumeGrams, locale)}` : ''}`}
-            </Text>
-          </SurfaceCard>
-        ) : null}
-
         {conflicts.length > 0 ? <SurfaceCard>
           <Text style={{ color: theme.text }}>{isAr ? 'تعارض في المزامنة. السجلات المحلية محفوظة. أعد المحاولة أو اعتمد سجل الخادم.' : 'Sync conflict. Local records are retained. Retry or keep the server records.'}</Text>
           {conflicts.filter((command, index, all) => all.findLastIndex(item => item.set.id === command.set.id) === index).map(command => <View key={command.clientEventId}><Text style={{ color: theme.textMuted }}>{isAr ? 'مجموعة محلية' : 'Local set'} {command.set.setIndex}: {command.set.reps} × {command.set.loadGrams / 1000} kg</Text>
@@ -783,9 +781,9 @@ export default function WorkoutScreen() {
           </Text>
         ) : null}
 
-        {isRunning ? <Button label={text(locale, 'pause')} disabled={busy} variant="secondary" onPress={() => void pause()} /> : null}
         {(isRunning || isPaused) ? (
           <Button
+            disabled={busy}
             label={text(locale, 'finish')}
             variant="secondary"
             onPress={() =>

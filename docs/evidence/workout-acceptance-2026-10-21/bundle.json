@@ -1,0 +1,9 @@
+{
+  "platform": "ios",
+  "mode": "optimized Hermes export",
+  "modules": 2102,
+  "bytes": 5658861,
+  "bundle": "index-0688670d90422003ef1651c7edb3d3a9.hbc",
+  "nativeBuild": false,
+  "deviceProfiling": false
+}

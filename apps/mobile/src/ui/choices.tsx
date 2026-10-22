@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Text } from './Text';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';

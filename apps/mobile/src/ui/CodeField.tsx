@@ -1,5 +1,6 @@
+import { Text } from './Text';
 import { useRef } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { verificationDigits } from '../auth/code';
 import { fontFamily, radius, spacing, typeScale } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';

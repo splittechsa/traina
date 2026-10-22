@@ -1,3 +1,33 @@
+# Current signed Android closure — 2026-10-23
+
+**Public release NO-GO; experience PARTIAL.** Signed Android APKs build and run on the requested API36 PC emulator. Native login/set editing/pause/completion/history/restart and durable offline writes across process restart are observed. 100/500/1,000-session native runs and a full50-page traversal now exist; emulator jank remains and physical performance acceptance is open. 393 tests pass. No independent approvals, signed-iPhone acceptance, approved demonstration assets or commercial readiness.
+
+Evidence: [current closure report](../evidence/android-closure-2026-10-22/REPORT.md). Earlier snapshots below are historical.
+
+# Current Arabic/native closure and Android request — 2026-10-21
+
+**NO-GO; experience PARTIAL.** Source RTL and interaction fixes implemented in PR58; no fresh physical screenshot/recording acceptance. User reported opening/navigation error; staging configuration corrected and optional read-cache blocking removed, but phone resolution remains unverified. Android SDK, Java, emulator and Android36 image are now installed after the user freed disk space; the user enabled Windows Hypervisor Platform and launch is now BLOCKED_PENDING_WINDOWS_RESTART. The preferences directory and adb startup are resolved. Five reviewed exercise clips remain BLOCKED individually; no assets/approvals fabricated.
+
+Evidence: [route-by-route source review](../evidence/arabic-native-closure-2026-10-21/RTL_AUDIT.md), [five clip blockers](../evidence/arabic-native-closure-2026-10-21/EXERCISE_MEDIA_BLOCKERS.md), [Android setup](../ops/ANDROID_EMULATOR_ACCEPTANCE.md). PR57→PR58 dependency order and independent approvals/current-head CI remain required. Signed iOS acceptance still requires Apple distribution credentials. Previous engineering and development-device evidence below is historical, not acceptance of these new interfaces.
+
+# Current experience transformation — 2026-10-21
+
+**Release NO-GO; transformation PARTIAL.** Actual physical iPhone Expo Go screenshots, bounded JS traces, before/after observations and synthetic set persistence checks now exist. The historical blanket hardware-blocked claim below is superseded for these specific journeys only. See [experience evidence](../evidence/experience-2026-10-21/REPORT.md).
+
+| Gate | Current evidence / remaining work |
+| --- | --- |
+| Storage / workout input | Implemented; 137 mobile tests; physical scripted beginner and experienced journeys; review required |
+| Performance | Development-only observations; native FPS/memory/cold-start/release-mode/Android remain NOT_TESTED |
+| Exercise demonstrations | BLOCKED: licensed, technically reviewed realistic trainer/animation assets absent |
+| Native usability | PARTIAL: real screenshots and handlers; independent human tasks, English/RTL restart, accessibility, recordings and next-day return open |
+| Completion | Replay-safe completion deployed to isolated staging; HTTPS completion/replay PASS; native human retry after reported error open |
+| Yazan | Context action retained; clinical/coaching quality acceptance open |
+| Release / merge | Required review, privacy, ENERGY_POLICY, billing and platform-policy gates remain intact; no merge authorized |
+
+Follow-up: [save feedback latency](../evidence/experience-2026-10-21/SAVE_FEEDBACK.md) removes additional waits; new physical latency verification remains open after disconnect.
+
+## Historical evidence below
+
 # Traina production completion matrix — 2026-10-20
 
 **Release: NO-GO.** The authoritative requirement-level inventory is [LAUNCH_MATRIX.json](LAUNCH_MATRIX.json), with 447 entries extracted from directive sections 1–17, explicit approval gates and five end-to-end journeys. Each entry records implementation, gaps, UI/backend/database, integrations, security, tests, devices, dependencies, blockers and acceptance status.
@@ -109,3 +139,7 @@ Device legend: **PASS** · **FAIL** · **BLOCKED** · **NOT TESTED** · **PARTIA
 2. Do not mark reconstructed mobile UX complete without device evidence.  
 3. Do not enable live billing or real sensitive-data processing before approvals.  
 4. Screenshots require real capture — never fabricated.  
+
+## Dependency gate — 2026-10-23
+
+Expo Doctor21/21 passes after SDK57 patch/config migration. Three underlying dependency advisories remain open; [dependency triage](../evidence/android-closure-2026-10-22/DEPENDENCY_SECURITY.md) does not constitute independent approval. Commercial NO-GO unchanged.

@@ -23,6 +23,7 @@ export type LibraryExercise = {
   disciplines: string[] | string;
   environments: string[] | string;
   equipment_brands: string[] | string;
+  approvedDemonstration?: unknown;
   demonstrationMedia: {
     type: 'procedural' | 'glb';
     profile: string | null;

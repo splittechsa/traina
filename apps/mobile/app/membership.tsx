@@ -1,8 +1,10 @@
-import { Text, View } from 'react-native';
+import { Text } from '../src/ui/Text';
+import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../src/api/client';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text, type CopyKey } from '../src/i18n/copy';
+import { label } from '../src/i18n/labels';
 import { fontFamily, spacing, typeScale } from '../src/theme/tokens';
 import { useTheme } from '../src/theme/ThemeProvider';
 import { Screen, ScreenBody } from '../src/ui/Screen';
@@ -57,7 +59,7 @@ export default function MembershipScreen() {
                 {planLabel(locale, entitlements.data.planCode)}
               </Text>
               <Text style={{ color: theme.accent, fontFamily: fontFamily.semibold, marginTop: 8 }}>
-                {entitlements.data.status}
+                {label(locale, 'subscriptionStatus', entitlements.data.status)}
               </Text>
             </SurfaceCard>
 
@@ -68,7 +70,7 @@ export default function MembershipScreen() {
               <View style={{ marginTop: spacing[2], gap: 8 }}>
                 {entitlements.data.capabilities.map((capability) => (
                   <Text key={capability} style={{ color: theme.textMuted, fontFamily: fontFamily.regular, lineHeight: 22 }}>
-                    · {capability}
+                    · {label(locale, 'capability', capability)}
                   </Text>
                 ))}
               </View>

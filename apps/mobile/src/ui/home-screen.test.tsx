@@ -225,6 +225,8 @@ describe('HomeScreen hook order', () => {
       const refresh = client.invalidateQueries({ queryKey: ['home'] });
       await new Promise((resolve) => setTimeout(resolve, 40));
       await refresh;
+      // React Query schedules observer notifications after its request promise settles.
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
     expect(renderedText(renderer)).toContain('لا يوجد اتصال');
 
@@ -233,6 +235,8 @@ describe('HomeScreen hook order', () => {
       const refresh = client.invalidateQueries({ queryKey: ['home'] });
       await new Promise((resolve) => setTimeout(resolve, 40));
       await refresh;
+      // React Query schedules observer notifications after its request promise settles.
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
     expect(renderedText(renderer)).toContain('تعذر إكمال الطلب');
 
@@ -244,8 +248,11 @@ describe('HomeScreen hook order', () => {
       ]);
       await new Promise((resolve) => setTimeout(resolve, 40));
       await refresh;
+      // React Query schedules observer notifications after its request promise settles.
+      await new Promise(resolve => setTimeout(resolve, 0));
     });
     expect(renderedText(renderer)).toContain('لا توجد بيانات محفوظة بعد');
     expect(renderedText(renderer)).toContain('إعداد الملف');
+    await act(async () => { renderer.unmount(); client.clear(); });
   });
 });

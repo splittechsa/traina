@@ -1,3 +1,5 @@
+import { historyQuerySchema, listSessionPage } from '../member/history.js';
+import { workoutResults } from '../member/workoutResults.js';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   activateProgramSchema,
@@ -99,7 +101,6 @@ import {
   listExercises,
   listFavoriteFoods,
   listReadyMeals,
-  listSessions,
   mealPlanFor,
   memberStateFor,
   generateMemberRecommendations,
@@ -558,15 +559,21 @@ export function registerProductRoutes(app: FastifyInstance, options: ProductOpti
     return { persisted: true, session };
   });
 
-  app.get('/v1/training/sessions', async (request) => {
-    const actor = actorOf(request.claims);
-    return { sessions: await listSessions(dbOf(options), actor.userId) };
+  app.get('/v1/training/sessions', async (request, reply) => {
+    const query = parse(historyQuerySchema, request.query, reply);
+    if (!query) return;
+    return listSessionPage(dbOf(options), actorOf(request.claims).userId, query);
   });
 
   app.get('/v1/training/sessions/:id', async (request) => {
     const actor = actorOf(request.claims);
     const params = request.params as { id: string };
     return { session: await getSession(dbOf(options), actor.userId, params.id) };
+  });
+
+  app.get('/v1/training/sessions/:id/results', async request => {
+    const actor=actorOf(request.claims);const params=request.params as {id:string};
+    return workoutResults(dbOf(options),actor.userId,params.id);
   });
 
   app.post('/v1/training/sessions/:id/start', async (request, reply) => {

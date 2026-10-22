@@ -80,3 +80,34 @@ describe('apiRequest token refresh', () => {
     expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/v1/auth/refresh'))).toHaveLength(1);
   });
 });
+
+it('retries a late old-token 401 with the already rotated token instead of rotating again',async()=>{
+  setTokenMemory({accessToken:'old',refreshToken:'refresh',userId:'account-a'});
+  let finish!: (response:Response)=>void;let refreshes=0;
+  vi.stubGlobal('fetch',vi.fn(async(url:string,init:RequestInit)=>{
+    if(url.endsWith('/refresh')){refreshes++;return new Response(JSON.stringify({accessToken:'new',refreshToken:'rotated'}));}
+    if((init.headers as Headers).get('authorization')==='Bearer new')return new Response('{"ok":true}');
+    if(url.endsWith('/late'))return new Promise<Response>(resolve=>{finish=resolve;});
+    return new Response('{}',{status:401});
+  }));
+  const late=apiRequest('/v1/late');await expect(apiRequest('/v1/early')).resolves.toEqual({ok:true});
+  finish(new Response('{}',{status:401}));await expect(late).resolves.toEqual({ok:true});expect(refreshes).toBe(1);
+});
+it('bounds a stalled successful response body by the request deadline', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => ({
+    status: 200, ok: true,
+    json: () => new Promise((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(new Error('body aborted')))),
+  })));
+  const rejected = expect(apiRequest('/v1/me', { timeoutMs: 100 })).rejects.toMatchObject({ code: 'TIMEOUT' });
+  await vi.advanceTimersByTimeAsync(101); await rejected;
+});
+it('bounds a stalled refresh response body and preserves account identity', async () => {
+  vi.useFakeTimers(); setTokenMemory({ accessToken: 'expired', refreshToken: 'refresh', userId: 'account-a' });
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => url.endsWith('/refresh') ? {
+    status: 200, ok: true,
+    json: () => new Promise((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(new Error('body aborted')))),
+  } : new Response('{}', { status: 401 })));
+  const rejected = expect(apiRequest('/v1/me')).rejects.toMatchObject({ status: 401 });
+  await vi.advanceTimersByTimeAsync(12001); await rejected; expect(getTokens()?.userId).toBe('account-a');
+});

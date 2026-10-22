@@ -10,7 +10,7 @@ vi.mock('../auth/SessionProvider', () => ({ useSession: () => ({ tokens: {}, cle
 vi.mock('../i18n/LocaleProvider', () => ({ useLocale: () => ({ locale: 'en' }) }));
 vi.mock('../theme/ThemeProvider', () => ({ useTheme: () => ({}) }));
 vi.mock('./Screen', () => ({ Screen: 'Screen', ScreenBody: 'ScreenBody' }));
-vi.mock('./kit', () => ({ ProfileAvatar: 'ProfileAvatar', SettingsGroup: 'SettingsGroup', SettingsRow: 'SettingsRow' }));
+vi.mock('./kit', () => ({ AppHeader: 'AppHeader', ProfileAvatar: 'ProfileAvatar', SettingsGroup: 'SettingsGroup', SettingsRow: 'SettingsRow' }));
 
 beforeEach(() => { vi.clearAllMocks(); mocks.api.mockResolvedValue({}); mocks.clear.mockResolvedValue(undefined); });
 async function mount() {

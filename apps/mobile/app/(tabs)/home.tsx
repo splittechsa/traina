@@ -1,5 +1,7 @@
+import { Text } from '../../src/ui/Text';
+import { useWorkoutHistory } from '../../src/training/history';
 import { accountResource } from '../../src/offline/resource';
-import { Pressable, Text, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
@@ -48,12 +50,7 @@ export default function HomeScreen() {
     queryFn: () => accountResource<Me>('/v1/me'),
   });
   const progress = useQuery({ queryKey: ['progress'], queryFn: () => apiRequest<Progress>('/v1/progress') });
-  const sessions = useQuery({
-    queryKey: ['sessions'],
-    enabled: tokens !== null,
-    queryFn: () =>
-      accountResource<{ sessions: { id: string; name: string; status: string }[] }>('/v1/training/sessions'),
-  });
+  const sessions = useWorkoutHistory();
   const coachingSignals = useQuery({
     queryKey: ['home-coaching-signals'],
     enabled: tokens !== null,
@@ -126,9 +123,7 @@ export default function HomeScreen() {
   const latest = weights.length === 0 ? null : weights[weights.length - 1];
   const goal = dashboard.goal.status === 'ready' ? label(locale, 'goal', dashboard.goal.data) : null;
   const today = dashboard.todayWorkout.status === 'ready' ? dashboard.todayWorkout.data : null;
-  const resumeSession = (sessions.data?.sessions ?? []).find(
-    (row) => row.status === 'in_progress' || row.status === 'paused',
-  );
+  const resumeSession = sessions.data?.resume ?? null;
   const actions = [
     [text(locale, 'askCoach'), { ios: 'sparkles', android: 'auto_awesome', web: 'auto_awesome' }, () => router.push('/(tabs)/coach')],
     [text(locale, 'weeklyCheckin'), { ios: 'clipboard.fill', android: 'assignment', web: 'assignment' }, () => router.push('/weekly-checkin')],
@@ -140,7 +135,7 @@ export default function HomeScreen() {
   const calories = logged && nutrition !== null ? nutrition.consumed.energyKcal : null;
   const protein = logged && nutrition !== null ? nutrition.consumed.proteinMg : null;
   const workoutAction = () => {
-    if (resumeSession !== undefined) {
+    if (resumeSession !== null) {
       router.push({ pathname: '/workout/[id]', params: { id: resumeSession.id } });
       return;
     }
@@ -167,21 +162,21 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[4] }}>
             <View style={{ flex: 1 }}>
             <Text style={[styles.heroEyebrow, { color: theme.heroAccent, fontFamily: fontFamily.semibold }]}>
-              {resumeSession !== undefined
+              {resumeSession !== null
                 ? (isAr ? 'جلسة جارية' : 'IN PROGRESS')
                 : isAr
                   ? 'الخطوة التالية'
                   : 'UP NEXT'}
             </Text>
             <Text style={[styles.heroTitle, { color: theme.heroText, fontFamily: fontFamily.bold }]} numberOfLines={2}>
-              {resumeSession !== undefined
+              {resumeSession !== null
                 ? resumeSession.name
                 : today === null
                   ? (isAr ? 'جاهز تبدأ؟' : 'Ready to train?')
                   : today.name}
             </Text>
             <Text style={[styles.heroCaption, { color: theme.heroText, fontFamily: fontFamily.regular }]} numberOfLines={2}>
-              {resumeSession !== undefined
+              {resumeSession !== null
                 ? text(locale, 'resumeWorkout')
                 : today === null
                   ? isAr
@@ -191,7 +186,7 @@ export default function HomeScreen() {
             </Text>
             <View style={[styles.heroButton, { backgroundColor: theme.heroAccent }]}>
               <Text style={[styles.heroButtonText, { color: theme.goldInk, fontFamily: fontFamily.bold }]}>
-                {resumeSession !== undefined
+                {resumeSession !== null
                   ? text(locale, 'resumeWorkout')
                   : today === null
                     ? text(locale, 'createPlan')
@@ -219,7 +214,7 @@ export default function HomeScreen() {
           compact
           body={yazanTip(locale, {
             surface: 'home',
-            hasResume: resumeSession !== undefined,
+            hasResume: resumeSession !== null,
             hasTodayWorkout: today !== null,
             mealLogged: logged,
             weekCompleted: weekAdherence?.completed ?? 0,
@@ -228,7 +223,7 @@ export default function HomeScreen() {
           })}
           actions={[
             {
-              label: resumeSession !== undefined ? text(locale, 'resumeWorkout') : text(locale, 'start'),
+              label: resumeSession !== null ? text(locale, 'resumeWorkout') : text(locale, 'start'),
               onPress: workoutAction,
             },
             {

@@ -52,3 +52,14 @@ describe('workout set interaction under slow network',()=>{
     expect(state.writes).toBe(2);expect(state.queue.map(command=>command.set.setIndex)).toEqual([1,2]);expect(save().props.disabled).toBe(false);
   });
 });
+
+it('lets a member edit the final logged set instead of hiding save behind Next/Finish',async()=>{
+  await act(async()=>{renderer=TestRenderer.create(<QueryClientProvider client={client}><WorkoutScreen/></QueryClientProvider>);});
+  for(let i=0;i<3;i++){const save=renderer!.root.findAllByType('button').find(button=>button.props.testID==='workout-log-set')!;await act(async()=>save.props.onPress());}
+  expect(renderer!.root.findAllByType('button').some(button=>button.props.testID==='workout-finish')).toBe(true);
+  const row=renderer!.root.findAll(node=>node.props.accessibilityLabel==='Edit logged set 3'&&typeof node.props.onPress==='function')[0]!;
+  await act(async()=>row.props.onPress());
+  expect(renderer!.root.findAllByType('button').some(button=>button.props.testID==='workout-log-set')).toBe(true);
+  expect(renderer!.root.findAllByType('button').some(button=>button.props.testID==='workout-finish')).toBe(false);
+  expect(renderer!.root.findAllByType(TextInput)).toHaveLength(2);
+});

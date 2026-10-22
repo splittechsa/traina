@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-22T01:29:26.658Z",
+  "syntheticOnly": true,
+  "runtime": "Android API36 emulator / Expo Go development",
+  "scope": "Deep-link opening and visible-screen capture; not independent human usability or native performance acceptance",
+  "checks": [
+    {
+      "route": "home",
+      "status": "OBSERVED_WITHOUT_GENERIC_ERROR",
+      "visibleTextNodes": 43
+    },
+    {
+      "route": "training",
+      "status": "OBSERVED_WITHOUT_GENERIC_ERROR",
+      "visibleTextNodes": 36
+    },
+    {
+      "route": "nutrition",
+      "status": "OBSERVED_WITHOUT_GENERIC_ERROR",
+      "visibleTextNodes": 39
+    },
+    {
+      "route": "progress",
+      "status": "OBSERVED_WITHOUT_GENERIC_ERROR",
+      "visibleTextNodes": 43
+    },
+    {
+      "route": "coach",
+      "status": "OBSERVED_WITHOUT_GENERIC_ERROR",
+      "visibleTextNodes": 25
+    },
+    {
+      "route": "account",
+      "status": "OBSERVED_WITHOUT_GENERIC_ERROR",
+      "visibleTextNodes": 18
+    },
+    {
+      "route": "settings",
+      "status": "OBSERVED_WITHOUT_GENERIC_ERROR",
+      "visibleTextNodes": 3
+    }
+  ]
+}

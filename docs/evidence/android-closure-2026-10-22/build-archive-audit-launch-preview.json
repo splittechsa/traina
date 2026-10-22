@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-22T23:27:02.293Z",
+  "method": "EAS_NO_VCS=1; explicit monorepo root; inspected archive",
+  "sourceCommit": "db8aaac",
+  "fileCount": 1827,
+  "archiveContentSha256": "4558afd33c0244adde976a3622746ee41db119613c4f16233d388e148a6beec7",
+  "forbiddenPaths": [],
+  "sourceMismatches": [],
+  "nativeAndroidIncluded": false,
+  "nativeIosIncluded": false,
+  "status": "PASS"
+}

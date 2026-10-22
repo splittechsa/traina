@@ -1,0 +1,10 @@
+{
+  "phase": "after",
+  "http": 200,
+  "elapsedMs": 851.5637999999999,
+  "completed": true,
+  "clockSkewMs": 2200,
+  "syntheticOnly": true,
+  "replayHttp": 200,
+  "sameCompletedAt": true
+}

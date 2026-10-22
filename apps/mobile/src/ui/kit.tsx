@@ -1,5 +1,6 @@
+import { Text } from './Text';
 import { useEffect, type ComponentProps, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -756,8 +757,9 @@ export function BottomSheet({ visible, onClose, children }: { visible: boolean; 
     <Modal visible={visible} transparent animationType={reduce ? 'none' : 'slide'} onRequestClose={onClose}>
       <View style={[styles.sheetFrame, { marginBottom: keyboard }]}>
         <Pressable style={[styles.scrim, { backgroundColor: theme.overlay }]} onPress={onClose} accessibilityLabel={text(locale, 'back')} />
-        <View style={[styles.sheet, { backgroundColor: theme.background, direction }]}>
+        <View accessibilityViewIsModal style={[styles.sheet, { backgroundColor: theme.background, direction }]}>
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
+          <Button variant="secondary" label={locale === 'ar' ? 'إغلاق' : 'Close'} onPress={onClose} />
           {children}
         </View>
       </View>
@@ -857,6 +859,8 @@ export function SettingsRow({
         // Plain row: the RTL root already starts it on the right. 'row-reverse' here was
         // flipping Arabic settings rows back to left-to-right.
         flexDirection: 'row',
+        direction,
+
         alignItems: 'center',
         gap: spacing[3],
         minHeight: 52,
@@ -873,7 +877,7 @@ export function SettingsRow({
       ) : null}
       <Text
         numberOfLines={1}
-        style={{ flex: 1, color: destructive ? theme.danger : theme.text, fontFamily: fontFamily.regular, fontSize: typeScale.body, writingDirection: 'auto' }}
+        style={{ flex: 1, color: destructive ? theme.danger : theme.text, fontFamily: fontFamily.regular, fontSize: typeScale.body, textAlign: direction === 'rtl' ? 'right' : 'left', writingDirection: 'auto' }}
       >
         {title}
       </Text>
@@ -884,7 +888,7 @@ export function SettingsRow({
       ) : null}
       {showChevron && onPress !== undefined ? (
         <SymbolView
-          name={{ ios: direction === 'rtl' ? 'chevron.left' : 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+          name={{ ios: direction === 'rtl' ? 'chevron.left' : 'chevron.right', android: direction === 'rtl' ? 'chevron_left' : 'chevron_right', web: direction === 'rtl' ? 'chevron_left' : 'chevron_right' }}
           size={13}
           tintColor={theme.textMuted}
         />

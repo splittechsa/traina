@@ -1,5 +1,5 @@
+import { Text } from '../src/ui/Text';
 import { useState } from 'react';
-import { Text } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../src/api/client';
 import { accountResource } from '../src/offline/resource';

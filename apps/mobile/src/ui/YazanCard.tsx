@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Text } from './Text';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { useLocale } from '../i18n/LocaleProvider';
 import { text } from '../i18n/copy';

@@ -59,3 +59,12 @@ docs/
 apps/www/
 apps/coach-portal/
 *.zip
+
+# CNG regenerates native projects from app.json in the cloud. A local prebuild
+# must not silently override the checked-in package/configuration during upload.
+/apps/mobile/android
+/apps/mobile/ios
+**/*.p8
+**/*.key
+**/*.pem
+.git/

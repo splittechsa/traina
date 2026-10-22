@@ -1,10 +1,11 @@
+import { Text } from '../Text';
 // Shared numeric picker: a real snapping wheel (UIPickerView-style) for integers and
 // decimals, with haptic ticks, a typing fallback, and a VoiceOver "adjustable" role.
 //
 // Decimals are split into two columns (whole + fraction), the way Apple Health does weight —
 // 30.0–300.0 kg becomes a 271-row column and a 10-row column instead of one 2,701-row list.
 import { useCallback, useMemo, useState } from 'react';
-import { AccessibilityInfo, Keyboard, Pressable, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Keyboard, Pressable, TextInput, View } from 'react-native';
 import type { Locale } from '../../format';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useMotion } from '../../theme/motion';

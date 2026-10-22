@@ -16,11 +16,11 @@ export default function TabLayout() {
       }}
       tabBar={(props) => <BottomTabBar {...props} />}
     >
-      <Tabs.Screen name="home" options={{ title: text(locale, 'home') }} />
+      <Tabs.Screen name="home" options={{ title: locale === 'ar' ? 'اليوم' : 'Today' }} />
       <Tabs.Screen name="training" options={{ title: text(locale, 'training') }} />
       <Tabs.Screen name="nutrition" options={{ title: text(locale, 'nutrition') }} />
       <Tabs.Screen name="progress" options={{ title: text(locale, 'progress') }} />
-      <Tabs.Screen name="coach" options={{ title: text(locale, 'coach') }} />
+      <Tabs.Screen name="coach" options={{ title: locale === 'ar' ? 'يزن' : 'Yazan' }} />
       <Tabs.Screen name="community" options={{ title: text(locale, 'community'), href: null }} />
     </Tabs>
   );

@@ -1,8 +1,9 @@
+import { Text } from './Text';
 // Visual primitives for the redesigned activity / nutrition surfaces: gradient progress
 // rings, a glowing hero card, and labelled macro bars. Built on react-native-svg (already a
 // dependency) so they render identically in Expo Go and in a dev build.
 import { useEffect, useId, type ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../theme/ThemeProvider';

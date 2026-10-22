@@ -1,5 +1,6 @@
+import { Text } from '../../src/ui/Text';
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { readJson, writeJson, removeKey } from '../../src/storage/local';

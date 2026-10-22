@@ -1,5 +1,6 @@
-import { useState, type ReactNode, type RefObject } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text } from './Text';
+import { useEffect, useState, type ReactNode, type RefObject } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
@@ -12,14 +13,18 @@ import { text, type CopyKey } from '../i18n/copy';
 import { useKeyboardInset } from './keyboard';
 import { useTabBarInset } from './TabBar';
 import { tapImpact } from './haptics';
+import { perfMark } from '../performance/lab';
 
 export function Screen({ title, children }: { title?: string; children: ReactNode }) {
   const theme = useTheme();
   const { direction, locale } = useLocale();
   const insets = useSafeAreaInsets();
-  const inTabs = useSegments()[0] === '(tabs)';
+  const segments=useSegments();
+  const inTabs = segments[0] === '(tabs)';
+  useEffect(()=>{perfMark('screen.render',segments.join('/'));});
   return (
     <SafeAreaView
+      onLayout={()=>perfMark('screen.layout',segments.join('/'))}
       style={[
         styles.screen,
         { backgroundColor: theme.background, direction, paddingBottom: inTabs ? 0 : insets.bottom },
@@ -54,7 +59,7 @@ export function ScreenBody({
   const inTabs = useSegments()[0] === '(tabs)';
   const tabInset = useTabBarInset();
   const keyboard = useKeyboardInset();
-  const keyboardLift = keyboard > 0 ? Math.max(0, keyboard - (inTabs ? 0 : insets.bottom)) : 0;
+  const keyboardLift = keyboard > 0 ? (Platform.OS === 'android' ? keyboard : Math.max(0, keyboard - (inTabs ? 0 : insets.bottom))) : 0;
   const resting = inTabs ? tabInset : 0;
   const occupied = keyboard > 0 ? keyboardLift : resting;
   return (
@@ -134,6 +139,7 @@ export function Field({
   const { locale } = useLocale();
   const [hidden, setHidden] = useState(secureTextEntry);
   const [focused, setFocused] = useState(false);
+  const ltrContent = secureTextEntry || keyboardType !== 'default';
   return (
     <View style={styles.field}>
       <Muted inverse={inverse}>{label}</Muted>
@@ -158,8 +164,8 @@ export function Field({
               borderColor: focused ? theme.lime : theme.border,
               backgroundColor: theme.surface,
               fontFamily: fontFamily.regular,
-              textAlign: locale === 'ar' ? 'right' : 'left',
-              writingDirection: locale === 'ar' ? 'rtl' : 'ltr',
+              textAlign: ltrContent ? 'left' : locale === 'ar' ? 'right' : 'left',
+              writingDirection: ltrContent ? 'ltr' : locale === 'ar' ? 'rtl' : 'ltr',
               paddingEnd: secureTextEntry ? 72 : spacing[3],
             },
           ]}
@@ -186,11 +192,13 @@ export function Button({
   onPress,
   disabled = false,
   variant = 'primary',
+  testID,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   variant?: 'primary' | 'secondary' | 'lime' | 'violet' | 'danger';
+  testID?: string;
 }) {
   const theme = useTheme();
   const { duration } = useMotion();
@@ -209,8 +217,10 @@ export function Button({
   return (
     <Animated.View style={animated}>
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       disabled={disabled}
+      accessibilityState={{ disabled }}
       onPress={() => {
         tapImpact(duration(1) === 0);
         onPress();

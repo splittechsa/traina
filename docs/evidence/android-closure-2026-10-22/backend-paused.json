@@ -1,0 +1,51 @@
+{
+  "at": "2026-10-22T01:19:48.374Z",
+  "syntheticOnly": true,
+  "sessionId": "d74e31f0-4570-4402-bdbb-7dec01529175",
+  "status": "paused",
+  "sets": [
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000001",
+      "index": 1,
+      "reps": 8,
+      "loadGrams": 20000
+    },
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000002",
+      "index": 1,
+      "reps": 8,
+      "loadGrams": 20000
+    },
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000001",
+      "index": 2,
+      "reps": 8,
+      "loadGrams": 20000
+    },
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000002",
+      "index": 2,
+      "reps": 8,
+      "loadGrams": 20000
+    },
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000001",
+      "index": 3,
+      "reps": 8,
+      "loadGrams": 20000
+    },
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000002",
+      "index": 3,
+      "reps": 9,
+      "loadGrams": 20000
+    }
+  ],
+  "pauses": [
+    {
+      "pausedAt": "2026-10-22T01:19:10.082Z",
+      "resumedAt": null
+    }
+  ],
+  "completedAt": null
+}

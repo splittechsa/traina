@@ -1,6 +1,7 @@
+import { Text } from '../src/ui/Text';
 import { accountResource } from '../src/offline/resource';
 import { useMemo, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError, apiRequest } from '../src/api/client';

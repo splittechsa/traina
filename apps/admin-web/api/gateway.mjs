@@ -47,7 +47,9 @@ export function createGateway({fetchImpl=fetch,apiOrigin='https://traina-staging
       if(response.status===401 && stored[REFRESH]) {
         const refresh=await call('POST','/v1/auth/refresh',null,{refreshToken:decodeURIComponent(stored[REFRESH])});
         if(refresh.ok){const tokens=await refresh.json();persist(res,tokens);response=await call(route[0],upstream,tokens.accessToken,req.method==='GET'?undefined:body);}
-        else clear(res);
+        else if(refresh.status===401)return send(409,{error:{code:'SESSION_REFRESH_RETRY'}});
+        else if(refresh.status===403){clear(res);return send(403,{error:{code:'ADMIN_REQUIRED'}});}
+        else return send(503,{error:{code:'UPSTREAM_UNAVAILABLE'}});
       }
       if(response.status===401||response.status===403)clear(res);
       return send(response.status,await response.json());

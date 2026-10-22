@@ -12,7 +12,7 @@
   "scripts": {
     "build": "npm run build -w @sahhti/domain && npm run build -w @sahhti/contracts && npm run build -w @sahhti/design-tokens && npm run build -w @sahhti/api",
     "typecheck": "npm run typecheck -w @sahhti/domain && npm run typecheck -w @sahhti/contracts && npm run typecheck -w @sahhti/design-tokens && npm run typecheck -w @sahhti/api",
-    "test": "npm run test -w @sahhti/domain && npm run test -w @sahhti/contracts && npm run test -w @sahhti/design-tokens && npm run test -w @sahhti/api",
+    "test": "npm run test -w @sahhti/domain && npm run test -w @sahhti/contracts && npm run test -w @sahhti/design-tokens && npm run test -w @sahhti/api && node --test apps/admin-web/gateway.test.mjs apps/admin-web/session-request.test.mjs",
     "dev:api": "npm run build -w @sahhti/domain && npm run build -w @sahhti/contracts && npm run build -w @sahhti/api && node scripts/dev-api.mjs",
     "migrate": "npm run build && node services/api/dist/migrate.js"
   },

@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-22T23:47:07.838Z",
+  "buildId": "c4183d28-2419-49ff-b5fc-89298532be88",
+  "sourceCommit": "db8aaac6b48ea557f41e328f7d7c8bc8741fd0b6",
+  "runtime": "signed release APK on Android API36 x86_64 emulator",
+  "package": "sa.sahhti.member",
+  "debuggable": false,
+  "apk": {
+    "name": "Traina-preview-c4183d28-2419-49ff-b5fc-89298532be88.apk",
+    "bytes": 156428768,
+    "sha256": "a0df856c15f0c423fa09a07c9fe9909c1d3325aa77d70452e7da486a818eaefe"
+  },
+  "syntheticOnly": true,
+  "sessionId": "7ebddd96-406b-4148-9298-3c2f1b095e88",
+  "status": "completed",
+  "sets": 3,
+  "completedAt": "2026-10-22T23:46:30.651Z",
+  "sameCompletionTimestamp": true,
+  "savedSummaryAfterRestart": true,
+  "genericFailure": false,
+  "coldActivityLaunch": [
+    "LaunchState: COLD",
+    "TotalTime: 1437",
+    "WaitTime: 1440"
+  ],
+  "scope": "Latest APK installed and launched using delivered helper; restored and completed the previously offline-reconciled3-set synthetic session; persisted after force-stop. Full edit/pause recording is predecessor240c552, differing only in training-library muscle localization. No physical-iPhone acceptance."
+}

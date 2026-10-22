@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-22T23:24:44.539Z",
+  "syntheticOnly": true,
+  "historySessions": 100,
+  "runtime": "signed EAS preview APK / Android API36 emulator",
+  "sampledPages": 4,
+  "serverPageLimit": 20,
+  "samples": [
+    {
+      "page": 1,
+      "at": "2026-10-22T23:24:18.237Z",
+      "totalPssKiB": 230079
+    },
+    {
+      "page": 2,
+      "at": "2026-10-22T23:24:32.493Z",
+      "totalPssKiB": 227973
+    },
+    {
+      "page": 3,
+      "at": "2026-10-22T23:24:38.290Z",
+      "totalPssKiB": 230205
+    },
+    {
+      "page": 4,
+      "at": "2026-10-22T23:24:44.055Z",
+      "totalPssKiB": 233025
+    }
+  ],
+  "graphicsSummary": [
+    "Total frames rendered: 193",
+    "Janky frames: 43 (22.28%)",
+    "50th percentile: 30ms",
+    "90th percentile: 48ms",
+    "95th percentile: 53ms",
+    "99th percentile: 81ms",
+    "Number Missed Vsync: 11",
+    "50th gpu percentile: 16ms",
+    "90th gpu percentile: 4950ms",
+    "95th gpu percentile: 4950ms",
+    "99th gpu percentile: 4950ms"
+  ],
+  "limits": "Process PSS and emulator frame summary only; not physical-device acceptance or proof of an asymptotic memory bound."
+}

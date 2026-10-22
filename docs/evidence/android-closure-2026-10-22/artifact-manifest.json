@@ -1,0 +1,488 @@
+{
+  "at": "2026-10-22T23:49:23.879Z",
+  "scope": "Curated local evidence delivery; APK delivered separately due size. Intermediate failed Metro/keyboard captures excluded; prior before/after images and Expo Go videos explicitly historical.",
+  "syntheticOnly": true,
+  "sourceCommit": "db8aaac6b48ea557f41e328f7d7c8bc8741fd0b6",
+  "files": [
+    {
+      "name": "01-after-login.png",
+      "bytes": 278883,
+      "sha256": "f12cae8b25ee8d45e2b8a8b40939d1d1f7a62e7360ba7c71a9eb6540de7d3ede"
+    },
+    {
+      "name": "02-workout-before.png",
+      "bytes": 144319,
+      "sha256": "e4188a0e798a2c066f8eb557e91824543e05767a0e6f4761fd38af1e8f405612"
+    },
+    {
+      "name": "03-rtl-adjusted.png",
+      "bytes": 144236,
+      "sha256": "6cf340a49bc74e36ae4cbb8b62e4d109cd7cf6e748f83336c5cef2253204f374"
+    },
+    {
+      "name": "04-rest-after-first-set.png",
+      "bytes": 155159,
+      "sha256": "0be14d64b57d24ce9608957b77f9d9817a43ff38b6855a2a9573e21b773edbb7"
+    },
+    {
+      "name": "05-three-sets.png",
+      "bytes": 150458,
+      "sha256": "2467925b2b1d2f6e3cf6fbb477b68d9483f208a700bad64c8de2c8d9d4548c5e"
+    },
+    {
+      "name": "06-edit-final-set.png",
+      "bytes": 148043,
+      "sha256": "835e9c5435724698ba665f9d9e9e50c95a95af6bc4910898f8eed8deb0a7265c"
+    },
+    {
+      "name": "07-paused.png",
+      "bytes": 146222,
+      "sha256": "a03f23f0365ce78a4d0cdcf766c067bdabbe01b58a3fa94343763d63c92aeeac"
+    },
+    {
+      "name": "08-offline-sets.png",
+      "bytes": 171161,
+      "sha256": "11d2417893eadad37b5baf3b96a0b8e23fda789cde02a18616301f9f4a3683af"
+    },
+    {
+      "name": "09-reconnected.png",
+      "bytes": 171756,
+      "sha256": "da9f581bb43a2732c7bb8b4e29008586f08b00001f30889caa31de4574c750c3"
+    },
+    {
+      "name": "10-diagnostics.png",
+      "bytes": 182099,
+      "sha256": "cf51dfe958e0b6f9942db1560c341220112ca0844b92056c9db6eb109e3815f3"
+    },
+    {
+      "name": "11-completion-confirmation.png",
+      "bytes": 159027,
+      "sha256": "e7477b99682a70a21d666aaf9c423f55683b8b54ef7851cf996b29d3ba934d3b"
+    },
+    {
+      "name": "12-completion-in-flight.png",
+      "bytes": 158899,
+      "sha256": "1b12692593e34f25a7e86d056f6076e3e617e1e2f70af9b555077c93429b165b"
+    },
+    {
+      "name": "13-completed-summary.png",
+      "bytes": 189579,
+      "sha256": "41d3215ae3c8a696b6ba0f6116a0012a05b9fcd671615b82eec304a17a301802"
+    },
+    {
+      "name": "14-summary-first.png",
+      "bytes": 189869,
+      "sha256": "22266e510b611c523b6ed3ad423014de4d2afa52a2cb4e83c846c672512e3f24"
+    },
+    {
+      "name": "15-final-summary.png",
+      "bytes": 229583,
+      "sha256": "e573f8aaf8c6a79017083b5e591ca5f15781715e453e419eecda098e4887c398"
+    },
+    {
+      "name": "16-history.png",
+      "bytes": 222331,
+      "sha256": "42e9ae7b30781c6d8269cf1a4f66521bd1603c315e50873d036461fcc0d052f4"
+    },
+    {
+      "name": "17-restart-summary.png",
+      "bytes": 229601,
+      "sha256": "dc74fe1c6df74288c1785ff82a6f10d054c6ad2bf084d62ffb19d157bc4085a7"
+    },
+    {
+      "name": "18-settings-english.png",
+      "bytes": 165943,
+      "sha256": "68d1963a8f889c44a3717b306ec657e131d09f5bb28818b01a47e8c6052a1010"
+    },
+    {
+      "name": "19-english-after-restart.png",
+      "bytes": 166011,
+      "sha256": "f1cd92c814bae37dd64d42af43098c0f97a6b514b5cdde47cc1581c21f89ac90"
+    },
+    {
+      "name": "21-settings-arabic-after-restart.png",
+      "bytes": 157644,
+      "sha256": "1704761a4ada0cfeef27dc95d1be0aeba03d22f3402dc7b70b5d4b5752a62cb7"
+    },
+    {
+      "name": "28-keyboard-final.png",
+      "bytes": 703911,
+      "sha256": "a232b83f6b931dd19b99fcc0014dbb3eb45dce78f38ceddd3ace2ec8bd5b689e"
+    },
+    {
+      "name": "DEPENDENCY_SECURITY.md",
+      "bytes": 2329,
+      "sha256": "43bd1c2f628e43a080d7f796966b215bd57391453649178eba179ae0ecae5fed"
+    },
+    {
+      "name": "DEPLOYMENT_RUNBOOK.md",
+      "bytes": 5270,
+      "sha256": "bb49c3125069773b8a38116f42e4da2e8f14d13e7dda61928d4d0ca8651a3eba"
+    },
+    {
+      "name": "NATIVE_RTL_AUDIT.md",
+      "bytes": 4599,
+      "sha256": "5cd7a150edc6029698b78ddb3cee12d87fc90bfc24c0cde19d50b867954a8e8a"
+    },
+    {
+      "name": "REPORT.md",
+      "bytes": 8154,
+      "sha256": "eaea16a28b18efb61938b900e7717700a359b696c21c231225600cf440b08d46"
+    },
+    {
+      "name": "backend-completed.json",
+      "bytes": 1524,
+      "sha256": "004f36748a43acf1e513a8ee0c1f29fd18e97fc25c0a10002f50c1bbd42ad682"
+    },
+    {
+      "name": "backend-paused.json",
+      "bytes": 1078,
+      "sha256": "a81a08d7f60e617ff1f48ac1c689de7a1bee36717019220a779b48afe1a81738"
+    },
+    {
+      "name": "build-archive-audit-emulator.json",
+      "bytes": 387,
+      "sha256": "f7e898ed0b977fdd115956f6314e508bd7ecfc0ac3f20b0ce3289f80e30bca66"
+    },
+    {
+      "name": "build-archive-audit-final.json",
+      "bytes": 420,
+      "sha256": "06607cfeb1df1992c82f8970e0ce0b6042c06bd99f5d85b65b13f6d4691a7525"
+    },
+    {
+      "name": "build-archive-audit-launch-preview.json",
+      "bytes": 387,
+      "sha256": "cdd958317860db45117c7c1a763d21cf39b4a68362d7a435c3f6a16dd81cda8e"
+    },
+    {
+      "name": "current-head-ci.json",
+      "bytes": 611,
+      "sha256": "dad500190873deea7fd159262e4af5e3a13245cff81313917a8ff1b5d5b49bcd"
+    },
+    {
+      "name": "eas-emulator.json",
+      "bytes": 1087,
+      "sha256": "0ef1457aaa8e02888b8c6200090140f3b784bde87f762ba60c03bcdf22e04ae2"
+    },
+    {
+      "name": "eas-launch-preview.json",
+      "bytes": 1078,
+      "sha256": "ea4e996d55e38dccc7d56724eb2e3f55ec78b395bdaf7958943518c3de59dc32"
+    },
+    {
+      "name": "eas-preview.json",
+      "bytes": 1111,
+      "sha256": "dc349ceb5ea1b84e6e45e617d1d593d4eaa2b83a364163f2c060debd6f880439"
+    },
+    {
+      "name": "extended-routes.json",
+      "bytes": 1247,
+      "sha256": "9ae41d56449bebc704e47d6534a36dd5962b0675def4df2904a0e8a2a47e91ee"
+    },
+    {
+      "name": "final-apk-restart-summary.png",
+      "bytes": 209472,
+      "sha256": "230c6e9ba98f928812683f30e80a1f73299ceb8a3be10b88a98e2497f9eb5d24"
+    },
+    {
+      "name": "final-apk-smoke.json",
+      "bytes": 1147,
+      "sha256": "506c485bb54edce2fac252063acf73f12e1a5ec83b6f5299087941cfcce6f8a4"
+    },
+    {
+      "name": "final-apk-summary.png",
+      "bytes": 203793,
+      "sha256": "8a1d2732ecf764251e2af89365be30e00db10d5b57ae2b2a1034000adf8e8595"
+    },
+    {
+      "name": "final-apk-training-localized.png",
+      "bytes": 204932,
+      "sha256": "a1c47c3c0a8e885f57d9292e743f22ef016b096daa579bda235b8f0ffcbf6e89"
+    },
+    {
+      "name": "final-apk-workout.png",
+      "bytes": 154088,
+      "sha256": "3cd719bcce8ff76f6028f33a82572442c41637e549c8a21634961a10c8d8f875"
+    },
+    {
+      "name": "lost-response-proxy.json",
+      "bytes": 542,
+      "sha256": "90fe3efaaa0770e5ee875cd42b9e17341f6fac0798c57c35aa57ac68fcdb733f"
+    },
+    {
+      "name": "offline-reconciliation.json",
+      "bytes": 953,
+      "sha256": "9b783d5e290b83ebc78233d590243f0f64a3ec5fa7fdff926a7b5669889c7fc6"
+    },
+    {
+      "name": "public-services-final.json",
+      "bytes": 534,
+      "sha256": "87422bfe57b7418eb5b95c827cd4f476ca36202748546e5446f6bb0e45252233"
+    },
+    {
+      "name": "recordings.json",
+      "bytes": 642,
+      "sha256": "ccce153474c4b40028c3a7e3c921a337bf53da49a68adcef9b79c76bd3bc7162"
+    },
+    {
+      "name": "release-first-launch.png",
+      "bytes": 983508,
+      "sha256": "3cd0bff3187283889da7e40de4c86d1f7b437f06b86f072d0ec22646f0854480"
+    },
+    {
+      "name": "release-history-100-page1.png",
+      "bytes": 440691,
+      "sha256": "4ba849db3f01f8723d5277adbfcc20ce3805ee976897159289622743b54a5b92"
+    },
+    {
+      "name": "release-history-100-page4.png",
+      "bytes": 236715,
+      "sha256": "1519f25c419e723fd79b891338c81e4c5854b5776b2c0a12ca48052ac9d60161"
+    },
+    {
+      "name": "release-history-100.json",
+      "bytes": 1120,
+      "sha256": "5693c306d528bba31d976f648f278d79a80899f19adb1efd90c828c686a5ca04"
+    },
+    {
+      "name": "release-history-1000-page1.png",
+      "bytes": 439783,
+      "sha256": "c49dfe77285d0000f68a473d69fab954b5d1e582033fa769b98c90867dea2a32"
+    },
+    {
+      "name": "release-history-1000-page4.png",
+      "bytes": 236754,
+      "sha256": "6ed2dc2333e4fb223da7ee8747a2e6371aec6d7904c7585a0acb907c21357f8e"
+    },
+    {
+      "name": "release-history-1000-page50.png",
+      "bytes": 237006,
+      "sha256": "ae9a3d2b6f303c85f7e6ac6b52691db84ea40d521d58c546e5df78f0ff0515d6"
+    },
+    {
+      "name": "release-history-1000-traversal.json",
+      "bytes": 2065,
+      "sha256": "49b03b4440bc4b128691777d63e3b64107828dafa2a7a20a86fa8a8e08be00b3"
+    },
+    {
+      "name": "release-history-1000.json",
+      "bytes": 1121,
+      "sha256": "3e1d310e0ff4e200c9856c21323fb436ef98305d39d1748ba7374897ec9cd6f6"
+    },
+    {
+      "name": "release-history-500-page1.png",
+      "bytes": 439817,
+      "sha256": "1ffc288300e793224620cf8604d5ae49959262199e5709af78e6bbd39693d5a7"
+    },
+    {
+      "name": "release-history-500-page4.png",
+      "bytes": 236917,
+      "sha256": "ee4e948a2e79e03bb4ce80ec48b999e167de3de00226efe4abdd87d9e4a55283"
+    },
+    {
+      "name": "release-history-500.json",
+      "bytes": 1121,
+      "sha256": "d7aaec2ce7c5a0c65339350d50a8f519147c359e0844077e34ba66c54d6378d4"
+    },
+    {
+      "name": "replay-history-check.json",
+      "bytes": 262,
+      "sha256": "05c831e75c2512c53355b70a47fe5fbe70b81699df4503aee19c303dd4dbcebe"
+    },
+    {
+      "name": "restart-check.json",
+      "bytes": 244,
+      "sha256": "d25fa7ccb9efebdd35cf0d6ec1b0a1bc52dd1d694c6c4d2b900fdfe2f1db44e3"
+    },
+    {
+      "name": "review-gates.json",
+      "bytes": 1548,
+      "sha256": "8c889ac336608671ce41cff121b5c062812f035c245afeaaf33588825f4ade58"
+    },
+    {
+      "name": "route-account.png",
+      "bytes": 88808,
+      "sha256": "37c00d42108ee765e167ff4c8fcf38f2ce39467a9b0fd37876b259161b14ca78"
+    },
+    {
+      "name": "route-coach.png",
+      "bytes": 121795,
+      "sha256": "e1de7a5353c955db9e65eaaecddef33d27899622241479d48dc8a057295e2113"
+    },
+    {
+      "name": "route-home.png",
+      "bytes": 285656,
+      "sha256": "d734394aa861a3bac3ea24dbef25a7d53f40f70ca3c69361f6a14338e913f211"
+    },
+    {
+      "name": "route-meal-library.png",
+      "bytes": 123966,
+      "sha256": "0838d882a10f206f346f71f41fff1cb243c2013001bd40b8859d643b04bea0d8"
+    },
+    {
+      "name": "route-membership.png",
+      "bytes": 148245,
+      "sha256": "511143c24869ad9fff61ca62bc78a44a202ae934e3eb0677dfb76bf022d95309"
+    },
+    {
+      "name": "route-notifications.png",
+      "bytes": 71177,
+      "sha256": "15f290529f2f48fcd12308951f8d0ad002b90d53c73c6e3f91dd4d715fa11f79"
+    },
+    {
+      "name": "route-nutrition.png",
+      "bytes": 253285,
+      "sha256": "0acf9dd81e55db2da39a034bbfe6b96364f82ebd51e3c9e6ad403fe410cd007e"
+    },
+    {
+      "name": "route-profile.png",
+      "bytes": 51924,
+      "sha256": "3f5022d3b17d98936ffcfe4370ae32a7ffc29b937533f6bd79bdfc1b079d7911"
+    },
+    {
+      "name": "route-program-edit.png",
+      "bytes": 189541,
+      "sha256": "a38a805b1057148cdb69ee8bd0fb0697653d3b841b75bde8c77b25a870e53afa"
+    },
+    {
+      "name": "route-programs.png",
+      "bytes": 165332,
+      "sha256": "c26517fa5df11508ace9fab2da09b3e8ce95adb9b68507243d80eaa7a78c4934"
+    },
+    {
+      "name": "route-progress.png",
+      "bytes": 162752,
+      "sha256": "e951afc306a22eb9eddee19ce3a8e4cb4f43069269efdb67ecbe0b3aa8cbaf7f"
+    },
+    {
+      "name": "route-settings-after.png",
+      "bytes": 156548,
+      "sha256": "27854c9369c438eda97aedab05a924921b36a8558415529d5191097fa7b84d1d"
+    },
+    {
+      "name": "route-settings.png",
+      "bytes": 144205,
+      "sha256": "e73d55afedf7a5731c871230b0121e984bcbcd68f4a8eed5faeb057cf1dbaf75"
+    },
+    {
+      "name": "route-training.png",
+      "bytes": 225175,
+      "sha256": "2424c10ef4f87f812a26c63462f05ea22fac8f18b79ca8c53520895556a53695"
+    },
+    {
+      "name": "route-weekly-checkin.png",
+      "bytes": 200567,
+      "sha256": "09e890723c7a59660f16327e7834e787ab5fb1c40e2b7eb205fb82ba7a991536"
+    },
+    {
+      "name": "routes.json",
+      "bytes": 1092,
+      "sha256": "d261679b58ab0899ace1948fc317e6815c243b54372ed5a1fb7157e685e81c0f"
+    },
+    {
+      "name": "scale-fixtures.json",
+      "bytes": 212,
+      "sha256": "9d4fe326298d44e83a3ceb66ba9919bc7118165c3a39e9670e3590d0fb2365cf"
+    },
+    {
+      "name": "signed-backend-completed.json",
+      "bytes": 726,
+      "sha256": "2720b8822df0d7efb227080ac1107a70804aa264e2eff689bfd8bc52a62226f4"
+    },
+    {
+      "name": "signed-completion-summary.png",
+      "bytes": 202524,
+      "sha256": "29dac8e67e993d338d8b6e5039cf6a5611833a7fb4cfe0c6033d46ffd5f9fe62"
+    },
+    {
+      "name": "signed-history-after-completion.png",
+      "bytes": 219057,
+      "sha256": "6a3f61cb7dd0affb2effe8e0f602b8fca2c5e13623202aac6614d6b4875c5f1f"
+    },
+    {
+      "name": "signed-offline-after-restart.png",
+      "bytes": 157414,
+      "sha256": "a82991065705f67e39892101ebd5822f54299efe5c8e16148dae4ad092238054"
+    },
+    {
+      "name": "signed-offline-before-restart.png",
+      "bytes": 157571,
+      "sha256": "25f38962b5424f5ff0094adc506f806c762a5ee0e2a6d9ed5fc36af31244a7a7"
+    },
+    {
+      "name": "signed-offline-reconciled.png",
+      "bytes": 159270,
+      "sha256": "9a174c9d6bc1c1c30fb8af35b25bc876216f0fc4dbb8d80b45a4a479a1e2a517"
+    },
+    {
+      "name": "signed-offline-restart.json",
+      "bytes": 1020,
+      "sha256": "5981a5a91b3617e9e4b2f263b3e18c9d28656f4b39d5fb9c6f8ed9927c091e5d"
+    },
+    {
+      "name": "signed-paused.png",
+      "bytes": 158471,
+      "sha256": "3440b8ccf21e0749ac79a613d74195e52a5412f06402e5091f1f2221576c1e15"
+    },
+    {
+      "name": "signed-recording.json",
+      "bytes": 595,
+      "sha256": "0dab22ed258a3de7776ca8c1434ad4a1c200f8ef7d9b8693fb8689d48e3538c6"
+    },
+    {
+      "name": "signed-restart-summary.png",
+      "bytes": 209730,
+      "sha256": "c6a59f8a3db69d2f03d49534cf1de86f9be38aa2a69553bf05f5c4146d3eb301"
+    },
+    {
+      "name": "signed-three-sets.png",
+      "bytes": 158737,
+      "sha256": "d01fbb9ef1ed0e920135a017fbec9e88c1e66c7397bb184b925d90af6a3bb028"
+    },
+    {
+      "name": "signed-video-final-frame.png",
+      "bytes": 318159,
+      "sha256": "8ecef91ccabb212b73fadfec2801b8fb8b63ae2cfba4f2c1f0867bb309fc0390"
+    },
+    {
+      "name": "signed-workout-before-start.png",
+      "bytes": 197030,
+      "sha256": "04fe2ca73fb1064ce09f71e465c90eba7dbbc6407468b68b3bf6a6239354e827"
+    },
+    {
+      "name": "signed-workout.mp4",
+      "bytes": 6460453,
+      "sha256": "e2288a7f9caa49c43446d2d2ee32dfb1e49b3c290eaf1ed28a99867aa7b29309"
+    },
+    {
+      "name": "validation.json",
+      "bytes": 13740,
+      "sha256": "ca2a472511412eafb0f829191ab2c5eb222a5e811e0979cb41530cb0001e589a"
+    },
+    {
+      "name": "workout-completion.mp4",
+      "bytes": 1860864,
+      "sha256": "41c217d16eeb2bc2b3ae24a70be809bbc9488a4681540c775b2898a6678cc1c0"
+    },
+    {
+      "name": "workout-edits.mp4",
+      "bytes": 2259551,
+      "sha256": "9fa2fa53e5221befe75b5d8a52b7ef221a0967eea83941bb0914a6f34a5eacf8"
+    },
+    {
+      "name": "workout-offline.mp4",
+      "bytes": 5441958,
+      "sha256": "ffb35a3e1cf28afb97945afc8179d44193a177c9c4567cb3fa414f1036bb8e04"
+    },
+    {
+      "name": "ابدأ-هنا.md",
+      "bytes": 2890,
+      "sha256": "d97e80d88b6bba9e3a4a0f1f754ae3848c6259ef4fc2fd7e43e7aadcb56f6e16"
+    }
+  ],
+  "apk": {
+    "name": "Traina-preview-c4183d28-2419-49ff-b5fc-89298532be88.apk",
+    "bytes": 156428768,
+    "sha256": "a0df856c15f0c423fa09a07c9fe9909c1d3325aa77d70452e7da486a818eaefe"
+  }
+}

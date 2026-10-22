@@ -1,0 +1,90 @@
+{
+  "at": "2026-10-22T23:33:05.926Z",
+  "sourceCommit": "5e0576a",
+  "syntheticOnly": true,
+  "historySessions": 1000,
+  "pages": 50,
+  "pageSize": 20,
+  "coldStart": [
+    "LaunchState: COLD",
+    "TotalTime: 2205",
+    "WaitTime: 2209"
+  ],
+  "samples": [
+    {
+      "page": 1,
+      "at": "2026-10-22T23:28:28.092Z",
+      "totalPssKiB": 208513
+    },
+    {
+      "page": 2,
+      "at": "2026-10-22T23:28:40.332Z",
+      "totalPssKiB": 227543
+    },
+    {
+      "page": 5,
+      "at": "2026-10-22T23:28:57.054Z",
+      "totalPssKiB": 233783
+    },
+    {
+      "page": 10,
+      "at": "2026-10-22T23:29:24.372Z",
+      "totalPssKiB": 242431
+    },
+    {
+      "page": 15,
+      "at": "2026-10-22T23:29:51.428Z",
+      "totalPssKiB": 252418
+    },
+    {
+      "page": 20,
+      "at": "2026-10-22T23:30:18.859Z",
+      "totalPssKiB": 257300
+    },
+    {
+      "page": 25,
+      "at": "2026-10-22T23:30:46.100Z",
+      "totalPssKiB": 253747
+    },
+    {
+      "page": 30,
+      "at": "2026-10-22T23:31:13.410Z",
+      "totalPssKiB": 255362
+    },
+    {
+      "page": 35,
+      "at": "2026-10-22T23:31:41.067Z",
+      "totalPssKiB": 256970
+    },
+    {
+      "page": 40,
+      "at": "2026-10-22T23:32:08.795Z",
+      "totalPssKiB": 259982
+    },
+    {
+      "page": 45,
+      "at": "2026-10-22T23:32:36.164Z",
+      "totalPssKiB": 261266
+    },
+    {
+      "page": 50,
+      "at": "2026-10-22T23:33:03.195Z",
+      "totalPssKiB": 256075
+    }
+  ],
+  "lastPageOlderDisabled": true,
+  "graphicsSummary": [
+    "Total frames rendered: 1222",
+    "Janky frames: 334 (27.33%)",
+    "50th percentile: 28ms",
+    "90th percentile: 48ms",
+    "95th percentile: 53ms",
+    "99th percentile: 65ms",
+    "Number Missed Vsync: 72",
+    "50th gpu percentile: 16ms",
+    "90th gpu percentile: 4950ms",
+    "95th gpu percentile: 4950ms",
+    "99th gpu percentile: 4950ms"
+  ],
+  "limits": "One release emulator run. PSS includes native allocations; no forced GC. am start timing is activity launch, not first usable paint. No physical device or independent usability acceptance."
+}

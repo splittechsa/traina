@@ -1,5 +1,6 @@
+import { Text } from './Text';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type TextStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, type TextStyle } from 'react-native';
 import { Image, type ImageSource } from 'expo-image';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,11 +52,12 @@ export function EditorialLink({
   align?: 'center' | 'start';
 }) {
   const theme = useTheme();
+  const { locale } = useLocale();
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={{ paddingVertical: 10, alignItems: align === 'center' ? 'center' : 'flex-start' }}
+      style={{ paddingVertical: 10, direction: 'ltr', alignItems: align === 'center' ? 'center' : locale === 'ar' ? 'flex-end' : 'flex-start' }}
     >
       <Text style={{ color: theme.heroAccent, fontFamily: fontFamily.semibold, fontSize: typeScale.label, writingDirection: 'auto' }}>
         {children}
@@ -143,7 +145,7 @@ export function EditorialFrame({
   const theme = useTheme();
   const alignment = { textAlign: locale === 'ar' ? 'right' as const : 'left' as const, writingDirection: locale === 'ar' ? 'rtl' as const : 'ltr' as const };
   return (
-    <View style={[styles.frame, { backgroundColor: theme.hero }]}>
+    <View style={[styles.frame, { backgroundColor: theme.hero, direction: locale === 'ar' ? 'rtl' : 'ltr' }]}>
       <PhotoWash source={source} />
       <View style={[styles.copy, { paddingTop: insets.top + spacing[4], paddingBottom: Math.max(insets.bottom, spacing[4]) + keyboard }]}>
         <View style={{ position: 'absolute', top: insets.top + spacing[3], start: spacing[5] }}>
@@ -196,7 +198,7 @@ const styles = StyleSheet.create({
   frame: { flex: 1 },
   hero: { borderRadius: radius.lg, overflow: 'hidden', marginBottom: spacing[4] },
   copy: { flex: 1, justifyContent: 'flex-end', paddingHorizontal: spacing[5] },
-  copyBlock: { marginBottom: spacing[4] },
+  copyBlock: { marginBottom: spacing[4], flexShrink: 1 },
   kicker: {
     fontFamily: fontFamily.semibold,
     fontSize: typeScale.label,
@@ -218,7 +220,7 @@ const styles = StyleSheet.create({
     writingDirection: 'auto',
   },
   pager: { flexDirection: 'row', gap: 6, marginTop: spacing[4] },
-  form: { maxHeight: 340, flexGrow: 0 },
+  form: { maxHeight: 340, flexGrow: 0, flexShrink: 1 },
   dot: { height: 6, borderRadius: 3 },
   actions: { gap: spacing[2] },
   cta: {

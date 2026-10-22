@@ -253,17 +253,15 @@ export async function refreshSession(
   refreshToken: string,
 ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
   const hashed = sha256(refreshToken);
-  const found = await db.query<{ id: string; user_id: string }>(
-    `SELECT id, user_id FROM device_sessions
-     WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()`,
-    [hashed],
-  );
-  const row = found.rows[0];
-  if (row === undefined) {
-    throw new ApiError(401, 'INVALID_REFRESH', 'Refresh token is invalid');
-  }
-  await db.query(`UPDATE device_sessions SET revoked_at = now() WHERE id = $1`, [row.id]);
-  return issueSession(db, secret, row.user_id);
+  return db.transaction(async tx => {
+    // A single conditional UPDATE consumes the token once, including across serverless instances.
+    const found = await tx.query<{ user_id: string }>(
+      `UPDATE device_sessions SET revoked_at=now()
+       WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now() RETURNING user_id`, [hashed]);
+    const row=found.rows[0];
+    if (!row) throw new ApiError(401, 'INVALID_REFRESH', 'Refresh token is invalid');
+    return issueSession(tx, secret, row.user_id);
+  });
 }
 
 export async function logoutSession(db: Database, sessionId: string): Promise<void> {

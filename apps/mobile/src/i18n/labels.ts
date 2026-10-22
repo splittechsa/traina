@@ -3,6 +3,25 @@ import type { Locale } from '../format';
 const unspecified = { ar: 'غير محدد', en: 'Unspecified' } as const;
 
 const tables = {
+  capability: {
+    'tracking.free': { ar: 'تسجيل التمارين والغذاء والتقدّم', en: 'Track workouts, food and progress' },
+    'yazan.daily': { ar: 'محادثات يومية مع يزن', en: 'Daily conversations with Yazan' },
+    'recommendations.propose': { ar: 'اقتراحات تناسب تقدّمك', en: 'Suggestions based on your progress' },
+    'human_coach.weekly_review': { ar: 'مراجعة أسبوعية من مدرب بشري', en: 'Weekly human-coach review' },
+    'human_coach.assignment': { ar: 'المتابعة مع مدربك', en: 'Follow-up with your coach' },
+    'nutrition.paid_adaptations': { ar: 'تعديل خطة التغذية', en: 'Nutrition plan adjustments' },
+  },
+  subscriptionStatus: {
+    free: { ar: 'مجاني', en: 'Free' },
+    trialing: { ar: 'فترة تجريبية', en: 'Trial' },
+    active: { ar: 'نشط', en: 'Active' },
+    grace_period: { ar: 'مهلة تجديد', en: 'Renewal grace period' },
+    billing_retry: { ar: 'بانتظار إكمال الدفع', en: 'Payment pending' },
+    canceled: { ar: 'ملغى', en: 'Canceled' },
+    expired: { ar: 'منتهٍ', en: 'Expired' },
+    refunded: { ar: 'تم استرداد المبلغ', en: 'Refunded' },
+    revoked: { ar: 'غير متاح', en: 'Unavailable' },
+  },
   goal: {
     cutting: { ar: 'تنشيف', en: 'Cutting' },
     fat_loss: { ar: 'خسارة دهون', en: 'Fat loss' },
@@ -57,6 +76,11 @@ const tables = {
     abandoned: { ar: 'متروك', en: 'Abandoned' },
   },
   muscle: {
+    abductors: { ar: 'مُبعِدات الفخذ', en: 'Hip abductors' },
+    adductors: { ar: 'مُقرِّبات الفخذ', en: 'Hip adductors' },
+    calves: { ar: 'عضلات بطة الساق', en: 'Calves' },
+    forearms: { ar: 'الساعدان', en: 'Forearms' },
+    traps: { ar: 'العضلات شبه المنحرفة', en: 'Trapezius' },
     quadriceps: { ar: 'عضلات الفخذ', en: 'Quadriceps' },
     glutes: { ar: 'عضلات المؤخرة', en: 'Glutes' },
     chest: { ar: 'الصدر', en: 'Chest' },

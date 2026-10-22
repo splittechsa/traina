@@ -1,4 +1,5 @@
 import { getApiBaseOverride, getTokens, replaceTokens, sessionEpoch } from './tokens';
+import { perfMark, safeResource } from '../performance/lab';
 
 export class ApiClientError extends Error {
   constructor(
@@ -39,6 +40,7 @@ async function refreshAccess(): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12_000);
   let response: Response;
+  let body: { accessToken: string; refreshToken: string } | undefined;
   try {
     response = await fetch(`${apiBaseUrl()}/v1/auth/refresh`, {
       method: 'POST',
@@ -46,13 +48,14 @@ async function refreshAccess(): Promise<boolean> {
       body: JSON.stringify({ refreshToken: tokens.refreshToken }),
       signal: controller.signal,
     });
+    if (response.ok) body = await response.json() as { accessToken: string; refreshToken: string };
   } finally { clearTimeout(timer); }
   if (sessionEpoch() !== refreshEpoch) return false;
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) await replaceTokens(null);
     return false;
   }
-  const body = (await response.json()) as { accessToken: string; refreshToken: string };
+  if (!body) return false;
   if (sessionEpoch() !== refreshEpoch) return false;
   await replaceTokens({ accessToken: body.accessToken, refreshToken: body.refreshToken, userId: tokens.userId });
   return true;
@@ -75,15 +78,19 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}, 
   if (options.body !== undefined) {
     headers.set('content-type', 'application/json');
   }
+  const requestAccess = getTokens()?.accessToken;
   if (options.auth !== false) {
-    const access = getTokens()?.accessToken;
+    const access = requestAccess;
     if (access !== undefined) {
       headers.set('authorization', `Bearer ${access}`);
     }
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 12_000);
+  const started=performance.now();
+  let observedStatus=0;
   let response: Response;
+  let payload: { error?: { code?: string; message?: string } };
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
       method: options.method ?? 'GET',
@@ -91,20 +98,25 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}, 
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: controller.signal,
     });
+    observedStatus=response.status;
+    payload = await response.json().catch(error => { if (controller.signal.aborted) throw error; return {}; });
+    if (controller.signal.aborted) throw new Error("Request deadline exceeded");
   } catch (caught) {
-    const aborted = caught instanceof Error && caught.name === 'AbortError';
+    const aborted = controller.signal.aborted || (caught instanceof Error && caught.name === 'AbortError');
     throw new ApiClientError(0, aborted ? 'TIMEOUT' : 'OFFLINE', aborted ? 'Request timed out' : 'Network unavailable');
   } finally {
+    perfMark('api',safeResource(path),performance.now()-started,observedStatus);
     clearTimeout(timer);
   }
   if (options.auth !== false && requestEpoch !== sessionEpoch()) throw new ApiClientError(409, 'ACCOUNT_CHANGED', 'Account changed during request');
   if (response.status === 401 && options.auth !== false && !retried && !path.startsWith('/v1/auth/')) {
+    // A late 401 may belong to the old access token after another request already rotated it.
+    if (getTokens()?.accessToken && getTokens()?.accessToken !== requestAccess) return apiRequest<T>(path, options, true);
     const refreshed = await refreshAccessOnce().catch(() => false);
     if (refreshed) {
       return apiRequest<T>(path, options, true);
     }
   }
-  const payload = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
   if (options.auth !== false && requestEpoch !== sessionEpoch()) throw new ApiClientError(409, 'ACCOUNT_CHANGED', 'Account changed during request');
   if (!response.ok) {
     throw new ApiClientError(response.status, payload.error?.code ?? 'HTTP', payload.error?.message ?? 'Request failed');

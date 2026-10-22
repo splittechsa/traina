@@ -1,0 +1,24 @@
+{
+  "syntheticOnly": true,
+  "sessionId": "d74e31f0-4570-4402-bdbb-7dec01529175",
+  "dropped": true,
+  "events": [
+    {
+      "at": "2026-10-22T01:23:40.073Z",
+      "event": "reconciliation_read",
+      "status": 200,
+      "serverStatus": "in_progress"
+    },
+    {
+      "at": "2026-10-22T01:24:17.427Z",
+      "event": "completion_committed_response_dropped",
+      "status": 200
+    },
+    {
+      "at": "2026-10-22T01:24:17.882Z",
+      "event": "reconciliation_read",
+      "status": 200,
+      "serverStatus": "completed"
+    }
+  ]
+}

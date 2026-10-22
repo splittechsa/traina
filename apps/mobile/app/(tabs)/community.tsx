@@ -1,6 +1,7 @@
+import { Text } from '../../src/ui/Text';
 import { useFormRecovery } from '../../src/storage/useFormRecovery';
 import { useState } from 'react';
-import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SymbolView } from 'expo-symbols';
 import { ApiClientError, apiRequest } from '../../src/api/client';

@@ -1,4 +1,16 @@
-# Deployment runbook — 2026-10-20
+# Current staging handoff — 2026-10-23
+
+**Public launch remains NO-GO.** The isolated staging API, website and admin workspace are deployed. Earlier preparation steps below are historical; they do not describe the current staging state.
+
+- API: https://traina-staging-api.vercel.app; website: https://traina-staging-www.vercel.app; admin: https://traina-staging-admin.vercel.app. Use synthetic accounts only. Health and HTTP availability are separate from commercial readiness: `/v1/ready` reports missing `store_verifier`; live payments stay disabled.
+- Isolated Neon project `solitary-pond-59179148`, database `traina_staging`, has verified migrations 0001–0035. The production project was not migrated or seeded during this closure.
+- Mobile `development` and `preview` profiles use the actual staging HTTPS origin. `preview` produces signed Android APKs; `preview-emulator` is an x86_64-only release APK for the PC emulator. Neither is a production store release. Persisted development endpoint overrides are ignored in release builds.
+- SDK57-compatible patches and splash plugin configuration require runtime `0.1.0-staging.2`. Build from `apps/mobile` with `eas build --platform android --profile preview`. For this PC use `--profile preview-emulator`. Install the downloaded APK with Android SDK `adb install -r <APK>`, then launch `sa.sahhti.member/.MainActivity`. Expo Go/Metro is unnecessary for the signed APK.
+- Build and environment provenance, native screenshots, recordings and remaining limitations are in [the closure report](../evidence/android-closure-2026-10-22/REPORT.md). An archive inspection must reject secrets, credentials, local databases, generated native projects and working folders before upload. Do not commit `.env` or signing files.
+- Server-only API variables: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `SAHHTI_TOKEN_SECRET` (at least32 characters), and `SAHHTI_COACH_PROVIDER`, `SAHHTI_COACH_API_KEY`, `SAHHTI_COACH_BASE_URL`, `SAHHTI_COACH_MODEL`. Retain the verified staging values in the hosting secret store. Website uses `TRAINA_API_ORIGIN` and `WEBSITE_ORIGIN`; admin uses `TRAINA_API_ORIGIN` and `ADMIN_ORIGIN`. Only `EXPO_PUBLIC_API_URL` belongs in the mobile bundle. See the existing service configuration for the complete environment schema; this list is not permission to reuse staging secrets in production.
+- Before promotion: close dependency-security findings, obtain independent PR57→PR58 approvals/current-head CI, record a signed physical iPhone journey, qualify Android performance on actual hardware, approve coaching/AI and licensed exercise demonstrations, and complete privacy/store/payment/operations gates. Apple Developer access and reviewed demonstration assets are currently unavailable. Do not merge or submit based on emulator checks alone.
+
+# Historical deployment plan — 2026-10-20
 
 Release state: NO-GO. These steps describe the controlled promotion procedure; production deployment has not been executed.
 
