@@ -1,0 +1,92 @@
+{
+  "at": "2026-10-22T22:39:45.282Z",
+  "release": "NO_GO",
+  "experience": "PARTIAL",
+  "mobile": {
+    "tests": 160,
+    "files": 45,
+    "typecheck": "PASS",
+    "lint": {
+      "errors": 0,
+      "existingWarnings": 5
+    }
+  },
+  "root": {
+    "domain": 136,
+    "contracts": 3,
+    "designTokens": 1,
+    "api": 81,
+    "admin": 8,
+    "typecheck": "PASS",
+    "build": "PASS"
+  },
+  "totalTests": 389,
+  "android": {
+    "device": "Pixel 7 AVD / Android 36 x86_64",
+    "runtime": "Expo Go 57.0.9",
+    "whpx": "HOST_PROBE_0_USABLE",
+    "booted": true,
+    "syntheticNativeLogin": true,
+    "rapidOfflineSets": "PASS",
+    "editFinalSet": "PASS_SERVER_RECONCILED",
+    "pauseResume": "PASS_SERVER_RECONCILED",
+    "completionLostResponse": "PASS_NATIVE_RECONCILIATION",
+    "completionReplay": "PASS_HTTPS",
+    "history": "PASS",
+    "restart": "PASS",
+    "releaseLike": "NOT_TESTED",
+    "nativeFps": "NOT_MEASURED",
+    "nativeMemory": "NOT_MEASURED",
+    "physicalIphone": "NOT_TESTED_CURRENT_HEAD"
+  },
+  "media": {
+    "approvedAssets": 0,
+    "status": "BLOCKED"
+  },
+  "services": [
+    {
+      "url": "https://traina-staging-api.vercel.app/v1/health",
+      "status": 200
+    },
+    {
+      "url": "https://traina-staging-api.vercel.app/v1/ready",
+      "status": 503,
+      "missing": [
+        "store_verifier"
+      ]
+    },
+    {
+      "url": "https://traina-staging-www.vercel.app",
+      "status": 200
+    },
+    {
+      "url": "https://traina-staging-admin.vercel.app",
+      "status": 200
+    }
+  ],
+  "merge": {
+    "order": [
+      57,
+      58
+    ],
+    "independentApprovals": "MISSING",
+    "merged": false
+  },
+  "easPreview": {
+    "status": "NOT_STARTED_CURRENT_HEAD",
+    "previousBuild": "57cea473-8e52-4183-bf15-20bd5d3f13f9",
+    "previousFailure": "obsolete React Navigation imports; current source imports router compatibility module"
+  },
+  "androidExport": {
+    "status": "PASS",
+    "bundle": "index-6adea7621b043acc5d6369ec0adb44ce.hbc",
+    "bytes": 5861897,
+    "installableBinary": false
+  },
+  "iosExport": {
+    "status": "PASS",
+    "bundle": "index-8e756d8a242d50a582f61fb5f63ec73e.hbc",
+    "bytes": 5666851,
+    "installableBinary": false
+  }
+}

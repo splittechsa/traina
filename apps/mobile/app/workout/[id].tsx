@@ -43,6 +43,7 @@ type WorkoutProgress = {
 function formatRest(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
+  if (m >= 60) return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
@@ -484,6 +485,7 @@ export default function WorkoutScreen() {
         <AppHeader
           title={isRunning || isPaused ? (isAr ? 'التمرين الحالي' : 'Current exercise') : current.name}
           subtitle={label(locale, 'session', current.status)}
+          trailing={isRunning ? <Pressable accessibilityRole="button" accessibilityLabel={text(locale, 'pause')} accessibilityState={{disabled:busy}} disabled={busy} testID="workout-pause" onPress={() => void pause()} style={{minHeight:44,minWidth:44,padding:8,justifyContent:'center',borderRadius:radius.sm,backgroundColor:theme.surfaceMuted,opacity:busy?0.55:1}}><Text style={{color:theme.accent,fontFamily:fontFamily.semibold,fontSize:typeScale.label}}>{text(locale, 'pause')}</Text></Pressable> : undefined}
           showBack
           confirmUnsaved={
             isRunning || isPaused
@@ -496,6 +498,30 @@ export default function WorkoutScreen() {
               : undefined
           }
         />
+
+        {isDone ? (
+          <SurfaceCard tone="raised" style={{ marginBottom: spacing[3] }}>
+            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
+              {isAr ? 'ملخص الجلسة' : 'Session summary'}
+            </Text>
+            <Text style={{ color: theme.accent, marginBottom: 8 }}>{isAr ? 'أحسنت، تم حفظ جلستك' : 'Well done, your session is saved'} · {formatRest(workoutElapsedSeconds(current, current.completedAt!))}</Text>
+            <Text style={{ color: theme.textMuted, lineHeight: 22 }}>
+              {isAr
+                ? `${completedSets} مجموعات · ${new Set(current.sets.map(set => set.exerciseId)).size} تمارين مسجّلة${volumeGrams > 0 ? ` · حجم تدريبي ${formatKg(volumeGrams, locale)} كغ` : ''}`
+                : `${completedSets} sets · ${new Set(current.sets.map(set => set.exerciseId)).size} exercises logged${volumeGrams > 0 ? ` · volume ${formatKg(volumeGrams, locale)} kg` : ''}`}
+            </Text>
+          </SurfaceCard>
+        ) : null}
+
+        {isDone ? <SurfaceCard style={{marginBottom:12}}>
+          <Text style={{color:theme.accent,fontFamily:fontFamily.semibold}}>{isAr?'التقدّم مقارنة بما قبل الجلسة':'Progress against your pre-workout best'}</Text>
+          {results.isPending?<Text style={{color:theme.textMuted}}>{isAr?'نراجع سجلك…':'Checking your history…'}</Text>:null}
+          {results.isError?<Text style={{color:theme.textMuted}}>{isAr?'جلستك محفوظة. مقارنة الأرقام غير متاحة الآن.':'Your workout is saved. Record comparisons are unavailable right now.'}</Text>:null}
+          {results.data?.improvements.map(record=><Text key={record.exerciseId} style={{color:theme.text,lineHeight:24}}>{exerciseName(record.exerciseId)} · {formatKg(record.previous.loadGrams,locale)} × {record.previous.reps} → {formatKg(record.loadGrams,locale)} × {record.reps}</Text>)}
+          {results.data?.firstRecorded.map(record=><Text key={record.exerciseId} style={{color:theme.textMuted,lineHeight:24}}>{exerciseName(record.exerciseId)} · {isAr?'خط أساس جديد':'First recorded baseline'} · {formatKg(record.loadGrams,locale)} × {record.reps}</Text>)}
+          {results.data&&results.data.improvements.length===0&&results.data.firstRecorded.length===0?<Text style={{color:theme.textMuted}}>{isAr?'تم تسجيل عملك اليوم. لا توجد زيادة على أفضل أرقامك السابقة.':'Today’s work is recorded. No increase over your prior best.'}</Text>:null}
+          <Button variant="secondary" label={isAr?'العودة إلى سجل التمارين':'Back to workout history'} onPress={()=>router.replace('/(tabs)/training')} />
+        </SurfaceCard>:null}
 
         {(isScheduled || isDone) ? (<YazanCard
           compact
@@ -543,7 +569,7 @@ export default function WorkoutScreen() {
           </Text>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {[
-              [String(current.plannedExercises.length), isAr ? 'تمارين' : 'Exercises'],
+              [String(isDone ? new Set(current.sets.map(set => set.exerciseId)).size : current.plannedExercises.length), isAr ? 'تمارين' : 'Exercises'],
               [`${completedSets}/${plannedSetTotal}`, isAr ? 'مجموعات' : 'Sets'],
               [volumeGrams > 0 ? formatKg(volumeGrams, locale) : '—', isAr ? 'حجم' : 'Volume'],
             ].map(([n, caption]) => (
@@ -558,10 +584,12 @@ export default function WorkoutScreen() {
 
         {rest > 0 && isRunning ? (
           <SurfaceCard style={{ marginBottom: spacing[3], borderColor: theme.accent, borderWidth: 1 }}>
-            <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium }}>{text(locale, 'restTimer')}</Text>
-            <RestCountdown readState={() => restAnchor.current} paused={restPaused} secondsAtChange={rest} onExpire={() => { setRest(0); restAnchor.current = null; }} />
+            <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8}}>
+              <Text style={{ color: theme.textMuted, fontFamily: fontFamily.medium }}>{text(locale, 'restTimer')}</Text>
+              <RestCountdown readState={() => restAnchor.current} paused={restPaused} secondsAtChange={rest} onExpire={() => { setRest(0); restAnchor.current = null; }} />
+            </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Button variant="secondary" label={isAr ? '+١٥ ثانية' : '+15 seconds'} onPress={() => adjustRest(15)} />
+              <Pressable accessibilityRole="button" accessibilityLabel={isAr ? 'إضافة ١٥ ثانية للراحة' : 'Add 15 seconds to rest'} onPress={() => adjustRest(15)} style={{flex:1,minHeight:44,borderRadius:radius.md,backgroundColor:theme.surfaceMuted,alignItems:'center',justifyContent:'center'}}><Text style={{color:theme.text,fontFamily:fontFamily.semibold}}>{isAr ? '+١٥ ثانية' : '+15 seconds'}</Text></Pressable>
               <Pressable
                 accessibilityRole="button"
                 testID="workout-pause-rest"
@@ -620,7 +648,9 @@ export default function WorkoutScreen() {
               {exerciseName(active.exerciseId)}
             </Text>
             <Text style={{ color: theme.textMuted, marginBottom: 10 }}>
-              {isAr ? 'المجموعة' : 'Set'} {Math.min(loggedForActive.length + 1, plannedSets)} / {plannedSets} · {targetReps} {text(locale, 'reps')}
+              {activeTargetMet
+                ? (isAr ? 'اكتملت مجموعات هذا التمرين' : 'All sets for this exercise are recorded')
+                : (isAr ? `المجموعة ${formatCount(Math.min(loggedForActive.length + 1, plannedSets),locale)} من ${formatCount(plannedSets,locale)} · ${formatCount(targetReps,locale)} تكرارات` : `Set ${Math.min(loggedForActive.length + 1, plannedSets)} of ${plannedSets} · ${targetReps} reps`)}
             </Text>
 
 
@@ -634,7 +664,7 @@ export default function WorkoutScreen() {
               </Text>
             ) : null}
 
-            {isRunning && editingSetId === null ? <SetInputs reps={reps} load={load} weighted={active.prescription.kind === 'strength'} onReps={value => { setReps(value); setInputDirty(true); }} onLoad={value => { setLoad(value); setInputDirty(true); }} /> : null}
+            {isRunning && editingSetId === null && !activeTargetMet ? <SetInputs reps={reps} load={load} weighted={active.prescription.kind === 'strength'} onReps={value => { setReps(value); setInputDirty(true); }} onLoad={value => { setLoad(value); setInputDirty(true); }} /> : null}
             <SurfaceCard style={{ marginBottom: spacing[3] }}>
               <View style={{ flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: theme.border }}>
                 <Text style={{ flex: 1, color: theme.textMuted, fontFamily: fontFamily.semibold }}>{text(locale, 'setTableHeader')}</Text>
@@ -728,30 +758,6 @@ export default function WorkoutScreen() {
           </View>
         )}
 
-        {isDone ? (
-          <SurfaceCard tone="raised" style={{ marginBottom: spacing[3] }}>
-            <Text style={{ color: theme.text, fontFamily: fontFamily.bold, fontSize: typeScale.card, marginBottom: 8 }}>
-              {isAr ? 'ملخص الجلسة' : 'Session summary'}
-            </Text>
-            <Text style={{ color: theme.accent, marginBottom: 8 }}>{isAr ? 'أحسنت، تم حفظ جلستك' : 'Well done, your session is saved'} · {formatRest(workoutElapsedSeconds(current, current.completedAt!))}</Text>
-            <Text style={{ color: theme.textMuted, lineHeight: 22 }}>
-              {isAr
-                ? `${completedSets} مجموعات · ${new Set(current.sets.map(set => set.exerciseId)).size} تمارين مسجّلة${volumeGrams > 0 ? ` · حجم ${formatKg(volumeGrams, locale)}` : ''}`
-                : `${completedSets} sets · ${new Set(current.sets.map(set => set.exerciseId)).size} exercises logged${volumeGrams > 0 ? ` · volume ${formatKg(volumeGrams, locale)}` : ''}`}
-            </Text>
-          </SurfaceCard>
-        ) : null}
-
-        {isDone ? <SurfaceCard style={{marginBottom:12}}>
-          <Text style={{color:theme.accent,fontFamily:fontFamily.semibold}}>{isAr?'التقدّم مقارنة بما قبل الجلسة':'Progress against your pre-workout best'}</Text>
-          {results.isPending?<Text style={{color:theme.textMuted}}>{isAr?'نراجع سجلك…':'Checking your history…'}</Text>:null}
-          {results.isError?<Text style={{color:theme.textMuted}}>{isAr?'جلستك محفوظة. مقارنة الأرقام غير متاحة الآن.':'Your workout is saved. Record comparisons are unavailable right now.'}</Text>:null}
-          {results.data?.improvements.map(record=><Text key={record.exerciseId} style={{color:theme.text,lineHeight:24}}>{exerciseName(record.exerciseId)} · {formatKg(record.previous.loadGrams,locale)} × {record.previous.reps} → {formatKg(record.loadGrams,locale)} × {record.reps}</Text>)}
-          {results.data?.firstRecorded.map(record=><Text key={record.exerciseId} style={{color:theme.textMuted,lineHeight:24}}>{exerciseName(record.exerciseId)} · {isAr?'خط أساس جديد':'First recorded baseline'} · {formatKg(record.loadGrams,locale)} × {record.reps}</Text>)}
-          {results.data&&results.data.improvements.length===0&&results.data.firstRecorded.length===0?<Text style={{color:theme.textMuted}}>{isAr?'تم تسجيل عملك اليوم. لا توجد زيادة على أفضل أرقامك السابقة.':'Today’s work is recorded. No increase over your prior best.'}</Text>:null}
-          <Button variant="secondary" label={isAr?'العودة إلى سجل التمارين':'Back to workout history'} onPress={()=>router.replace('/(tabs)/training')} />
-        </SurfaceCard>:null}
-
         {conflicts.length > 0 ? <SurfaceCard>
           <Text style={{ color: theme.text }}>{isAr ? 'تعارض في المزامنة. السجلات المحلية محفوظة. أعد المحاولة أو اعتمد سجل الخادم.' : 'Sync conflict. Local records are retained. Retry or keep the server records.'}</Text>
           {conflicts.filter((command, index, all) => all.findLastIndex(item => item.set.id === command.set.id) === index).map(command => <View key={command.clientEventId}><Text style={{ color: theme.textMuted }}>{isAr ? 'مجموعة محلية' : 'Local set'} {command.set.setIndex}: {command.set.reps} × {command.set.loadGrams / 1000} kg</Text>
@@ -775,7 +781,6 @@ export default function WorkoutScreen() {
           </Text>
         ) : null}
 
-        {isRunning ? <Button label={text(locale, 'pause')} disabled={busy} variant="secondary" onPress={() => void pause()} /> : null}
         {(isRunning || isPaused) ? (
           <Button
             disabled={busy}

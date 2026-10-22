@@ -1,0 +1,38 @@
+{
+  "syntheticOnly": true,
+  "mode": "Android API 36 emulator / Expo Go development",
+  "sessionId": "d74e31f0-4570-4402-bdbb-7dec01529175",
+  "setsBefore": 6,
+  "setsWhileOffline": 6,
+  "setsAfterReconnect": 9,
+  "expectedAdded": 3,
+  "tapWindowMs": 1259.8608000000004,
+  "events": [
+    {
+      "name": "emulator_network_disabled",
+      "at": "2026-10-22T01:20:55.278Z"
+    },
+    {
+      "name": "native_set_tap_1",
+      "at": "2026-10-22T01:20:55.326Z"
+    },
+    {
+      "name": "native_set_tap_2",
+      "at": "2026-10-22T01:20:55.754Z"
+    },
+    {
+      "name": "native_set_tap_3",
+      "at": "2026-10-22T01:20:56.177Z"
+    },
+    {
+      "name": "emulator_network_restored",
+      "at": "2026-10-22T01:20:58.545Z"
+    },
+    {
+      "name": "backend_checked",
+      "at": "2026-10-22T01:21:02.774Z"
+    }
+  ],
+  "status": "PASS",
+  "limits": "Tap window includes adb dispatch and deliberate 350ms waits; not measured input latency or FPS."
+}

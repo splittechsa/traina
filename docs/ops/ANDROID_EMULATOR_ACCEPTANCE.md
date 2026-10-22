@@ -1,3 +1,7 @@
+# Current observed status — 2026-10-22
+
+**BOOTED; EXPO GO NATIVE JOURNEY PARTIAL PASS.** Host acceleration probe returned 0/WHPX usable. Matching Expo Go is installed; Metro 8085 and ADB reverse opened the app. See [native closure evidence](../evidence/android-closure-2026-10-22/REPORT.md). Windows restart is no longer the blocker. Signed Android preview, device performance and physical-iPhone acceptance remain open. Earlier installation snapshots below are retained as history.
+
 # Android emulator setup and acceptance
 
 2026-10-21 current status: **INSTALLED; launch BLOCKED_PENDING_WINDOWS_RESTART.** The user freed disk space, raising observed free space from1.43GiB to36.71GiB before installation. Microsoft OpenJDK21.0.12.1, Google command-line tools, Android Emulator37.2.12, platform-tools and Google APIs Android36 x86_64 system image revision7 were downloaded/installed. Source SHA256 checks passed for Java and the command-line tools. AVD Traina_API_36 was created with a Pixel7 profile. Its generated numeric settings were normalized from Arabic digits to ASCII because emulator configuration keys require ASCII numbers.

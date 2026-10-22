@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Keyboard, Platform } from 'react-native';
+import { Keyboard, Platform, useWindowDimensions, type KeyboardMetrics } from 'react-native';
 
 /**
  * Height of the software keyboard from the bottom of the screen.
  * iOS does not resize the window, so composers must pad by this amount.
- * Android resizes the window, so adding the height again would leave an empty gap.
+ * On Android, only lift by the part still overlapping the current window. Some
+ * edge-to-edge hosts overlay the keyboard; others resize, which must not add it twice.
  */
 export function useKeyboardInset(): number {
-  const [height, setHeight] = useState(0);
+  const { height: windowHeight } = useWindowDimensions();
+  const [frame, setFrame] = useState<KeyboardMetrics | undefined>(() => Keyboard.metrics());
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    const show = Keyboard.addListener('keyboardWillShow', (event) => setHeight(event.endCoordinates.height));
-    const hide = Keyboard.addListener('keyboardWillHide', () => setHeight(0));
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (event) => setFrame(event.endCoordinates));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setFrame(undefined));
     return () => {
       show.remove();
       hide.remove();
     };
   }, []);
-  return height;
+  if (!frame) return 0;
+  return Platform.OS === 'ios' ? frame.height : Math.max(0, windowHeight - frame.screenY);
 }

@@ -1,3 +1,9 @@
+# Current Android native closure — 2026-10-22
+
+**Release NO-GO; experience PARTIAL.** Android now boots with host WHPX acceleration and runs Traina in Expo Go. Actual native synthetic interaction verified login, set logging, final-set editing, pause/resume, offline queue reconciliation (6→9 sets), a deliberately lost successful completion response, safe HTTPS replay, history and persistence after process restart. Screenshots prompted RTL, keyboard, workout controls and summary improvements. 389 automated tests passed. Signed preview/native performance and current-head physical iPhone acceptance remain open; no independent approvals, reviewed 3D assets or commercial readiness.
+
+Evidence: [Android closure report](../evidence/android-closure-2026-10-22/REPORT.md). Earlier snapshots below are historical and do not supersede this status.
+
 # Current Arabic/native closure and Android request — 2026-10-21
 
 **NO-GO; experience PARTIAL.** Source RTL and interaction fixes implemented in PR58; no fresh physical screenshot/recording acceptance. User reported opening/navigation error; staging configuration corrected and optional read-cache blocking removed, but phone resolution remains unverified. Android SDK, Java, emulator and Android36 image are now installed after the user freed disk space; the user enabled Windows Hypervisor Platform and launch is now BLOCKED_PENDING_WINDOWS_RESTART. The preferences directory and adb startup are resolved. Five reviewed exercise clips remain BLOCKED individually; no assets/approvals fabricated.

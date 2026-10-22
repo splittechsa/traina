@@ -1,26 +1,14 @@
-import { useEffect } from 'react';
-import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text } from '../src/i18n/copy';
-import { Screen, ScreenBody } from '../src/ui/Screen';
-import { AppHeader, SectionLabel, SegmentedControl, SettingsGroup, SettingsRow } from '../src/ui/kit';
+import { Body, Muted, Screen, ScreenBody } from '../src/ui/Screen';
+import { AppHeader, SectionLabel, SegmentedControl, SettingsGroup, SettingsRow, SurfaceCard } from '../src/ui/kit';
 import { useTheme } from '../src/theme/ThemeProvider';
 
 export default function SettingsScreen() {
   const { locale, setLocale, restartRequired } = useLocale();
   const theme = useTheme();
 
-  // Switching ar<->en flips I18nManager's RTL flag, but React Native only applies that to
-  // the *next* native layout pass (see index.ts) — it cannot re-mirror an already-mounted
-  // app. There is no way around a real restart here; surfacing it honestly beats leaving
-  // the UI half-mirrored with no explanation.
-  useEffect(() => {
-    if (!restartRequired) return;
-    Alert.alert(text(locale, 'restartRequiredTitle'), text(locale, 'restartRequiredBody'), [
-      { text: text(locale, 'ok') },
-    ]);
-  }, [restartRequired, locale]);
   return (
     <Screen>
       <ScreenBody>
@@ -44,6 +32,7 @@ export default function SettingsScreen() {
             { id: 'en', label: text(locale, 'english') },
           ]}
         />
+        {restartRequired ? <SurfaceCard><Body>{text(locale, 'restartRequiredTitle')}</Body><Muted>{text(locale, 'restartRequiredBody')}</Muted></SurfaceCard> : null}
         <SettingsGroup>
           <SettingsRow
             icon={{ ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' }}

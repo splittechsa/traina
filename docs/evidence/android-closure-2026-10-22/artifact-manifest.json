@@ -1,0 +1,211 @@
+{
+  "at": "2026-10-22T22:39:45.344Z",
+  "syntheticOnly": true,
+  "files": [
+    {
+      "name": "01-after-login.png",
+      "bytes": 278883,
+      "sha256": "f12cae8b25ee8d45e2b8a8b40939d1d1f7a62e7360ba7c71a9eb6540de7d3ede"
+    },
+    {
+      "name": "02-workout-before.png",
+      "bytes": 144319,
+      "sha256": "e4188a0e798a2c066f8eb557e91824543e05767a0e6f4761fd38af1e8f405612"
+    },
+    {
+      "name": "03-rtl-adjusted.png",
+      "bytes": 144236,
+      "sha256": "6cf340a49bc74e36ae4cbb8b62e4d109cd7cf6e748f83336c5cef2253204f374"
+    },
+    {
+      "name": "04-rest-after-first-set.png",
+      "bytes": 155159,
+      "sha256": "0be14d64b57d24ce9608957b77f9d9817a43ff38b6855a2a9573e21b773edbb7"
+    },
+    {
+      "name": "05-three-sets.png",
+      "bytes": 150458,
+      "sha256": "2467925b2b1d2f6e3cf6fbb477b68d9483f208a700bad64c8de2c8d9d4548c5e"
+    },
+    {
+      "name": "06-edit-final-set.png",
+      "bytes": 148043,
+      "sha256": "835e9c5435724698ba665f9d9e9e50c95a95af6bc4910898f8eed8deb0a7265c"
+    },
+    {
+      "name": "07-paused.png",
+      "bytes": 146222,
+      "sha256": "a03f23f0365ce78a4d0cdcf766c067bdabbe01b58a3fa94343763d63c92aeeac"
+    },
+    {
+      "name": "08-offline-sets.png",
+      "bytes": 171161,
+      "sha256": "11d2417893eadad37b5baf3b96a0b8e23fda789cde02a18616301f9f4a3683af"
+    },
+    {
+      "name": "09-reconnected.png",
+      "bytes": 171756,
+      "sha256": "da9f581bb43a2732c7bb8b4e29008586f08b00001f30889caa31de4574c750c3"
+    },
+    {
+      "name": "10-diagnostics.png",
+      "bytes": 182099,
+      "sha256": "cf51dfe958e0b6f9942db1560c341220112ca0844b92056c9db6eb109e3815f3"
+    },
+    {
+      "name": "11-completion-confirmation.png",
+      "bytes": 159027,
+      "sha256": "e7477b99682a70a21d666aaf9c423f55683b8b54ef7851cf996b29d3ba934d3b"
+    },
+    {
+      "name": "12-completion-in-flight.png",
+      "bytes": 158899,
+      "sha256": "1b12692593e34f25a7e86d056f6076e3e617e1e2f70af9b555077c93429b165b"
+    },
+    {
+      "name": "13-completed-summary.png",
+      "bytes": 189579,
+      "sha256": "41d3215ae3c8a696b6ba0f6116a0012a05b9fcd671615b82eec304a17a301802"
+    },
+    {
+      "name": "14-summary-first.png",
+      "bytes": 189869,
+      "sha256": "22266e510b611c523b6ed3ad423014de4d2afa52a2cb4e83c846c672512e3f24"
+    },
+    {
+      "name": "15-final-summary.png",
+      "bytes": 229583,
+      "sha256": "e573f8aaf8c6a79017083b5e591ca5f15781715e453e419eecda098e4887c398"
+    },
+    {
+      "name": "16-history.png",
+      "bytes": 222331,
+      "sha256": "42e9ae7b30781c6d8269cf1a4f66521bd1603c315e50873d036461fcc0d052f4"
+    },
+    {
+      "name": "17-restart-summary.png",
+      "bytes": 229601,
+      "sha256": "dc74fe1c6df74288c1785ff82a6f10d054c6ad2bf084d62ffb19d157bc4085a7"
+    },
+    {
+      "name": "18-settings-english.png",
+      "bytes": 165943,
+      "sha256": "68d1963a8f889c44a3717b306ec657e131d09f5bb28818b01a47e8c6052a1010"
+    },
+    {
+      "name": "19-english-after-restart.png",
+      "bytes": 166011,
+      "sha256": "f1cd92c814bae37dd64d42af43098c0f97a6b514b5cdde47cc1581c21f89ac90"
+    },
+    {
+      "name": "21-settings-arabic-after-restart.png",
+      "bytes": 157644,
+      "sha256": "1704761a4ada0cfeef27dc95d1be0aeba03d22f3402dc7b70b5d4b5752a62cb7"
+    },
+    {
+      "name": "backend-completed.json",
+      "bytes": 1524,
+      "sha256": "004f36748a43acf1e513a8ee0c1f29fd18e97fc25c0a10002f50c1bbd42ad682"
+    },
+    {
+      "name": "backend-paused.json",
+      "bytes": 1078,
+      "sha256": "a81a08d7f60e617ff1f48ac1c689de7a1bee36717019220a779b48afe1a81738"
+    },
+    {
+      "name": "lost-response-proxy.json",
+      "bytes": 542,
+      "sha256": "90fe3efaaa0770e5ee875cd42b9e17341f6fac0798c57c35aa57ac68fcdb733f"
+    },
+    {
+      "name": "offline-reconciliation.json",
+      "bytes": 953,
+      "sha256": "9b783d5e290b83ebc78233d590243f0f64a3ec5fa7fdff926a7b5669889c7fc6"
+    },
+    {
+      "name": "previous-eas-build-failure.json",
+      "bytes": 3174,
+      "sha256": "f0f7d669f84a70426b79df8b54285e481d6e4448ef150967a6d38a7aed7e4c3f"
+    },
+    {
+      "name": "replay-history-check.json",
+      "bytes": 262,
+      "sha256": "05c831e75c2512c53355b70a47fe5fbe70b81699df4503aee19c303dd4dbcebe"
+    },
+    {
+      "name": "REPORT.md",
+      "bytes": 4730,
+      "sha256": "3fc17a59869be102471f0430e42acaadbb8af89f10e18835409a487bd67a31cd"
+    },
+    {
+      "name": "restart-check.json",
+      "bytes": 244,
+      "sha256": "d25fa7ccb9efebdd35cf0d6ec1b0a1bc52dd1d694c6c4d2b900fdfe2f1db44e3"
+    },
+    {
+      "name": "route-account.png",
+      "bytes": 88808,
+      "sha256": "37c00d42108ee765e167ff4c8fcf38f2ce39467a9b0fd37876b259161b14ca78"
+    },
+    {
+      "name": "route-coach.png",
+      "bytes": 121795,
+      "sha256": "e1de7a5353c955db9e65eaaecddef33d27899622241479d48dc8a057295e2113"
+    },
+    {
+      "name": "route-home.png",
+      "bytes": 285656,
+      "sha256": "d734394aa861a3bac3ea24dbef25a7d53f40f70ca3c69361f6a14338e913f211"
+    },
+    {
+      "name": "route-nutrition.png",
+      "bytes": 253285,
+      "sha256": "0acf9dd81e55db2da39a034bbfe6b96364f82ebd51e3c9e6ad403fe410cd007e"
+    },
+    {
+      "name": "route-progress.png",
+      "bytes": 162752,
+      "sha256": "e951afc306a22eb9eddee19ce3a8e4cb4f43069269efdb67ecbe0b3aa8cbaf7f"
+    },
+    {
+      "name": "route-settings-after.png",
+      "bytes": 156548,
+      "sha256": "27854c9369c438eda97aedab05a924921b36a8558415529d5191097fa7b84d1d"
+    },
+    {
+      "name": "route-settings.png",
+      "bytes": 144205,
+      "sha256": "e73d55afedf7a5731c871230b0121e984bcbcd68f4a8eed5faeb057cf1dbaf75"
+    },
+    {
+      "name": "route-training.png",
+      "bytes": 225175,
+      "sha256": "2424c10ef4f87f812a26c63462f05ea22fac8f18b79ca8c53520895556a53695"
+    },
+    {
+      "name": "routes.json",
+      "bytes": 1092,
+      "sha256": "d261679b58ab0899ace1948fc317e6815c243b54372ed5a1fb7157e685e81c0f"
+    },
+    {
+      "name": "validation.json",
+      "bytes": 2199,
+      "sha256": "6725a89f8afad52e00810ecc72b5290287e2e4f34f0fe013d2d5b19cad3cc7ef"
+    },
+    {
+      "name": "workout-completion.mp4",
+      "bytes": 1860864,
+      "sha256": "41c217d16eeb2bc2b3ae24a70be809bbc9488a4681540c775b2898a6678cc1c0"
+    },
+    {
+      "name": "workout-edits.mp4",
+      "bytes": 2259551,
+      "sha256": "9fa2fa53e5221befe75b5d8a52b7ef221a0967eea83941bb0914a6f34a5eacf8"
+    },
+    {
+      "name": "workout-offline.mp4",
+      "bytes": 5441958,
+      "sha256": "ffb35a3e1cf28afb97945afc8179d44193a177c9c4567cb3fa414f1036bb8e04"
+    }
+  ]
+}

@@ -7,5 +7,7 @@ import { fontFamily } from '../theme/tokens';
  */
 export function Text({ style, ...props }: TextProps) {
   const { locale } = useLocale();
-  return <NativeText {...props} style={[{ fontFamily: fontFamily.regular, textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: 'auto' }, style]} />;
+  // Keep physical alignment stable inside RTL Yoga containers. Paragraph runs
+  // still follow Unicode; only the parent owns row and icon mirroring.
+  return <NativeText {...props} style={[{ fontFamily: fontFamily.regular, direction: 'ltr', textAlign: locale === 'ar' ? 'right' : 'left', writingDirection: 'auto' }, style]} />;
 }
