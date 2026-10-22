@@ -1,6 +1,6 @@
 import { Text } from './Text';
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
@@ -59,7 +59,7 @@ export function ScreenBody({
   const inTabs = useSegments()[0] === '(tabs)';
   const tabInset = useTabBarInset();
   const keyboard = useKeyboardInset();
-  const keyboardLift = keyboard > 0 ? Math.max(0, keyboard - (inTabs ? 0 : insets.bottom)) : 0;
+  const keyboardLift = keyboard > 0 ? (Platform.OS === 'android' ? keyboard : Math.max(0, keyboard - (inTabs ? 0 : insets.bottom))) : 0;
   const resting = inTabs ? tabInset : 0;
   const occupied = keyboard > 0 ? keyboardLift : resting;
   return (

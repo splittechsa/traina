@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Keyboard, Platform, useWindowDimensions, type KeyboardMetrics } from 'react-native';
+import { Keyboard, Platform, StatusBar, useWindowDimensions, type KeyboardMetrics } from 'react-native';
 
 /**
  * Height of the software keyboard from the bottom of the screen.
@@ -19,5 +19,10 @@ export function useKeyboardInset(): number {
     };
   }, []);
   if (!frame) return 0;
-  return Platform.OS === 'ios' ? frame.height : Math.max(0, windowHeight - frame.screenY);
+  if (Platform.OS === 'ios') return frame.height;
+  // Android's window height can exclude the status bar while keyboard screenY
+  // is in screen coordinates. Clamp to the actual keyboard height for hosts
+  // whose window already includes the bars, and never pad a resized window twice.
+  if (windowHeight <= frame.screenY) return 0;
+  return Math.min(frame.height, Math.max(0, windowHeight + (StatusBar.currentHeight ?? 0) - frame.screenY));
 }

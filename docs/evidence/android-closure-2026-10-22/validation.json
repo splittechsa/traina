@@ -3,7 +3,7 @@
   "release": "NO_GO",
   "experience": "PARTIAL",
   "mobile": {
-    "tests": 161,
+    "tests": 164,
     "files": 46,
     "typecheck": "PASS",
     "lint": {
@@ -20,7 +20,7 @@
     "typecheck": "PASS",
     "build": "PASS"
   },
-  "totalTests": 390,
+  "totalTests": 393,
   "android": {
     "device": "Pixel 7 AVD / Android 36 x86_64",
     "runtime": "Expo Go 57.0.9",
@@ -38,7 +38,9 @@
     "nativeFps": "NOT_MEASURED",
     "nativeMemory": "NOT_MEASURED",
     "physicalIphone": "NOT_TESTED_CURRENT_HEAD",
-    "nativeEvidenceSourceCommit": "d7e165d7b55db4ef4e0a81335eca2385f06adecf"
+    "nativeEvidenceSourceCommit": "d7e165d7b55db4ef4e0a81335eca2385f06adecf",
+    "keyboard": "NATIVE_OBSERVED_STATUS_BAR_COORDINATES_CORRECTED",
+    "priorityRouteAudit": "NATIVE_RTL_AUDIT.md; signed/iPhone acceptance open"
   },
   "media": {
     "approvedAssets": 0,
@@ -76,7 +78,8 @@
   "easPreview": {
     "status": "REBUILD_REQUIRED_AFTER_SDK_CONFIG_PATCH",
     "supersededAttempt": "aec648d6-ed26-4b19-8265-37aafbc70db9",
-    "archiveMode": "EAS_NO_VCS_EXPLICIT_ROOT_INSPECTED"
+    "archiveMode": "EAS_NO_VCS_EXPLICIT_ROOT_INSPECTED",
+    "emulatorProfile": "preview-emulator (x86_64 release APK; not for ARM phones)"
   },
   "androidExport": {
     "status": "PASS",

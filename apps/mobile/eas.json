@@ -25,6 +25,12 @@
         "EXPO_PUBLIC_API_URL": "https://traina-staging-api.vercel.app"
       }
     },
+    "preview-emulator": {
+      "extends": "preview",
+      "android": {
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=x86_64"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "channel": "production"

@@ -2,17 +2,26 @@ import { afterEach, expect, it, vi } from 'vitest';
 import TestRenderer, { act } from 'react-test-renderer';
 import { createElement } from 'react';
 import { useKeyboardInset } from './keyboard';
-const native = vi.hoisted(() => ({ os: 'android', height: 900, frame: undefined as undefined | {height:number;screenY:number;width:number;screenX:number}, listeners: new Map<string,(event:unknown)=>void>() }));
+const native = vi.hoisted(() => ({ os: 'android', height: 900, statusBar: 0, frame: undefined as undefined | {height:number;screenY:number;width:number;screenX:number}, listeners: new Map<string,(event:unknown)=>void>() }));
 vi.mock('react-native', () => ({
   Platform: { get OS() { return native.os; } },
   useWindowDimensions: () => ({height:native.height}),
+  StatusBar: {get currentHeight(){return native.statusBar;}},
   Keyboard: {metrics:()=>native.frame, addListener:(event:string,handler:(event:unknown)=>void)=>{native.listeners.set(event,handler);return {remove:()=>native.listeners.delete(event)};}},
 }));
 let tree: TestRenderer.ReactTestRenderer | undefined;
 const inset = () => tree!.root.findByType('InsetValue' as never).props.value;
 function Probe() { return createElement('InsetValue', {value:useKeyboardInset()}); }
 async function mount() { (globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true; await act(async()=>{tree=TestRenderer.create(<Probe/>);}); }
-afterEach(async()=>{await act(async()=>tree?.unmount());native.os='android';native.height=900;native.frame=undefined;native.listeners.clear();});
+afterEach(async()=>{await act(async()=>tree?.unmount());native.os='android';native.height=900;native.statusBar=0;native.frame=undefined;native.listeners.clear();});
+it('accounts for status-bar coordinates observed on the API36 emulator',async()=>{
+  native.height=838;native.statusBar=52;native.frame={height:312,screenY:578,width:411,screenX:0};await mount();expect(inset()).toBe(312);
+  native.height=526;await act(async()=>tree?.update(<Probe/>));expect(inset()).toBe(0);
+});
+it('does not over-pad edge-to-edge hosts whose window already contains the status bar',async()=>{
+  native.height=914;native.statusBar=52;native.frame={height:312,screenY:578,width:411,screenX:0};await mount();expect(inset()).toBe(312);
+  native.height=578;await act(async()=>tree?.update(<Probe/>));expect(inset()).toBe(0);
+});
 it('lifts controls above an overlay keyboard and clears the inset on hide',async()=>{
   await mount();
   await act(async()=>native.listeners.get('keyboardDidShow')?.({endCoordinates:{height:300,screenY:600,width:400,screenX:0}}));

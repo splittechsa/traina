@@ -10,6 +10,7 @@ import { ApiClientError, apiRequest } from '../src/api/client';
 import { messageFor } from '../src/api/errors';
 import { useLocale } from '../src/i18n/LocaleProvider';
 import { text } from '../src/i18n/copy';
+import { labelList } from '../src/i18n/labels';
 import { fontFamily, radius, spacing } from '../src/theme/tokens';
 import { useTheme } from '../src/theme/ThemeProvider';
 import { Body, Button, Field, Screen, ScreenBody } from '../src/ui/Screen';
@@ -284,7 +285,7 @@ export default function ProgramEditScreen() {
                     {exerciseLabel(exerciseId)}
                   </Text>
                   {muscles.length > 0 ? (
-                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>{muscles.join(' · ')}</Text>
+                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>{labelList(locale, 'muscle', muscles)}</Text>
                   ) : null}
                   {strengthProgram ? (
                     <View style={{ gap: 8 }}>
@@ -390,7 +391,7 @@ export default function ProgramEditScreen() {
                     {isAr ? row.name_ar : row.name_en}
                   </Text>
                   <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
-                    {asLibraryList(row.primary_muscles).slice(0, 2).join(' · ')} · score {row.score}
+                    {labelList(locale, 'muscle', asLibraryList(row.primary_muscles).slice(0, 2))}
                   </Text>
                 </Pressable>
               ))}
@@ -408,7 +409,7 @@ export default function ProgramEditScreen() {
                 {isAr ? row.name_ar : row.name_en}
               </Text>
               <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
-                {asLibraryList(row.primary_muscles).slice(0, 2).join(' · ')}
+                {labelList(locale, 'muscle', asLibraryList(row.primary_muscles).slice(0, 2))}
               </Text>
             </Pressable>
           ))}
