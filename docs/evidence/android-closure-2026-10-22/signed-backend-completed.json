@@ -1,0 +1,33 @@
+{
+  "at": "2026-10-22T23:38:39.238Z",
+  "syntheticOnly": true,
+  "sessionId": "76a5145e-2fdc-4644-aad1-65aca2eaee65",
+  "status": "completed",
+  "sets": [
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000001",
+      "index": 1,
+      "reps": 8,
+      "loadGrams": 20000
+    },
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000001",
+      "index": 2,
+      "reps": 8,
+      "loadGrams": 20000
+    },
+    {
+      "exerciseId": "10000000-0000-4000-8000-000000000001",
+      "index": 3,
+      "reps": 9,
+      "loadGrams": 20000
+    }
+  ],
+  "pauses": [
+    {
+      "pausedAt": "2026-10-22T23:37:22.154Z",
+      "resumedAt": "2026-10-22T23:37:42.296Z"
+    }
+  ],
+  "completedAt": "2026-10-22T23:38:32.878Z"
+}

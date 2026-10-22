@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-22T23:43:34.798Z",
+  "syntheticOnly": true,
+  "buildId": "bdec93f1-cb4e-4398-aedb-cc1cb73000eb",
+  "sourceCommit": "240c552",
+  "sessionId": "7ebddd96-406b-4148-9298-3c2f1b095e88",
+  "before": {
+    "status": "in_progress",
+    "sets": []
+  },
+  "whileOffline": {
+    "status": "in_progress",
+    "sets": []
+  },
+  "dispatchMs": 1520,
+  "dispatchIncludesAdbAndWaits": true,
+  "restartedWhileOffline": true,
+  "offlineUiHasCompletedSets": true,
+  "offlineUiGenericFailure": false,
+  "after": {
+    "status": "in_progress",
+    "sets": [
+      {
+        "exerciseId": "10000000-0000-4000-8000-000000000001",
+        "index": 1,
+        "reps": 8,
+        "loadGrams": 20000
+      },
+      {
+        "exerciseId": "10000000-0000-4000-8000-000000000001",
+        "index": 2,
+        "reps": 8,
+        "loadGrams": 20000
+      },
+      {
+        "exerciseId": "10000000-0000-4000-8000-000000000001",
+        "index": 3,
+        "reps": 8,
+        "loadGrams": 20000
+      }
+    ]
+  },
+  "status": "PASS"
+}

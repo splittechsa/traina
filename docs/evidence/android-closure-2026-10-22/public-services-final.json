@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-22T23:31:39.464Z",
+  "services": [
+    {
+      "url": "https://traina-staging-api.vercel.app/v1/health",
+      "status": 200
+    },
+    {
+      "url": "https://traina-staging-api.vercel.app/v1/ready",
+      "status": 503,
+      "body": {
+        "ready": false,
+        "missing": [
+          "store_verifier"
+        ]
+      }
+    },
+    {
+      "url": "https://traina-staging-www.vercel.app",
+      "status": 200
+    },
+    {
+      "url": "https://traina-staging-admin.vercel.app",
+      "status": 200
+    }
+  ]
+}

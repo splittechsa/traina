@@ -1,0 +1,71 @@
+{
+  "at": "2026-10-22T23:32:44.855Z",
+  "dependencyOrder": [
+    57,
+    58
+  ],
+  "pullRequests": [
+    {
+      "number": 57,
+      "head": "7971d0484467790ee3df0f0c6db461594fa27c4e",
+      "base": "release/vercel-staging",
+      "draft": true,
+      "reviewDecision": "",
+      "approvedReviews": 0,
+      "checks": [
+        {
+          "name": "api",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "api",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "mobile",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "mobile",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    },
+    {
+      "number": 58,
+      "head": "db8aaac6b48ea557f41e328f7d7c8bc8741fd0b6",
+      "base": "feature/admin-landing-iphone",
+      "draft": true,
+      "reviewDecision": "",
+      "approvedReviews": 0,
+      "checks": [
+        {
+          "name": "api",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "api",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "mobile",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS"
+        },
+        {
+          "name": "mobile",
+          "status": "COMPLETED",
+          "conclusion": "SUCCESS"
+        }
+      ]
+    }
+  ],
+  "merged": false,
+  "independentApproval": "MISSING"
+}

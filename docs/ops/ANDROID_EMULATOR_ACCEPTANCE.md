@@ -1,6 +1,6 @@
-# Current observed status — 2026-10-22
+# Current observed status — 2026-10-23
 
-**BOOTED; EXPO GO NATIVE JOURNEY PARTIAL PASS.** Host acceleration probe returned 0/WHPX usable. Matching Expo Go is installed; Metro 8085 and ADB reverse opened the app. See [native closure evidence](../evidence/android-closure-2026-10-22/REPORT.md). Windows restart is no longer the blocker. Signed Android preview, device performance and physical-iPhone acceptance remain open. Earlier installation snapshots below are retained as history.
+**BOOTED; SIGNED ANDROID APK TESTED ON PC.** Host WHPX0/usable, ADB device5554, package sa.sahhti.member. Metro/Expo Go is unnecessary for signed APKs. Native history50-page traversal, workout completion/restart and offline queue across process restart now have evidence. Physical-device performance, iPhone signing and independent reviews remain open. See [current evidence](../evidence/android-closure-2026-10-22/REPORT.md). Earlier installation snapshots below are historical.
 
 # Android emulator setup and acceptance
 

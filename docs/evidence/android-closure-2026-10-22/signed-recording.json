@@ -1,0 +1,16 @@
+{
+  "name": "signed-workout.mp4",
+  "bytes": 6460453,
+  "sha256": "e2288a7f9caa49c43446d2d2ee32dfb1e49b3c290eaf1ed28a99867aa7b29309",
+  "durationSeconds": 165.7653,
+  "width": 1080,
+  "height": 2400,
+  "hasH264": true,
+  "verification": "Full H264 decode with preserved variable-frame timestamps plus container inspection and final-frame visual review",
+  "capture": "ADB screenrecord --bugreport, native timestamp overlay",
+  "syntheticOnly": true,
+  "buildId": "bdec93f1-cb4e-4398-aedb-cc1cb73000eb",
+  "sourceCommit": "240c552",
+  "decodeExitCode": 0,
+  "decodeErrorLines": 0
+}
